@@ -13,6 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Runs behind a TLS-terminating reverse proxy (Dokploy/Traefik): without
+        // this the X-Forwarded-Proto header is ignored and asset()/route() URLs
+        // come out as http:// on an https:// page (blocked as mixed content).
+        $middleware->trustProxies(at: '*');
         $middleware->alias(['permission' => EnsurePermission::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
