@@ -19,8 +19,12 @@ COPY config ./config
 COPY database ./database
 COPY routes ./routes
 COPY src ./src
+# --no-scripts: post-autoload-dump runs `artisan package:discover`, which boots
+# the app; SettingServiceProvider queries the DB on boot and there is none here.
+# The package manifest is rebuilt on first boot in the final image instead.
 RUN composer install \
     --no-dev \
+    --no-scripts \
     --no-interaction \
     --no-progress \
     --prefer-dist \
