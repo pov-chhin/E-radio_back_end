@@ -2,6 +2,7 @@
 
 namespace Src\Setting\Providers;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
@@ -19,14 +20,20 @@ class SettingServiceProvider extends ServiceProvider
 
         // Guarded: this runs on every boot, including `migrate` itself
         // before the tables exist on a fresh install.
-        if (Schema::hasTable('radio_scraper_settings')) {
-            RadioScraperSetting::first()?->applyToConfig();
-        }
-        if (Schema::hasTable('storage_settings')) {
-            StorageSetting::first()?->applyToConfig();
-        }
-        if (Schema::hasTable('azuracast_settings')) {
-            AzuraCastSetting::first()?->applyToConfig();
+        try {
+            if (Schema::hasTable('radio_scraper_settings')) {
+                RadioScraperSetting::first()?->applyToConfig();
+            }
+            if (Schema::hasTable('storage_settings')) {
+                StorageSetting::first()?->applyToConfig();
+            }
+            if (Schema::hasTable('azuracast_settings')) {
+                AzuraCastSetting::first()?->applyToConfig();
+            }
+        } catch (QueryException) {
+            // These are optional config overrides. With no reachable database
+            // (an image build's `composer install` runs `package:discover`,
+            // which boots the app) skip them instead of failing every boot.
         }
     }
 }
