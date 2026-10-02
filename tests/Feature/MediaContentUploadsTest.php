@@ -1,0 +1,326 @@
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Src\Catalog\Jobs\ProcessMediaContentAudio;
+use Src\Catalog\Models\Category;
+use Src\Catalog\Models\MediaContent;
+use Src\Catalog\Services\OpusAudioProcessor;
+use Src\Setting\Models\StorageSetting;
+use Symfony\Component\Process\Process;
+use Tests\Concerns\CreatesAdminUser;
+use Tests\TestCase;
+
+class MediaContentUploadsTest extends TestCase
+{
+    use CreatesAdminUser, RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withoutVite();
+        Storage::fake('public');
+        Queue::fake();
+        $this->actingAs($this->createAdmin(['view-media-content', 'create-media-content', 'edit-media-content', 'delete-media-content']), 'admin');
+    }
+
+    private function category(): Category
+    {
+        return Category::create(['name' => 'QA Category', 'slug' => 'qa-category']);
+    }
+
+    private function fakeImageBytes(int $width, int $height): string
+    {
+        $image = imagecreatetruecolor($width, $height);
+        imagefill($image, 0, 0, imagecolorallocate($image, 100, 150, 200));
+        ob_start();
+        imagepng($image);
+        $bytes = ob_get_clean();
+        imagedestroy($image);
+
+        return $bytes;
+    }
+
+    private function fakeWavUpload(string $name = 'track.wav'): UploadedFile
+    {
+        $sampleRate = 8000;
+        $audio = str_repeat(chr(128), 800);
+        $header = 'RIFF'.pack('V', 36 + strlen($audio)).'WAVEfmt '
+            .pack('VvvVVvv', 16, 1, 1, $sampleRate, $sampleRate, 1, 8)
+            .'data'.pack('V', strlen($audio));
+
+        return UploadedFile::fake()->createWithContent($name, $header.$audio);
+    }
+
+    private function processPendingAudio(MediaContent $mediaContent): void
+    {
+        $mediaContent->refresh();
+        (new ProcessMediaContentAudio($mediaContent->id, $mediaContent->source_path))
+            ->handle(app(OpusAudioProcessor::class));
+        $mediaContent->refresh();
+    }
+
+    public function test_uploading_a_thumbnail_keeps_its_aspect_ratio_and_is_converted_to_webp(): void
+    {
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'thumbnail' => UploadedFile::fake()->image('thumb.jpg', 2000, 500),
+        ])->assertRedirect(route('admin.media-contents.index'));
+
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $this->assertStringEndsWith('.webp', $mediaContent->thumbnail);
+
+        // 2000×500 is scaled down to fit 1280 wide, not cropped to 16:9.
+        $image = imagecreatefromstring(Storage::disk('public')->get($mediaContent->thumbnail));
+        $this->assertSame([1280, 320], [imagesx($image), imagesy($image)]);
+        $this->assertStringContainsString('/storage/', $mediaContent->thumbnail_url);
+    }
+
+    public function test_thumbnail_upload_respects_the_admin_configured_image_folder(): void
+    {
+        $setting = StorageSetting::firstOrFail();
+        $setting->update(['image_directory' => 'custom/images']);
+        $setting->applyToConfig();
+
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'thumbnail' => UploadedFile::fake()->image('thumb.jpg', 2000, 500),
+        ])->assertRedirect(route('admin.media-contents.index'));
+
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $this->assertStringStartsWith('custom/images/', $mediaContent->thumbnail);
+    }
+
+    public function test_a_pasted_thumbnail_url_is_downloaded_and_processed(): void
+    {
+        Http::fake(['cdn.example.com/*' => Http::response($this->fakeImageBytes(1000, 1000), 200)]);
+
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'thumbnail_url' => 'https://cdn.example.com/thumb.png',
+        ])->assertRedirect(route('admin.media-contents.index'));
+
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        // Already smaller than the 1280 cap, so it is neither cropped nor scaled up.
+        $image = imagecreatefromstring(Storage::disk('public')->get($mediaContent->thumbnail));
+        $this->assertSame([1000, 1000], [imagesx($image), imagesy($image)]);
+    }
+
+    public function test_uploading_audio_returns_immediately_and_the_queue_converts_it_to_opus(): void
+    {
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $this->fakeWavUpload(),
+        ])->assertRedirect(route('admin.media-contents.index'));
+
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $this->assertSame('processing', $mediaContent->processing_status);
+        $this->assertNull($mediaContent->stream);
+        Storage::disk('public')->assertExists($mediaContent->source_path);
+        Queue::assertPushed(ProcessMediaContentAudio::class, fn ($job) => $job->mediaContentId === $mediaContent->id);
+
+        $this->processPendingAudio($mediaContent);
+
+        $this->assertSame('ready', $mediaContent->processing_status);
+        $this->assertNull($mediaContent->source_path);
+        $this->assertStringEndsWith('.opus', $mediaContent->stream);
+        Storage::disk('public')->assertExists($mediaContent->stream);
+        $this->assertStringStartsWith('OggS', Storage::disk('public')->get($mediaContent->stream));
+        $this->assertSame(Storage::disk('public')->size($mediaContent->stream), $mediaContent->stream_size);
+        $this->assertMatchesRegularExpression('/\d+(?:\.\d)? (?:B|KB|MB)/', $mediaContent->stream_size_label);
+        $this->assertStringContainsString('/storage/', $mediaContent->stream_url);
+    }
+
+    public function test_audio_conversion_respects_the_admin_configured_audio_folder(): void
+    {
+        $setting = StorageSetting::firstOrFail();
+        $setting->update(['audio_directory' => 'custom/audio']);
+        $setting->applyToConfig();
+
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $this->fakeWavUpload(),
+        ])->assertRedirect(route('admin.media-contents.index'));
+
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $this->processPendingAudio($mediaContent);
+
+        $this->assertStringStartsWith('custom/audio/', $mediaContent->stream);
+    }
+
+    public function test_the_worker_extracts_video_audio_and_converts_it_to_opus(): void
+    {
+        $temporaryBase = tempnam(sys_get_temp_dir(), 'video_fixture_');
+        $videoPath = $temporaryBase.'.mp4';
+        @unlink($temporaryBase);
+
+        try {
+            (new Process([
+                config('services.ffmpeg.binary', 'ffmpeg'),
+                '-hide_banner', '-loglevel', 'error', '-y',
+                '-f', 'lavfi', '-i', 'color=c=black:s=16x16:d=0.2',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.2',
+                '-shortest', '-c:v', 'libx264', '-c:a', 'aac',
+                $videoPath,
+            ]))->mustRun();
+
+            $this->post('/admin/media-contents', [
+                'category_id' => $this->category()->id,
+                'title' => 'Video Track', 'slug' => 'video-track', 'media_type' => 'audio', 'status' => 'private',
+                'stream' => new UploadedFile($videoPath, 'clip.mp4', 'video/mp4', null, true),
+            ])->assertRedirect(route('admin.media-contents.index'));
+
+            $mediaContent = MediaContent::where('slug', 'video-track')->firstOrFail();
+            $this->assertSame('processing', $mediaContent->processing_status);
+
+            $this->processPendingAudio($mediaContent);
+
+            $this->assertSame('ready', $mediaContent->processing_status);
+            $this->assertStringEndsWith('.opus', $mediaContent->stream);
+            $this->assertStringStartsWith('OggS', Storage::disk('public')->get($mediaContent->stream));
+        } finally {
+            @unlink($videoPath);
+        }
+    }
+
+    public function test_the_worker_records_the_audio_duration_probed_from_the_uploaded_file(): void
+    {
+        $temporaryBase = tempnam(sys_get_temp_dir(), 'audio_fixture_');
+        $audioPath = $temporaryBase.'.wav';
+        @unlink($temporaryBase);
+
+        try {
+            (new Process([
+                config('services.ffmpeg.binary', 'ffmpeg'),
+                '-hide_banner', '-loglevel', 'error', '-y',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
+                $audioPath,
+            ]))->mustRun();
+
+            $this->post('/admin/media-contents', [
+                'category_id' => $this->category()->id,
+                'title' => 'Timed Track', 'slug' => 'timed-track', 'media_type' => 'audio', 'status' => 'private',
+                'duration_seconds' => 999, // whatever the admin typed in — the worker should overwrite it
+                'stream' => new UploadedFile($audioPath, 'timed.wav', 'audio/wav', null, true),
+            ])->assertRedirect(route('admin.media-contents.index'));
+
+            $mediaContent = MediaContent::where('slug', 'timed-track')->firstOrFail();
+            $this->assertSame(999, $mediaContent->duration_seconds);
+
+            $this->processPendingAudio($mediaContent);
+
+            $this->assertSame('ready', $mediaContent->processing_status);
+            $this->assertSame(2, $mediaContent->duration_seconds);
+        } finally {
+            @unlink($audioPath);
+        }
+    }
+
+    public function test_a_pasted_stream_url_is_stored_directly_without_being_downloaded(): void
+    {
+        Http::fake(); // any request here would mean we wrongly tried to download it
+
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream_url' => 'https://stream.example.com/live.mp3',
+        ])->assertRedirect(route('admin.media-contents.index'));
+
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $this->assertSame('https://stream.example.com/live.mp3', $mediaContent->stream);
+        $this->assertSame('https://stream.example.com/live.mp3', $mediaContent->stream_url);
+        $this->assertSame('External', $mediaContent->stream_size_label);
+        Http::assertNothingSent();
+    }
+
+    public function test_a_non_media_file_is_rejected_for_stream(): void
+    {
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => UploadedFile::fake()->create('not-audio.pdf', 100, 'application/pdf'),
+        ])->assertSessionHasErrors('stream');
+
+        $this->assertDatabaseMissing('media_contents', ['slug' => 'qa-track']);
+    }
+
+    public function test_replacing_the_stream_keeps_the_old_file_until_the_new_opus_is_ready(): void
+    {
+        $category = $this->category();
+        $this->post('/admin/media-contents', [
+            'category_id' => $category->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $this->fakeWavUpload('first.wav'),
+        ]);
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $this->processPendingAudio($mediaContent);
+        $originalStream = $mediaContent->stream;
+
+        $this->put("/admin/media-contents/{$mediaContent->id}", [
+            'category_id' => $category->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $this->fakeWavUpload('second.wav'),
+        ])->assertRedirect();
+
+        $mediaContent->refresh();
+        $this->assertSame('processing', $mediaContent->processing_status);
+        $this->assertSame($originalStream, $mediaContent->stream);
+        Storage::disk('public')->assertExists($originalStream);
+
+        $this->processPendingAudio($mediaContent);
+
+        $this->assertNotSame($originalStream, $mediaContent->stream);
+        Storage::disk('public')->assertMissing($originalStream);
+        Storage::disk('public')->assertExists($mediaContent->stream);
+    }
+
+    public function test_removing_the_thumbnail_clears_it_and_deletes_the_file(): void
+    {
+        $category = $this->category();
+        $this->post('/admin/media-contents', [
+            'category_id' => $category->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'thumbnail' => UploadedFile::fake()->image('thumb.jpg', 800, 600),
+        ]);
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $originalThumbnail = $mediaContent->thumbnail;
+
+        $this->put("/admin/media-contents/{$mediaContent->id}", [
+            'category_id' => $category->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'remove_thumbnail' => '1',
+        ])->assertRedirect();
+
+        $mediaContent->refresh();
+        $this->assertNull($mediaContent->thumbnail);
+        Storage::disk('public')->assertMissing($originalThumbnail);
+    }
+
+    public function test_deleting_media_content_removes_its_stored_stream_and_thumbnail(): void
+    {
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $this->fakeWavUpload(),
+            'thumbnail' => UploadedFile::fake()->image('thumb.jpg', 800, 600),
+        ]);
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $this->processPendingAudio($mediaContent);
+        [$streamPath, $thumbnailPath] = [$mediaContent->stream, $mediaContent->thumbnail];
+
+        $this->delete("/admin/media-contents/{$mediaContent->id}")->assertRedirect();
+
+        Storage::disk('public')->assertMissing($streamPath);
+        Storage::disk('public')->assertMissing($thumbnailPath);
+    }
+}

@@ -19,6 +19,31 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 - [Robust background job processing](https://laravel.com/docs/queues).
 - [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
 
+## Local Docker deployment
+
+The Compose stack runs Apache/PHP, MariaDB, and a dedicated Laravel queue
+listener. The queue command is `php artisan queue:listen --tries=1 --timeout=0`.
+
+```bash
+docker compose up -d --build
+```
+
+Open <http://172.30.30.206:8000/>. Follow startup and queue logs with:
+
+```bash
+docker compose logs -f app queue
+```
+
+On the first start only, MariaDB restores
+`database/backups/e_radio_full_backup_2026-09-19.sql`; Laravel then applies any
+newer migrations. Database and uploaded media persist in named Docker volumes.
+
+To stop the services without deleting their data:
+
+```bash
+docker compose down
+```
+
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
 ## Learning Laravel

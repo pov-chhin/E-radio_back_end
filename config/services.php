@@ -2,6 +2,15 @@
 
 return [
 
+    'ffmpeg' => [
+        'binary' => env('FFMPEG_BINARY', 'ffmpeg'),
+        'probe_binary' => env('FFMPEG_PROBE_BINARY', 'ffprobe'),
+        'hls_bitrate' => env('FFMPEG_HLS_BITRATE', '128k'),
+        'hls_timeout' => env('FFMPEG_HLS_TIMEOUT', 300),
+        'opus_bitrate' => env('FFMPEG_OPUS_BITRATE', '64k'),
+        'opus_timeout' => env('FFMPEG_OPUS_TIMEOUT', 300),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
@@ -33,6 +42,23 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    'azuracast' => [
+        'url' => env('AZURACAST_URL'),
+        'api_key' => env('AZURACAST_API_KEY'),
+        'station_id' => env('AZURACAST_STATION_ID', 'azuratest'),
+        'timeout' => env('AZURACAST_TIMEOUT', 5),
+    ],
+
+    'radio_browser' => [
+        'enabled' => env('RADIO_BROWSER_ENABLED', false),
+        'country' => env('RADIO_BROWSER_COUNTRY', 'KH'),
+    ],
+
+    'media_storage' => [
+        'image_directory' => env('MEDIA_IMAGE_DIRECTORY', 'media-contents/thumbnails'),
+        'audio_directory' => env('MEDIA_AUDIO_DIRECTORY', 'media-contents/streams'),
     ],
 
 ];

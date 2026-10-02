@@ -69,6 +69,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Admin Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Storage stays UTC (above), but datetime-local inputs in the CMS admin
+    | (e.g. "Publish at" scheduling) are typed and read back in the admin's
+    | own wall-clock time. This is the timezone that boundary is converted
+    | through, so "3pm" typed by an admin in Phnom Penh means 3pm there.
+    |
+    */
+
+    'admin_timezone' => env('ADMIN_TIMEZONE', 'Asia/Phnom_Penh'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

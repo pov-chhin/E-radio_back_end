@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use Src\CmsAdmin\Models\User as CustomerUser;
+use Src\User\User as AdminUser;
 
 return [
 
@@ -42,6 +44,16 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        'admin' => [
+            'driver' => 'session',
+            'provider' => 'admin_users',
+        ],
+
+        'customer' => [
+            'driver' => 'session',
+            'provider' => 'app_users',
+        ],
     ],
 
     /*
@@ -71,6 +83,16 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+
+        'admin_users' => [
+            'driver' => 'eloquent',
+            'model' => AdminUser::class,
+        ],
+
+        'app_users' => [
+            'driver' => 'eloquent',
+            'model' => CustomerUser::class,
+        ],
     ],
 
     /*
@@ -95,6 +117,13 @@ return [
     'passwords' => [
         'users' => [
             'provider' => 'users',
+            'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+
+        'customers' => [
+            'provider' => 'app_users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire' => 60,
             'throttle' => 60,

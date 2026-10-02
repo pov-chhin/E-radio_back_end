@@ -1,0 +1,66 @@
+name: eradio
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-e_radio}
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:-}
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+    volumes:
+      - eradio_db:/var/lib/mysql
+      - ./database/backups/e_radio_full_backup_2026-09-19.sql:/docker-entrypoint-initdb.d/01-e-radio.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root --password=\"$$MARIADB_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_URL: http://172.26.192.1:8000
+      DB_HOST: db
+      DB_PORT: 3306
+      RUN_MIGRATIONS: "1"
+    ports:
+      - "0.0.0.0:8000:80"
+    volumes:
+      - eradio_storage:/var/www/html/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "artisan", "about", "--only=environment"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  queue:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_URL: http://172.26.192.1:8000
+      DB_HOST: db
+      DB_PORT: 3306
+      RUN_MIGRATIONS: "0"
+    command: ["php", "artisan", "queue:listen", "--tries=1", "--timeout=0"]
+    volumes:
+      - eradio_storage:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  eradio_db:
+  eradio_storage:
