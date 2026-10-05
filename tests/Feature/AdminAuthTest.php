@@ -35,8 +35,21 @@ class AdminAuthTest extends TestCase
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('admin.radio-channels.index'));
+        $response->assertRedirect(route('admin.dashboard'));
         $this->assertAuthenticated('admin');
+    }
+
+    public function test_a_signed_in_admin_visiting_login_is_sent_to_the_dashboard(): void
+    {
+        $admin = User::create([
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'password' => Hash::make('password'),
+        ]);
+
+        $this->actingAs($admin, 'admin')
+            ->get('/login')
+            ->assertRedirect(route('admin.dashboard'));
     }
 
     public function test_an_inactive_admin_cannot_log_in(): void

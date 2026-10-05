@@ -31,7 +31,7 @@ class SessionController extends Controller
         if (Auth::guard('admin')->attempt(['email' => $credentials['identity'], 'password' => $credentials['password'], 'is_active' => true], $remember)) {
             $request->session()->regenerate();
 
-            return redirect()->intended(route('admin.radio-channels.index'));
+            return redirect()->intended(route('admin.dashboard'));
         }
 
         if (Auth::guard('customer')->attempt(['username' => $credentials['identity'], 'password' => $credentials['password']], $remember)) {

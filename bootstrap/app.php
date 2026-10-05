@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Middleware\RecordUserActivity;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Support\Facades\Auth;
 use Src\UserManagement\Http\Middleware\EnsurePermission;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -18,6 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // come out as http:// on an https:// page (blocked as mixed content).
         $middleware->trustProxies(at: '*');
         $middleware->alias(['permission' => EnsurePermission::class]);
+        $middleware->api(append: [RecordUserActivity::class]);
+        // A signed-in admin who opens /login (or any guest-only page) lands on the dashboard.
+        $middleware->redirectUsersTo(fn () => Auth::guard('admin')->check() ? route('admin.dashboard') : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
