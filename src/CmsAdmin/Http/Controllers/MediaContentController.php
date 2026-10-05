@@ -220,7 +220,6 @@ class MediaContentController extends Controller
             'media_type' => ['required', Rule::in(['audio', 'video', 'article'])],
             'stream' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,mp4,webm,mov', 'max:102400'],
             'stream_url' => ['nullable', 'string', 'max:2048', 'url'],
-            'remove_stream' => ['nullable', 'boolean'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:5120'],
             'thumbnail_url' => ['nullable', 'string', 'max:2048', 'url'],
             'remove_thumbnail' => ['nullable', 'boolean'],
@@ -247,7 +246,7 @@ class MediaContentController extends Controller
             crop: false,
         );
 
-        unset($data['stream'], $data['stream_url'], $data['remove_stream'], $data['thumbnail_url'], $data['remove_thumbnail']);
+        unset($data['stream'], $data['stream_url'], $data['thumbnail_url'], $data['remove_thumbnail']);
 
         return $data;
     }
@@ -290,17 +289,7 @@ class MediaContentController extends Controller
             return false;
         }
 
-        if ($request->boolean('remove_stream')) {
-            $this->deleteStoredMedia($mediaContent->stream);
-            $this->deleteStoredMedia($mediaContent->source_path);
-            $mediaContent->update([
-                'stream' => null,
-                'source_path' => null,
-                'processing_status' => 'ready',
-                'processing_error' => null,
-            ]);
-        }
-
+        // No new file or link: the current stream stays. It can only be replaced, never cleared.
         return false;
     }
 

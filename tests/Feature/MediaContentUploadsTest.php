@@ -243,6 +243,78 @@ class MediaContentUploadsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    private function mediaContentWithStream(?string $stream, array $overrides = []): MediaContent
+    {
+        return MediaContent::create(array_merge([
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $stream, 'processing_status' => 'ready', 'duration_seconds' => 1165,
+        ], $overrides));
+    }
+
+    public function test_the_edit_form_shows_the_uploaded_file_with_its_size_length_and_a_play_button(): void
+    {
+        Storage::disk('public')->put('audio/abc123.opus', str_repeat('a', 2048));
+        $mediaContent = $this->mediaContentWithStream('audio/abc123.opus');
+
+        $this->get(route('admin.media-contents.edit', $mediaContent))
+            ->assertOk()
+            ->assertSee('abc123.opus')
+            ->assertSee('Uploaded file')
+            ->assertSee('2.0 KB')
+            ->assertSee('19:25')
+            ->assertSee('data-stream-url="'.$mediaContent->stream_url.'"', false)
+            ->assertDontSee('File missing from storage');
+    }
+
+    public function test_the_edit_form_says_so_when_the_uploaded_file_is_gone_from_storage(): void
+    {
+        $mediaContent = $this->mediaContentWithStream('audio/gone.opus');
+
+        $this->get(route('admin.media-contents.edit', $mediaContent))
+            ->assertOk()
+            ->assertSee('gone.opus')
+            ->assertSee('File missing from storage')
+            ->assertDontSee('data-preview-toggle', false);
+    }
+
+    public function test_the_edit_form_shows_an_external_link_without_a_size(): void
+    {
+        $mediaContent = $this->mediaContentWithStream('https://stream.example.com/live.mp3');
+
+        $this->get(route('admin.media-contents.edit', $mediaContent))
+            ->assertOk()
+            ->assertSee('stream.example.com · live.mp3')
+            ->assertSee('External link')
+            ->assertDontSee('File missing from storage');
+    }
+
+    public function test_the_edit_form_offers_no_way_to_remove_the_current_stream(): void
+    {
+        Storage::disk('public')->put('audio/abc123.opus', 'a');
+        $mediaContent = $this->mediaContentWithStream('audio/abc123.opus');
+
+        $this->get(route('admin.media-contents.edit', $mediaContent))
+            ->assertOk()
+            ->assertSee('abc123.opus')
+            ->assertDontSee('name="remove_stream"', false);
+    }
+
+    public function test_a_save_without_a_new_file_or_link_keeps_the_current_stream_even_if_removal_is_requested(): void
+    {
+        Storage::disk('public')->put('audio/abc123.opus', 'a');
+        $mediaContent = $this->mediaContentWithStream('audio/abc123.opus');
+
+        $this->put(route('admin.media-contents.update', $mediaContent), [
+            'category_id' => $mediaContent->category_id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'remove_stream' => '1',
+        ])->assertRedirect();
+
+        $this->assertSame('audio/abc123.opus', $mediaContent->fresh()->stream);
+        Storage::disk('public')->assertExists('audio/abc123.opus');
+    }
+
     public function test_a_non_media_file_is_rejected_for_stream(): void
     {
         $this->post('/admin/media-contents', [

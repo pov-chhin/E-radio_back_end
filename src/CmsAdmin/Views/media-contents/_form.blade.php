@@ -66,10 +66,31 @@
                         <span class="badge slate" title="{{ $mediaContent->processing_error }}">Audio conversion failed — upload again to retry</span>
                     @endif
                     @if(isset($mediaContent) && $mediaContent->stream)
-                        <span class="check-row" style="margin:0">
-                            <a href="{{ $mediaContent->stream_url }}" target="_blank" rel="noopener">Current file ↗</a>
-                            &nbsp;— <input type="checkbox" name="remove_stream" value="1"> Remove
-                        </span>
+                        @php
+                            $isExternalStream = str_starts_with($mediaContent->stream, 'http://') || str_starts_with($mediaContent->stream, 'https://');
+                            $seconds = (int) $mediaContent->duration_seconds;
+                            $length = $seconds >= 3600
+                                ? sprintf('%d:%02d:%02d', intdiv($seconds, 3600), intdiv($seconds % 3600, 60), $seconds % 60)
+                                : sprintf('%d:%02d', intdiv($seconds, 60), $seconds % 60);
+                        @endphp
+                        <div class="current-file">
+                            @if($mediaContent->processing_status === 'ready' && ! $mediaContent->stream_missing)
+                                <button type="button" class="secondary-button compact" data-preview-toggle data-stream-url="{{ $mediaContent->stream_url }}"><i class="fa fa-play"></i> Play</button>
+                            @endif
+                            <div class="current-file-info">
+                                <b title="{{ $mediaContent->stream }}">{{ $isExternalStream ? parse_url($mediaContent->stream, PHP_URL_HOST).' · ' : '' }}{{ basename(parse_url($mediaContent->stream, PHP_URL_PATH) ?: $mediaContent->stream) }}</b>
+                                <small class="muted">
+                                    {{ $isExternalStream ? 'External link' : 'Uploaded file' }}
+                                    @unless($isExternalStream) · {{ $mediaContent->stream_size_label }} @endunless
+                                    @if($seconds > 0) · {{ $length }} @endif
+                                </small>
+                            </div>
+                            @if($mediaContent->stream_missing)
+                                <span class="badge amber" title="The record still points at this file, but it is no longer on the server's storage. Upload it again.">File missing from storage</span>
+                            @else
+                                <a href="{{ $mediaContent->stream_url }}" target="_blank" rel="noopener">Open ↗</a>
+                            @endif
+                        </div>
                     @endif
                     <div class="tag-view-toggle" style="align-self:flex-start">
                         <button type="button" class="{{ old('stream_url') ? '' : 'active' }}" data-image-mode-tab="upload" data-image-field="stream">Upload</button>

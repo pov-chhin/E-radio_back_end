@@ -89,6 +89,15 @@ class MediaContent extends Model
         });
     }
 
+    /** An uploaded file whose record is still there but whose file is not on the disk any more (storage that did not survive a redeploy). */
+    protected function streamMissing(): Attribute
+    {
+        return Attribute::make(get: fn (): bool => filled($this->stream)
+            && ! str_starts_with($this->stream, 'http://')
+            && ! str_starts_with($this->stream, 'https://')
+            && ! Storage::disk('public')->exists($this->stream));
+    }
+
     protected function streamSizeLabel(): Attribute
     {
         return Attribute::make(get: function (): string {
