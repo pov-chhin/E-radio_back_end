@@ -25,5 +25,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo(fn () => Auth::guard('admin')->check() ? route('admin.dashboard') : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // A failed validation flashes the submitted input back into the session; keep storage secrets out of it.
+        $exceptions->dontFlash(['s3_secret', 'rustfs_secret']);
     })->create();

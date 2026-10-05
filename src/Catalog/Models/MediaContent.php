@@ -7,15 +7,15 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Facades\Storage;
+use App\Support\MediaStorage;
 use Src\User\User as AdminUser;
 
 class MediaContent extends Model
 {
     protected $fillable = [
         'category_id', 'program_id', 'title', 'slug', 'artist_id', 'author_id', 'description',
-        'media_type', 'stream', 'processing_status', 'source_path', 'processing_error',
-        'thumbnail', 'duration_seconds', 'play_count', 'favorite_count',
+        'media_type', 'stream', 'stream_disk', 'processing_status', 'source_path', 'processing_error',
+        'thumbnail', 'thumbnail_disk', 'duration_seconds', 'play_count', 'favorite_count',
         'is_published', 'published_at',
     ];
 
@@ -64,26 +64,26 @@ class MediaContent extends Model
         return $this->belongsToMany(Tag::class);
     }
 
-    /** `stream`/`thumbnail` store a local `public` disk path (uploads) or a plain external URL — resolve either to something usable directly. */
+    /** `stream`/`thumbnail` store a path on the disk named in `stream_disk`/`thumbnail_disk` (null = local public) or a plain external URL — resolve either to something usable directly. */
     protected function streamUrl(): Attribute
     {
-        return Attribute::make(get: fn () => $this->resolveMediaUrl($this->stream));
+        return Attribute::make(get: fn () => $this->resolveMediaUrl($this->stream, $this->stream_disk));
     }
 
     protected function thumbnailUrl(): Attribute
     {
-        return Attribute::make(get: fn () => $this->resolveMediaUrl($this->thumbnail));
+        return Attribute::make(get: fn () => $this->resolveMediaUrl($this->thumbnail, $this->thumbnail_disk));
     }
 
-    /** Size in bytes for locally stored media; external streams have no reliable finite size. */
+    /** Size in bytes for locally stored media; external streams have no reliable finite size, and asking cloud storage would cost a network round trip per row. */
     protected function streamSize(): Attribute
     {
         return Attribute::make(get: function (): ?int {
-            if (blank($this->stream) || str_starts_with($this->stream, 'http://') || str_starts_with($this->stream, 'https://')) {
+            if (blank($this->stream) || str_starts_with($this->stream, 'http://') || str_starts_with($this->stream, 'https://') || MediaStorage::isRemote($this->stream_disk)) {
                 return null;
             }
 
-            $disk = Storage::disk('public');
+            $disk = MediaStorage::disk($this->stream_disk);
 
             return $disk->exists($this->stream) ? $disk->size($this->stream) : null;
         });
@@ -95,7 +95,8 @@ class MediaContent extends Model
         return Attribute::make(get: fn (): bool => filled($this->stream)
             && ! str_starts_with($this->stream, 'http://')
             && ! str_starts_with($this->stream, 'https://')
-            && ! Storage::disk('public')->exists($this->stream));
+            && ! MediaStorage::isRemote($this->stream_disk)
+            && ! MediaStorage::disk($this->stream_disk)->exists($this->stream));
     }
 
     protected function streamSizeLabel(): Attribute
@@ -104,7 +105,11 @@ class MediaContent extends Model
             $bytes = $this->stream_size;
 
             if ($bytes === null) {
-                return filled($this->stream) ? 'External' : '—';
+                return match (true) {
+                    blank($this->stream) => '—',
+                    MediaStorage::isRemote($this->stream_disk) => 'Cloud storage',
+                    default => 'External',
+                };
             }
 
             if ($bytes < 1024) {
@@ -124,7 +129,7 @@ class MediaContent extends Model
         });
     }
 
-    private function resolveMediaUrl(?string $value): ?string
+    private function resolveMediaUrl(?string $value, ?string $disk): ?string
     {
         if (blank($value)) {
             return null;
@@ -132,7 +137,7 @@ class MediaContent extends Model
 
         return str_starts_with($value, 'http://') || str_starts_with($value, 'https://')
             ? $value
-            : Storage::disk('public')->url($value);
+            : MediaStorage::disk($disk)->url($value);
     }
 
     /** 'private' (not published), 'scheduled' (published, but published_at is still in the future), or 'public'. */

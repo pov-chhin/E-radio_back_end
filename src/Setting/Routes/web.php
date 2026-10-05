@@ -7,4 +7,5 @@ Route::prefix('admin')->name('admin.')->middleware('permission:manage-settings')
     Route::get('/settings', 'edit')->name('settings.edit');
     Route::put('/settings', 'update')->name('settings.update');
     Route::put('/settings/storage', 'updateStorage')->name('settings.storage.update');
+    Route::put('/settings/rustfs', 'updateRustfs')->name('settings.rustfs.update');
 });

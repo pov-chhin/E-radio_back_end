@@ -191,6 +191,26 @@
 .user-menu-toggle{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px 0 4px;border:1px solid var(--line);background:#fff;border-radius:9px;cursor:pointer}
 .user-menu-toggle .user-avatar{width:28px;height:28px;font-size:10px}
 .user-menu-name{font-size:12px;font-weight:700;color:#3d3f4d}
+
+/* Settings → Storage — storage type picker and the S3 credentials that follow it */
+.storage-types{border:0;margin:20px 0 4px;padding:0;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.storage-types legend{padding:0;margin:0 0 10px;font-size:9px;font-weight:700}
+.storage-type{display:flex;align-items:flex-start;gap:11px;padding:14px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
+.storage-type:hover{border-color:#c7c9d4}
+.storage-type:has(input:checked){border-color:var(--pink);background:#fff7f8;box-shadow:0 0 0 2px #fff0f3}
+.storage-type input{flex:none;margin-top:2px;accent-color:var(--pink)}
+.storage-type span{display:flex;flex-direction:column;gap:5px}
+.storage-type b{font-size:11px}
+.storage-type small{font-size:9px;font-weight:400;line-height:1.55;color:var(--muted)}
+.storage-type-note{font-style:normal;font-weight:700;color:#a77700}
+.storage-type:has(input:disabled){cursor:not-allowed;background:#fafafd}
+.storage-type:has(input:disabled) b{color:#9598a6}
+.storage-s3{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:10px;background:#fafafd}
+.storage-check{margin:16px 0 0}
+.storage-check label{display:inline-flex;align-items:center;gap:8px;font-size:10px;font-weight:600;color:#4d5060;cursor:pointer}
+.storage-check input{accent-color:var(--pink)}
+.storage-hint{font-size:9px;line-height:1.6;margin:14px 0 0}
+.field-error{display:block;margin-top:6px;color:var(--pink);font-size:8px;font-style:normal}
 .user-menu-info{padding:10px 11px;display:flex;flex-direction:column;gap:2px}
 .user-menu-info b{font-size:12px;color:#191b27}
 .user-menu-info small{font-size:10px;color:#9598a6}

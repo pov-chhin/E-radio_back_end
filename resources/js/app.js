@@ -376,6 +376,12 @@ qsa('[data-settings-tab]').forEach(button => button.addEventListener('click', ()
     qsa('[data-settings-tab]').forEach(tab => tab.classList.toggle('active', tab === button));
     qsa('[data-settings-panel]').forEach(panel => panel.hidden = panel.dataset.settingsPanel !== button.dataset.settingsTab);
 }));
+// Storage settings: the S3 credential fields only matter while "S3-compatible storage" is the chosen type.
+const syncStorageDriver = () => {
+    const useS3 = qs('[data-storage-driver]:checked')?.value === 's3';
+    qsa('[data-storage-s3]').forEach(panel => { panel.hidden = !useS3; });
+};
+qsa('[data-storage-driver]').forEach(radio => radio.addEventListener('change', syncStorageDriver));
 qsa('[data-toast] button').forEach(button => button.addEventListener('click', () => button.parentElement.remove()));
 
 // A normal multipart form gives no feedback while a large MP3 is uploading.

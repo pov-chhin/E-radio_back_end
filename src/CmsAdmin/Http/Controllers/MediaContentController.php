@@ -3,6 +3,7 @@
 namespace Src\CmsAdmin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Support\MediaStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -106,9 +107,9 @@ class MediaContentController extends Controller
 
     public function destroy(Request $request, MediaContent $mediaContent): RedirectResponse
     {
-        $this->deleteStoredMedia($mediaContent->stream);
+        $this->deleteStoredMedia($mediaContent->stream, $mediaContent->stream_disk);
         $this->deleteStoredMedia($mediaContent->source_path);
-        $this->deleteStoredMedia($mediaContent->thumbnail);
+        $this->deleteStoredMedia($mediaContent->thumbnail, $mediaContent->thumbnail_disk);
         $mediaContent->delete();
 
         return $this->redirectAfterSave($request, 'Media content deleted.');
@@ -240,11 +241,20 @@ class MediaContentController extends Controller
 
         unset($data['tags'], $data['status'], $data['published_at']);
 
+        $thumbnailReplaced = $request->hasFile('thumbnail') || $request->filled('thumbnail_url');
+
         $data['thumbnail'] = $this->resolveImageField(
             $this->imageProcessor, $request, 'thumbnail', $mediaContent?->thumbnail,
             config('services.media_storage.image_directory'), self::THUMBNAIL_MAX_SIZE, self::THUMBNAIL_MAX_SIZE,
-            crop: false,
+            crop: false, disk: MediaStorage::current(), existingDisk: $mediaContent?->thumbnail_disk,
         );
+
+        // The file's disk follows the file: a new thumbnail lands on the current storage, a removed one leaves no disk behind.
+        if ($thumbnailReplaced) {
+            $data['thumbnail_disk'] = MediaStorage::column();
+        } elseif ($data['thumbnail'] === null) {
+            $data['thumbnail_disk'] = null;
+        }
 
         unset($data['stream'], $data['stream_url'], $data['thumbnail_url'], $data['remove_thumbnail']);
 
@@ -277,10 +287,11 @@ class MediaContentController extends Controller
         }
 
         if ($request->filled('stream_url')) {
-            $this->deleteStoredMedia($mediaContent->stream);
+            $this->deleteStoredMedia($mediaContent->stream, $mediaContent->stream_disk);
             $this->deleteStoredMedia($mediaContent->source_path);
             $mediaContent->update([
                 'stream' => $request->input('stream_url'),
+                'stream_disk' => null,
                 'source_path' => null,
                 'processing_status' => 'ready',
                 'processing_error' => null,

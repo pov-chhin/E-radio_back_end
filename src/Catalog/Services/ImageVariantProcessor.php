@@ -2,10 +2,10 @@
 
 namespace Src\Catalog\Services;
 
+use App\Support\MediaStorage;
 use GdImage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -21,22 +21,23 @@ class ImageVariantProcessor
      * is only the largest box it is scaled down to fit (never scaled up), so
      * nothing is cut off.
      */
-    public function process(UploadedFile $file, string $directory, int $width, int $height, int $quality = 82, bool $crop = true): string
+    public function process(UploadedFile $file, string $directory, int $width, int $height, int $quality = 82, bool $crop = true, ?string $disk = null): string
     {
-        return $this->processBytes(file_get_contents($file->getRealPath()), $directory, $width, $height, $quality, $crop);
+        return $this->processBytes(file_get_contents($file->getRealPath()), $directory, $width, $height, $quality, $crop, $disk);
     }
 
     /** Downloads the image server-side and runs it through the same crop/resize/WebP pipeline as an upload, so a pasted URL still ends up matching spec exactly. */
-    public function processFromUrl(string $url, string $directory, int $width, int $height, int $quality = 82, bool $crop = true): string
+    public function processFromUrl(string $url, string $directory, int $width, int $height, int $quality = 82, bool $crop = true, ?string $disk = null): string
     {
         $response = Http::timeout(10)->get($url);
 
         abort_unless($response->successful(), 422, 'Could not download that image URL.');
 
-        return $this->processBytes($response->body(), $directory, $width, $height, $quality, $crop);
+        return $this->processBytes($response->body(), $directory, $width, $height, $quality, $crop, $disk);
     }
 
-    private function processBytes(string $bytes, string $directory, int $width, int $height, int $quality, bool $crop): string
+    /** $disk is where the finished image is written; null means the local public disk. */
+    private function processBytes(string $bytes, string $directory, int $width, int $height, int $quality, bool $crop, ?string $disk): string
     {
         $source = @imagecreatefromstring($bytes);
 
@@ -54,7 +55,7 @@ class ImageVariantProcessor
         imagedestroy($cropped);
 
         $path = trim($directory, '/').'/'.Str::uuid().'.webp';
-        Storage::disk('public')->put($path, $contents);
+        abort_unless(MediaStorage::disk($disk)->put($path, $contents), 500, 'Could not save the image to storage.');
 
         return $path;
     }

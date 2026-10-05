@@ -11,6 +11,8 @@ use Src\Catalog\Jobs\ProcessMediaContentAudio;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Services\OpusAudioProcessor;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Src\Setting\Models\RustfsSetting;
 use Src\Setting\Models\StorageSetting;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesAdminUser;
@@ -376,6 +378,214 @@ class MediaContentUploadsTest extends TestCase
         $mediaContent->refresh();
         $this->assertNull($mediaContent->thumbnail);
         Storage::disk('public')->assertMissing($originalThumbnail);
+    }
+
+    /** @return array<string, array{string, string}> storage type chosen in the settings => the disk it uploads to */
+    public static function remoteStorages(): array
+    {
+        return ['S3-compatible' => ['s3', 'media_s3'], 'RustFS' => ['rustfs', 'media_rustfs']];
+    }
+
+    /**
+     * Selects the remote storage the way the settings page would and swaps its disk for an in-memory double, so
+     * nothing leaves the test. The config is applied first: applying rebuilds the disk, so the double goes in after.
+     */
+    private function useRemoteStorage(string $driver, string $disk): void
+    {
+        if ($driver === 's3') {
+            StorageSetting::firstOrFail()->update(['driver' => 's3', 's3_key' => 'k', 's3_secret' => 's', 's3_bucket' => 'b', 's3_region' => 'auto']);
+        } else {
+            RustfsSetting::firstOrFail()->update(['s3_key' => 'k', 's3_secret' => 's']);
+            StorageSetting::firstOrFail()->update(['driver' => 'rustfs']);
+        }
+
+        StorageSetting::firstOrFail()->applyToConfig();
+        Storage::fake($disk, ['url' => 'https://cdn.example.com']);
+    }
+
+    private function backToLocalStorage(): void
+    {
+        StorageSetting::firstOrFail()->update(['driver' => 'local']);
+        StorageSetting::firstOrFail()->applyToConfig();
+    }
+
+    private function createWithThumbnail(string $slug = 'qa-track'): MediaContent
+    {
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => $slug, 'media_type' => 'audio', 'status' => 'private',
+            'thumbnail' => UploadedFile::fake()->image('thumb.jpg', 800, 600),
+        ])->assertRedirect();
+
+        return MediaContent::where('slug', $slug)->firstOrFail();
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_a_thumbnail_is_stored_on_the_chosen_remote_storage_and_the_record_remembers_it(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+
+        $mediaContent = $this->createWithThumbnail();
+
+        $this->assertSame($disk, $mediaContent->thumbnail_disk);
+        Storage::disk($disk)->assertExists($mediaContent->thumbnail);
+        Storage::disk('public')->assertMissing($mediaContent->thumbnail);
+        $this->assertSame('https://cdn.example.com/'.$mediaContent->thumbnail, $mediaContent->thumbnail_url);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_converted_audio_is_stored_on_the_chosen_remote_storage_while_the_upload_stays_local_until_then(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $this->fakeWavUpload(),
+        ])->assertRedirect();
+
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $sourcePath = $mediaContent->source_path;
+        // FFmpeg needs a real file, so the upload waits on the local disk for the queue worker.
+        Storage::disk('public')->assertExists($sourcePath);
+
+        $this->processPendingAudio($mediaContent);
+
+        $this->assertSame($disk, $mediaContent->stream_disk);
+        Storage::disk($disk)->assertExists($mediaContent->stream);
+        Storage::disk('public')->assertMissing($mediaContent->stream);
+        Storage::disk('public')->assertMissing($sourcePath);
+        $this->assertSame('https://cdn.example.com/'.$mediaContent->stream, $mediaContent->stream_url);
+        // Cloud files are not probed for their size or presence: that would be a network round trip per row.
+        $this->assertNull($mediaContent->stream_size);
+        $this->assertSame('Cloud storage', $mediaContent->stream_size_label);
+        $this->assertFalse($mediaContent->stream_missing);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_a_queue_worker_that_booted_before_the_switch_still_uploads_to_the_new_storage(string $driver, string $disk): void
+    {
+        $this->post('/admin/media-contents', [
+            'category_id' => $this->category()->id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream' => $this->fakeWavUpload(),
+        ])->assertRedirect();
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
+
+        $this->useRemoteStorage($driver, $disk);
+        config(['services.media_storage.disk' => 'public']); // what a worker that started earlier still holds
+
+        $this->processPendingAudio($mediaContent);
+
+        $this->assertSame($disk, $mediaContent->stream_disk);
+        Storage::disk($disk)->assertExists($mediaContent->stream);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_switching_storage_leaves_old_files_where_they_are_and_replacing_one_cleans_up_the_old_disk(string $driver, string $disk): void
+    {
+        $mediaContent = $this->createWithThumbnail();
+        $localThumbnail = $mediaContent->thumbnail;
+        $this->assertNull($mediaContent->thumbnail_disk);
+
+        $this->useRemoteStorage($driver, $disk);
+        // Still resolves against the local disk after the switch.
+        $this->assertStringContainsString('/storage/', $mediaContent->fresh()->thumbnail_url);
+        Storage::disk('public')->assertExists($localThumbnail);
+
+        $this->put(route('admin.media-contents.update', $mediaContent), [
+            'category_id' => $mediaContent->category_id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'thumbnail' => UploadedFile::fake()->image('new.jpg', 800, 600),
+        ])->assertRedirect();
+
+        $mediaContent->refresh();
+        $this->assertSame($disk, $mediaContent->thumbnail_disk);
+        Storage::disk($disk)->assertExists($mediaContent->thumbnail);
+        Storage::disk('public')->assertMissing($localThumbnail);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_files_already_on_remote_storage_keep_working_after_switching_back_to_local(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        $mediaContent = $this->createWithThumbnail();
+        $remoteThumbnail = $mediaContent->thumbnail;
+
+        $this->backToLocalStorage();
+
+        $this->assertSame('https://cdn.example.com/'.$remoteThumbnail, $mediaContent->fresh()->thumbnail_url);
+
+        // Replacing it now writes locally and removes the old one from the disk it was actually on.
+        $this->put(route('admin.media-contents.update', $mediaContent), [
+            'category_id' => $mediaContent->category_id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'thumbnail' => UploadedFile::fake()->image('new.jpg', 800, 600),
+        ])->assertRedirect();
+
+        $mediaContent->refresh();
+        $this->assertNull($mediaContent->thumbnail_disk);
+        Storage::disk('public')->assertExists($mediaContent->thumbnail);
+        Storage::disk($disk)->assertMissing($remoteThumbnail);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_removing_a_remote_thumbnail_deletes_it_from_the_remote_disk_and_forgets_the_disk(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        $mediaContent = $this->createWithThumbnail();
+        $path = $mediaContent->thumbnail;
+
+        $this->put(route('admin.media-contents.update', $mediaContent), [
+            'category_id' => $mediaContent->category_id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'remove_thumbnail' => '1',
+        ])->assertRedirect();
+
+        $mediaContent->refresh();
+        $this->assertNull($mediaContent->thumbnail);
+        $this->assertNull($mediaContent->thumbnail_disk);
+        Storage::disk($disk)->assertMissing($path);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_pasting_a_stream_url_replaces_a_remote_stream_and_deletes_its_file(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        Storage::disk($disk)->put('audio/remote.opus', 'a');
+        $mediaContent = $this->mediaContentWithStream('audio/remote.opus', ['stream_disk' => $disk]);
+
+        $this->put(route('admin.media-contents.update', $mediaContent), [
+            'category_id' => $mediaContent->category_id,
+            'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio', 'status' => 'private',
+            'stream_url' => 'https://stream.example.com/live.mp3',
+        ])->assertRedirect();
+
+        $mediaContent->refresh();
+        $this->assertSame('https://stream.example.com/live.mp3', $mediaContent->stream);
+        $this->assertNull($mediaContent->stream_disk);
+        Storage::disk($disk)->assertMissing('audio/remote.opus');
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_deleting_media_content_removes_its_files_from_the_remote_disk(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        Storage::disk($disk)->put('audio/remote.opus', 'a');
+        Storage::disk($disk)->put('images/remote.webp', 'a');
+        $mediaContent = $this->mediaContentWithStream('audio/remote.opus', ['stream_disk' => $disk, 'thumbnail' => 'images/remote.webp', 'thumbnail_disk' => $disk]);
+
+        $this->delete(route('admin.media-contents.destroy', $mediaContent))->assertRedirect();
+
+        Storage::disk($disk)->assertMissing('audio/remote.opus');
+        Storage::disk($disk)->assertMissing('images/remote.webp');
+    }
+
+    public function test_a_record_pointing_at_a_disk_that_is_no_longer_configured_does_not_break_the_page(): void
+    {
+        $mediaContent = $this->mediaContentWithStream('audio/orphan.opus', ['stream_disk' => 'media_gone']);
+
+        $this->get(route('admin.media-contents.edit', $mediaContent))->assertOk()->assertSee('orphan.opus');
     }
 
     public function test_deleting_media_content_removes_its_stored_stream_and_thumbnail(): void

@@ -2,14 +2,15 @@
 
 namespace Src\Catalog\Services;
 
-use Illuminate\Support\Facades\Storage;
+use App\Support\MediaStorage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
 class OpusAudioProcessor
 {
-    public function process(string $sourcePath, string $directory): string
+    /** Converts $sourcePath (a local file) to Opus and stores it under $directory on $disk (null: the local public disk). */
+    public function process(string $sourcePath, string $directory, ?string $disk = null): string
     {
         $id = (string) Str::uuid();
         $temporaryOutput = sys_get_temp_dir().DIRECTORY_SEPARATOR."media_opus_{$id}.opus";
@@ -36,11 +37,19 @@ class OpusAudioProcessor
 
             $stream = fopen($temporaryOutput, 'rb');
 
-            if ($stream === false || ! Storage::disk('public')->put($storedPath, $stream)) {
-                throw new RuntimeException('Unable to store the converted Opus file.');
+            if ($stream === false) {
+                throw new RuntimeException('Unable to read the converted Opus file.');
             }
 
-            fclose($stream);
+            try {
+                if (! MediaStorage::disk($disk)->put($storedPath, $stream)) {
+                    throw new RuntimeException('Unable to store the converted Opus file.');
+                }
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
 
             return $storedPath;
         } catch (\Throwable $exception) {

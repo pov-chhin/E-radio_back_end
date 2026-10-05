@@ -2,11 +2,13 @@
 
 namespace Src\Catalog\Jobs;
 
+use App\Support\MediaStorage;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Services\OpusAudioProcessor;
+use Src\Setting\Models\StorageSetting;
 use Throwable;
 
 class ProcessMediaContentAudio implements ShouldQueue
@@ -31,27 +33,34 @@ class ProcessMediaContentAudio implements ShouldQueue
         }
 
         try {
+            // A queue worker keeps the settings it booted with, so re-read them: the admin may have switched
+            // storage (or its folders) since. The upload itself always waits on the local disk for FFmpeg;
+            // only the converted result goes to the chosen storage.
+            StorageSetting::first()?->applyToConfig();
+
             $disk = Storage::disk('public');
+            $targetDisk = MediaStorage::current();
 
             if (! $disk->exists($this->sourcePath)) {
                 throw new \RuntimeException('The uploaded source file is missing.');
             }
 
-            $convertedPath = $processor->process($disk->path($this->sourcePath), config('services.media_storage.audio_directory'));
+            $convertedPath = $processor->process($disk->path($this->sourcePath), config('services.media_storage.audio_directory'), $targetDisk);
             $mediaContent->refresh();
 
             // A newer upload superseded this job while FFmpeg was running.
             if ($mediaContent->source_path !== $this->sourcePath) {
-                $disk->delete($convertedPath);
+                MediaStorage::disk($targetDisk)->delete($convertedPath);
 
                 return;
             }
 
             $duration = $processor->probeDurationSeconds($disk->path($this->sourcePath));
 
-            $previousStream = $mediaContent->stream;
+            [$previousStream, $previousDisk] = [$mediaContent->stream, $mediaContent->stream_disk];
             $updates = [
                 'stream' => $convertedPath,
+                'stream_disk' => MediaStorage::column($targetDisk),
                 'source_path' => null,
                 'processing_status' => 'ready',
                 'processing_error' => null,
@@ -64,7 +73,7 @@ class ProcessMediaContentAudio implements ShouldQueue
             $mediaContent->update($updates);
 
             $disk->delete($this->sourcePath);
-            $this->deleteStoredMedia($previousStream);
+            $this->deleteStoredMedia($previousStream, $previousDisk);
         } catch (Throwable $exception) {
             $this->markFailed($exception);
 
@@ -90,18 +99,18 @@ class ProcessMediaContentAudio implements ShouldQueue
             ]);
     }
 
-    private function deleteStoredMedia(?string $path): void
+    private function deleteStoredMedia(?string $path, ?string $disk = null): void
     {
         if (! $path || str_starts_with($path, 'http')) {
             return;
         }
 
         if (str_ends_with($path, '.m3u8')) {
-            Storage::disk('public')->deleteDirectory(dirname($path));
+            MediaStorage::disk($disk)->deleteDirectory(dirname($path));
 
             return;
         }
 
-        Storage::disk('public')->delete($path);
+        MediaStorage::disk($disk)->delete($path);
     }
 }

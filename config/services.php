@@ -44,6 +44,17 @@ return [
         ],
     ],
 
+    'google' => [
+        // The OAuth client ID(s) the mobile app asks Google to issue ID tokens
+        // for (the "Web application" client, which the app passes as its server
+        // client ID). Comma-separated; a token for any other client is refused,
+        // and with none set "Continue with Google" is switched off.
+        'client_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))
+        ))),
+    ],
+
     'azuracast' => [
         'url' => env('AZURACAST_URL'),
         'api_key' => env('AZURACAST_API_KEY'),
@@ -59,6 +70,15 @@ return [
     'media_storage' => [
         'image_directory' => env('MEDIA_IMAGE_DIRECTORY', 'media-contents/thumbnails'),
         'audio_directory' => env('MEDIA_AUDIO_DIRECTORY', 'media-contents/streams'),
+        // The disk new uploads go to — 'public' (local) or 'media_s3'. Settings → Storage overrides it from the database.
+        'disk' => 'public',
+    ],
+
+    // Defaults the RustFS connection (Settings → RustFS) is created with; the admin only adds the access keys.
+    'rustfs' => [
+        'endpoint' => env('RUSTFS_ENDPOINT', 'http://s3.devams.site'),
+        'bucket' => env('RUSTFS_BUCKET', 'rustfs'),
+        'region' => env('RUSTFS_REGION', 'us-east-1'),
     ],
 
 ];

@@ -2,8 +2,8 @@
 
 namespace Src\CmsAdmin\Http\Controllers\Concerns;
 
+use App\Support\MediaStorage;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Src\Catalog\Services\HlsAudioProcessor;
 use Src\Catalog\Services\ImageVariantProcessor;
 
@@ -19,6 +19,9 @@ trait ResolvesUploadedMedia
      * upload or pasted URL → downloaded, cropped/resized, re-encoded as
      * WebP, replacing the old file; "remove" checked → clear it; otherwise
      * keep whatever's already there.
+     *
+     * $disk is where a new image is written (null: the local public disk) and
+     * $existingDisk where the image being replaced or removed lives.
      */
     private function resolveImageField(
         ImageVariantProcessor $imageProcessor,
@@ -29,21 +32,23 @@ trait ResolvesUploadedMedia
         int $width,
         int $height,
         bool $crop = true,
+        ?string $disk = null,
+        ?string $existingDisk = null,
     ): ?string {
         if ($request->hasFile($field)) {
-            $this->deleteStoredMedia($existingPath);
+            $this->deleteStoredMedia($existingPath, $existingDisk);
 
-            return $imageProcessor->process($request->file($field), $directory, $width, $height, crop: $crop);
+            return $imageProcessor->process($request->file($field), $directory, $width, $height, crop: $crop, disk: $disk);
         }
 
         if ($request->filled("{$field}_url")) {
-            $this->deleteStoredMedia($existingPath);
+            $this->deleteStoredMedia($existingPath, $existingDisk);
 
-            return $imageProcessor->processFromUrl($request->input("{$field}_url"), $directory, $width, $height, crop: $crop);
+            return $imageProcessor->processFromUrl($request->input("{$field}_url"), $directory, $width, $height, crop: $crop, disk: $disk);
         }
 
         if ($request->boolean("remove_{$field}")) {
-            $this->deleteStoredMedia($existingPath);
+            $this->deleteStoredMedia($existingPath, $existingDisk);
 
             return null;
         }
@@ -115,19 +120,22 @@ trait ResolvesUploadedMedia
         return $existingPath;
     }
 
-    /** An HLS playlist has sibling .ts segment files, so its whole directory goes with it. */
-    private function deleteStoredMedia(?string $path): void
+    /**
+     * Deletes a stored file from the disk it lives on (null: the local public disk).
+     * An HLS playlist has sibling .ts segment files, so its whole directory goes with it.
+     */
+    private function deleteStoredMedia(?string $path, ?string $disk = null): void
     {
         if (! $path || str_starts_with($path, 'http')) {
             return;
         }
 
         if (str_ends_with($path, '.m3u8')) {
-            Storage::disk('public')->deleteDirectory(dirname($path));
+            MediaStorage::disk($disk)->deleteDirectory(dirname($path));
 
             return;
         }
 
-        Storage::disk('public')->delete($path);
+        MediaStorage::disk($disk)->delete($path);
     }
 }
