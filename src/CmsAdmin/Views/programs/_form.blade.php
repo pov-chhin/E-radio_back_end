@@ -24,9 +24,9 @@
         <input id="slug" name="slug" type="text" value="{{ old('slug', $program->slug ?? '') }}">
         @error('slug') <em>{{ $message }}</em> @enderror
     </label>
-    <label>Cover image <small class="muted" style="font-weight:400">— cropped to WebP, 1200×400. Optional: the newest episode's picture is used without one.</small>
+    <label>Cover image <small class="muted" style="font-weight:400">— kept whole as WebP, never cropped (scaled down to fit 1280 px). Optional: the newest episode's picture is used without one.</small>
         @if(isset($program) && $program->cover_image)
-            <img src="{{ $program->cover_image_url }}" alt="" style="width:130px;height:43px;border-radius:8px;object-fit:cover">
+            <img src="{{ $program->cover_image_url }}" alt="" style="max-width:130px;max-height:130px;width:auto;height:auto;border-radius:8px">
             <span class="check-row" style="margin:0"><input type="checkbox" name="remove_cover_image" value="1"> Remove current cover image</span>
         @endif
         <div class="tag-view-toggle" style="align-self:flex-start">

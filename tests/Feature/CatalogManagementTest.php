@@ -145,7 +145,7 @@ class CatalogManagementTest extends TestCase
         $this->assertDatabaseHas('programs', ['slug' => 'qa-program', 'is_published' => true]);
     }
 
-    public function test_uploading_a_program_cover_image_is_cropped_to_1200x400_and_converted_to_webp(): void
+    public function test_uploading_a_program_cover_image_keeps_the_whole_picture_and_converts_it_to_webp(): void
     {
         $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
 
@@ -153,15 +153,32 @@ class CatalogManagementTest extends TestCase
             'tag_id' => $type->id,
             'name' => 'QA Program',
             'slug' => 'qa-program',
-            'cover_image' => UploadedFile::fake()->image('cover.jpg', 2000, 500),
+            'cover_image' => UploadedFile::fake()->image('cover.jpg', 2000, 1500),
         ])->assertRedirect();
 
         $program = Program::where('slug', 'qa-program')->firstOrFail();
         $this->assertStringEndsWith('.webp', $program->cover_image);
 
+        // Scaled down to fit 1280 px, in its own 4:3 shape — nothing cut off.
         $image = imagecreatefromstring(Storage::disk('public')->get($program->cover_image));
-        $this->assertSame([1200, 400], [imagesx($image), imagesy($image)]);
+        $this->assertSame([1280, 960], [imagesx($image), imagesy($image)]);
         $this->assertStringContainsString('/storage/', $program->cover_image_url);
+    }
+
+    public function test_a_small_program_cover_image_is_not_scaled_up_or_cropped(): void
+    {
+        $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
+
+        $this->post('/admin/programs', [
+            'tag_id' => $type->id,
+            'name' => 'QA Program',
+            'slug' => 'qa-program',
+            'cover_image' => UploadedFile::fake()->image('cover.jpg', 600, 800),
+        ])->assertRedirect();
+
+        $program = Program::where('slug', 'qa-program')->firstOrFail();
+        $image = imagecreatefromstring(Storage::disk('public')->get($program->cover_image));
+        $this->assertSame([600, 800], [imagesx($image), imagesy($image)]);
     }
 
     public function test_checking_remove_cover_image_clears_it_and_deletes_the_file(): void

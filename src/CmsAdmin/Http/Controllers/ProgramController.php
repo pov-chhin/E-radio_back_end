@@ -21,9 +21,8 @@ class ProgramController extends Controller
 
     private const COVER_DIRECTORY = 'programs/covers';
 
-    private const COVER_WIDTH = 1200;
-
-    private const COVER_HEIGHT = 400;
+    /** Largest box a cover is scaled down to fit — it keeps its own aspect ratio, never cropped. */
+    private const COVER_MAX_SIZE = 1280;
 
     public function __construct(private readonly ImageVariantProcessor $imageProcessor) {}
 
@@ -136,7 +135,8 @@ class ProgramController extends Controller
 
         $data['cover_image'] = $this->resolveImageField(
             $this->imageProcessor, $request, 'cover_image', $program?->cover_image,
-            self::COVER_DIRECTORY, self::COVER_WIDTH, self::COVER_HEIGHT,
+            self::COVER_DIRECTORY, self::COVER_MAX_SIZE, self::COVER_MAX_SIZE,
+            crop: false,
         );
 
         unset($data['cover_image_url'], $data['remove_cover_image']);
