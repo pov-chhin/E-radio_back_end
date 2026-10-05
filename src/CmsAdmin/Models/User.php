@@ -2,6 +2,7 @@
 
 namespace Src\CmsAdmin\Models;
 
+use App\Support\AvatarUrl;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -43,6 +44,14 @@ class User extends Authenticatable
     {
         return Attribute::make(
             get: fn () => trim($this->first_name.' '.$this->last_name),
+        );
+    }
+
+    /** The stored path or external URL, resolved to something loadable; `getRawOriginal('avatar_url')` is the stored value. */
+    protected function avatarUrl(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => AvatarUrl::from($value),
         );
     }
 

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Models\Program;
@@ -80,6 +81,18 @@ class CmsDashboardTest extends TestCase
             ->assertSee('Jane Doe')
             ->assertSee('jane@example.com')
             ->assertDontSee('Old Timer');
+    }
+
+    public function test_users_online_shows_an_uploaded_profile_picture_by_its_full_url(): void
+    {
+        $customer = Customer::create(['first_name' => 'Jane', 'last_name' => 'Doe', 'email' => 'jane@example.com', 'password' => Hash::make('password'), 'avatar_url' => 'avatars/jane.jpg']);
+        $customer->createToken('app')->accessToken->forceFill(['last_used_at' => now()->subMinute()])->save();
+
+        $this->actingAs($this->createAdmin([]), 'admin');
+
+        $this->get('/admin')
+            ->assertOk()
+            ->assertSee('src="'.Storage::disk('public')->url('avatars/jane.jpg').'"', false);
     }
 
     public function test_visitors_by_country_passes_the_per_country_counts_to_the_map(): void

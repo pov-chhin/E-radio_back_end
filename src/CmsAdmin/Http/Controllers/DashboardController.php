@@ -3,6 +3,7 @@
 namespace Src\CmsAdmin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Support\AvatarUrl;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -89,6 +90,7 @@ class DashboardController extends Controller
             ->get(['id', 'name', 'first_name', 'last_name', 'username', 'email', 'avatar_url', 'type'])
             ->map(function ($user) use ($latest) {
                 $user->display_name = trim($user->first_name.' '.$user->last_name) ?: ($user->name ?: ($user->username ?: $user->email));
+                $user->avatar_url = AvatarUrl::from($user->avatar_url);
                 $user->last_active = $latest->get((int) $user->id);
 
                 return $user;
