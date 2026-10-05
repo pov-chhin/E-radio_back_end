@@ -63,6 +63,76 @@ class CmsDashboardTest extends TestCase
             ->assertSeeInOrder(['All users online', '2']);
     }
 
+    public function test_users_online_lists_recently_active_people_with_their_email(): void
+    {
+        $admin = $this->createAdmin([]);
+        $customer = Customer::create(['first_name' => 'Jane', 'last_name' => 'Doe', 'email' => 'jane@example.com', 'password' => Hash::make('password')]);
+        $idle = Customer::create(['first_name' => 'Old', 'last_name' => 'Timer', 'email' => 'old@example.com', 'password' => Hash::make('password')]);
+
+        $customer->createToken('app')->accessToken->forceFill(['last_used_at' => now()->subMinute()])->save();
+        $idle->createToken('app')->accessToken->forceFill(['last_used_at' => now()->subHours(2)])->save();
+
+        $this->actingAs($admin, 'admin');
+
+        $this->get('/admin')
+            ->assertOk()
+            ->assertSee('Users online')
+            ->assertSee('Jane Doe')
+            ->assertSee('jane@example.com')
+            ->assertDontSee('Old Timer');
+    }
+
+    public function test_visitors_by_country_passes_the_per_country_counts_to_the_map(): void
+    {
+        $this->actingAs($this->createAdmin([]), 'admin');
+        foreach ([['a', 'KH'], ['b', 'KH'], ['c', 'US'], ['d', null]] as [$name, $country]) {
+            Customer::create(['first_name' => $name, 'last_name' => 'User', 'email' => "{$name}@example.com", 'password' => Hash::make('password')]);
+            DB::table('users')->where('email', "{$name}@example.com")->update(['country' => $country]);
+        }
+
+        $this->get('/admin')
+            ->assertOk()
+            ->assertSee('Visitors by country')
+            ->assertSee('3 of 5 users have a known country')
+            ->assertSee('data-country-map', false)
+            ->assertSee('{&quot;KH&quot;:2,&quot;US&quot;:1}', false);
+    }
+
+    public function test_visitors_by_country_explains_itself_when_no_country_is_known_yet(): void
+    {
+        $this->actingAs($this->createAdmin([]), 'admin');
+
+        $this->get('/admin')
+            ->assertOk()
+            ->assertSee('No location data yet')
+            ->assertDontSee('data-country-map', false);
+    }
+
+    public function test_podcasts_table_shows_episode_count_and_total_plays(): void
+    {
+        $this->actingAs($this->createAdmin([]), 'admin');
+        $program = Program::create([
+            'category_id' => Category::where('slug', 'podcast')->firstOrFail()->id,
+            'name' => 'Morning Brief',
+            'slug' => 'morning-brief',
+            'is_published' => true,
+        ]);
+        foreach ([40, 2] as $i => $plays) {
+            MediaContent::create([
+                'category_id' => Category::where('slug', 'podcast')->firstOrFail()->id,
+                'program_id' => $program->id,
+                'title' => "Episode {$i}",
+                'slug' => "episode-{$i}",
+                'media_type' => 'audio',
+                'play_count' => $plays,
+            ]);
+        }
+
+        $this->get('/admin')
+            ->assertOk()
+            ->assertSeeInOrder(['Morning Brief', 'Published', '<b class="dash-num">2</b>', '<b class="dash-num">42</b>'], false);
+    }
+
     public function test_it_shows_recent_podcasts_instead_of_recent_admin_users(): void
     {
         $this->actingAs($this->createAdmin([]), 'admin');

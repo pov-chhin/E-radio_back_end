@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\StationController;
 use App\Http\Controllers\Api\TagController;
+use App\Http\Middleware\RecordUserCountry;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -23,7 +24,7 @@ Route::post('/password/forgot', [PasswordResetController::class, 'sendCode'])->m
 Route::post('/password/verify-code', [PasswordResetController::class, 'verifyCode'])->middleware('throttle:10,1,password-verify');
 Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:6,1,password-reset');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', RecordUserCountry::class])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me', [AuthController::class, 'updateProfile']);
     Route::post('/me/avatar', [AuthController::class, 'updateAvatar']);

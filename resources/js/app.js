@@ -485,3 +485,7 @@ if (sessionClock && !sessionClock.textContent.includes('-')) {
     let seconds = sessionClock.textContent.split(':').reduce((sum, part) => sum * 60 + Number(part), 0);
     setInterval(() => { seconds++; sessionClock.textContent = [Math.floor(seconds/3600), Math.floor(seconds/60)%60, seconds%60].map(v => String(v).padStart(2,'0')).join(':'); }, 1000);
 }
+
+// Dashboard "Visitors by country" map — loaded on demand so no other admin page ships the map library.
+const countryMap = qs('[data-country-map]');
+if (countryMap) import('./dashboard-map.js').then(({ mountCountryMap }) => mountCountryMap(countryMap));
