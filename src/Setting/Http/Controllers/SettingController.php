@@ -32,6 +32,10 @@ class SettingController extends Controller
             's3HasSecret' => $this->savedCredential($storageSetting, 's3_secret') !== null,
             'rustfsKey' => $this->savedCredential($rustfsSetting, 's3_key'),
             'rustfsHasSecret' => $this->savedCredential($rustfsSetting, 's3_secret') !== null,
+            // True while the keys come from .env because none are saved here.
+            'rustfsFromEnv' => $rustfsSetting->hasEnvCredentials()
+                && $this->savedCredential($rustfsSetting, 's3_key') === null
+                && $this->savedCredential($rustfsSetting, 's3_secret') === null,
             // The RustFS storage type can only be picked once its connection is complete.
             'rustfsReady' => $rustfsSetting->s3Disk() !== null,
         ]);
@@ -132,10 +136,16 @@ class SettingController extends Controller
      */
     private function connectionRules(string $prefix, StorageSetting|RustfsSetting $setting, bool $required, bool $endpointRequired): array
     {
+        $savedKey = $this->savedCredential($setting, 's3_key');
+        $savedSecret = $this->savedCredential($setting, 's3_secret');
+        // The environment's key and secret stand in until some are saved, so both may stay blank — but a key typed
+        // in must come with its secret (and the other way round), or the pair would not match.
+        $fromEnv = $savedKey === null && $savedSecret === null && $setting->hasEnvCredentials();
+
         return [
             // Left blank, the saved key and secret are kept — they are never shown again once stored.
-            "{$prefix}_key" => [Rule::requiredIf($required && $this->savedCredential($setting, 's3_key') === null), 'nullable', 'string', 'max:255'],
-            "{$prefix}_secret" => [Rule::requiredIf($required && $this->savedCredential($setting, 's3_secret') === null), 'nullable', 'string', 'max:255'],
+            "{$prefix}_key" => [Rule::requiredIf($required && $savedKey === null && ! $fromEnv), ...($fromEnv ? ["required_with:{$prefix}_secret"] : []), 'nullable', 'string', 'max:255'],
+            "{$prefix}_secret" => [Rule::requiredIf($required && $savedSecret === null && ! $fromEnv), ...($fromEnv ? ["required_with:{$prefix}_key"] : []), 'nullable', 'string', 'max:255'],
             "{$prefix}_bucket" => [Rule::requiredIf($required), 'nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+$/'],
             "{$prefix}_region" => [Rule::requiredIf($required), 'nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9-]+$/'],
             "{$prefix}_endpoint" => [Rule::requiredIf($endpointRequired), 'nullable', 'url', 'max:255'],

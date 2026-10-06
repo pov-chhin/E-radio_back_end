@@ -143,13 +143,14 @@
                         'setting' => $rustfsSetting,
                         'savedKey' => $rustfsKey,
                         'hasSecret' => $rustfsHasSecret,
+                        'fromEnv' => $rustfsFromEnv,
                         'endpointRequired' => true,
                         'endpointHint' => 'http://s3.example.com',
                     ])
                     <p class="muted storage-hint">The endpoint is the address of the RustFS S3 API, and the bucket must already exist. Leave Public URL empty to serve files from the endpoint itself, or fill it in if the bucket is published under another address. Saving tests the connection by writing and deleting a small file.</p>
                 </div>
 
-                <div class="form-actions"><span>@if($rustfsReady) <span class="badge green">Connection saved</span> @else <span class="badge amber">Not set up yet</span> @endif</span><button type="submit" class="primary-button">Save</button></div>
+                <div class="form-actions"><span>@if($rustfsReady && $rustfsFromEnv) <span class="badge green">Using the keys from .env</span> @elseif($rustfsReady) <span class="badge green">Connection saved</span> @else <span class="badge amber">Not set up yet</span> @endif</span><button type="submit" class="primary-button">Save</button></div>
             </form>
         </div>
     </div>

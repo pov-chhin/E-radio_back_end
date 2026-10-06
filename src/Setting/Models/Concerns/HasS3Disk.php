@@ -25,7 +25,12 @@ trait HasS3Disk
         try {
             [$key, $secret] = [$this->s3_key, $this->s3_secret];
         } catch (DecryptException) {
-            return null;
+            [$key, $secret] = [null, null];
+        }
+
+        // Keys saved in the settings page win; the environment's pair is only used when none are saved.
+        if (blank($key) && blank($secret)) {
+            [$key, $secret] = [$this->envCredential('key'), $this->envCredential('secret')];
         }
 
         if (blank($key) || blank($secret) || blank($this->s3_bucket) || blank($this->s3_region)) {
@@ -51,6 +56,18 @@ trait HasS3Disk
             'report' => false,
             'http' => ['connect_timeout' => 5, 'timeout' => 300],
         ];
+    }
+
+    /** The access key ('key') or secret ('secret') this row falls back to when none is saved; null for no fallback. */
+    protected function envCredential(string $part): ?string
+    {
+        return null;
+    }
+
+    /** True when the environment supplies a complete key and secret to fall back to. */
+    public function hasEnvCredentials(): bool
+    {
+        return filled($this->envCredential('key')) && filled($this->envCredential('secret'));
     }
 
     /** True when credentials were saved but can no longer be read, so the page can ask for them again. */

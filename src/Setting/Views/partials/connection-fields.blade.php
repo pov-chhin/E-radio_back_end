@@ -4,14 +4,15 @@
     $setting      the settings row the values come from
     $savedKey     the access key ID already saved, if any;  $hasSecret whether a secret is saved
     $endpointHint placeholder text for the endpoint field
+    $fromEnv      (optional) true while the key and secret come from the .env file because none are saved
 --}}
 <div class="form-grid">
     <label>Access key ID
-        <input name="{{ $prefix }}_key" type="text" value="{{ old("{$prefix}_key", $savedKey) }}" autocomplete="off" spellcheck="false">
+        <input name="{{ $prefix }}_key" type="text" value="{{ old("{$prefix}_key", $savedKey) }}" autocomplete="off" spellcheck="false" placeholder="{{ ($fromEnv ?? false) ? 'From .env — leave blank to use it' : '' }}">
         @error("{$prefix}_key") <em>{{ $message }}</em> @enderror
     </label>
     <label>Secret access key
-        <input name="{{ $prefix }}_secret" type="password" value="" autocomplete="new-password" placeholder="{{ $hasSecret ? 'Saved — leave blank to keep it' : '' }}">
+        <input name="{{ $prefix }}_secret" type="password" value="" autocomplete="new-password" placeholder="{{ $hasSecret ? 'Saved — leave blank to keep it' : (($fromEnv ?? false) ? 'From .env — leave blank to use it' : '') }}">
         @error("{$prefix}_secret") <em>{{ $message }}</em> @enderror
     </label>
     <label>Bucket

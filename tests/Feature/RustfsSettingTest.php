@@ -120,6 +120,67 @@ class RustfsSettingTest extends TestCase
         $this->assertNull(RustfsSetting::firstOrFail()->s3_secret);
     }
 
+    /** Makes the environment supply the keys, as AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env do. */
+    private function keysFromEnv(): void
+    {
+        config(['services.rustfs.key' => 'ENVKEY123', 'services.rustfs.secret' => 'env-secret-value']);
+        RustfsSetting::firstOrFail()->applyToConfig();
+        Storage::fake('media_rustfs');
+    }
+
+    public function test_the_keys_come_from_env_when_none_are_saved_so_the_form_can_leave_them_blank(): void
+    {
+        $this->keysFromEnv();
+
+        $this->assertSame('ENVKEY123', config('filesystems.disks.media_rustfs.key'));
+        $this->assertSame('env-secret-value', config('filesystems.disks.media_rustfs.secret'));
+
+        $this->get('/admin/settings')
+            ->assertOk()
+            ->assertSee('Using the keys from .env')
+            ->assertSee('From .env — leave blank to use it')
+            ->assertDontSee('env-secret-value')
+            ->assertDontSee('ENVKEY123')
+            ->assertDontSee('Set it up in the RustFS tab first.');
+
+        // Changing the bucket rebuilds the disk, so fake the rebuilt one before saving.
+        RustfsSetting::firstOrFail()->fill(['s3_bucket' => 'e-radio-media'])->applyToConfig();
+        Storage::fake('media_rustfs');
+
+        $this->put('/admin/settings/rustfs', [...self::FORM, 'rustfs_key' => '', 'rustfs_secret' => '', 'rustfs_bucket' => 'e-radio-media'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', 'RustFS connection saved — connected to the bucket.');
+
+        // Nothing secret was copied into the database; the bucket was.
+        $row = DB::table('rustfs_settings')->first();
+        $this->assertNull($row->s3_key);
+        $this->assertNull($row->s3_secret);
+        $this->assertSame('e-radio-media', $row->s3_bucket);
+    }
+
+    public function test_keys_saved_in_the_form_win_over_the_ones_in_env(): void
+    {
+        $this->keysFromEnv();
+        $this->fakeRustfs();
+
+        $this->put('/admin/settings/rustfs', self::FORM)->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('RUSTFSKEY123', config('filesystems.disks.media_rustfs.key'));
+        $this->assertSame('rustfs-secret-value', config('filesystems.disks.media_rustfs.secret'));
+        $this->get('/admin/settings')->assertOk()->assertSee('Connection saved')->assertDontSee('Using the keys from .env');
+    }
+
+    public function test_a_key_typed_in_next_to_env_keys_needs_its_secret(): void
+    {
+        $this->keysFromEnv();
+
+        $this->put('/admin/settings/rustfs', [...self::FORM, 'rustfs_secret' => ''])->assertSessionHasErrors('rustfs_secret');
+        $this->put('/admin/settings/rustfs', [...self::FORM, 'rustfs_key' => ''])->assertSessionHasErrors('rustfs_key');
+
+        $this->assertNull(DB::table('rustfs_settings')->value('s3_key'));
+    }
+
     public function test_the_endpoint_must_be_a_url(): void
     {
         $this->put('/admin/settings/rustfs', [...self::FORM, 'rustfs_endpoint' => 's3.devams.site'])

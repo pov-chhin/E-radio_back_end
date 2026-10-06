@@ -79,6 +79,9 @@ return [
         'endpoint' => env('RUSTFS_ENDPOINT', 'http://s3.devams.site'),
         'bucket' => env('RUSTFS_BUCKET', 'rustfs'),
         'region' => env('RUSTFS_REGION', 'us-east-1'),
+        // Used while no keys are saved in Settings → RustFS, so the admin does not have to type them in.
+        'key' => env('RUSTFS_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID')),
+        'secret' => env('RUSTFS_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY')),
     ],
 
 ];
