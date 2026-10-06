@@ -4,6 +4,7 @@ namespace Src\Setting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Support\MediaStorage;
+use Aws\Exception\AwsException;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -174,10 +175,32 @@ class SettingController extends Controller
         try {
             MediaStorage::probe($disk);
         } catch (Throwable $exception) {
-            return 'Could not write to that bucket: '.Str::limit($exception->getMessage(), 240);
+            return 'Could not write to that bucket: '.$this->storageFailureReason($exception);
         }
 
         return null;
+    }
+
+    /**
+     * The storage provider's own reason. Flysystem's message leads with the full request URL, so cutting it to
+     * a fixed length used to drop the reason (the part after "AWS HTTP error:") before the admin ever saw it.
+     */
+    private function storageFailureReason(Throwable $exception): string
+    {
+        for ($cause = $exception; $cause; $cause = $cause->getPrevious()) {
+            if (! $cause instanceof AwsException) {
+                continue;
+            }
+
+            if ($cause->getAwsErrorCode()) {
+                return trim("{$cause->getAwsErrorCode()}: {$cause->getAwsErrorMessage()} (HTTP {$cause->getStatusCode()})");
+            }
+
+            // The reason follows "AWS HTTP error:" (a newline, not a space, separates it for cURL failures).
+            return Str::limit(preg_replace('/\s+/', ' ', trim(Str::after($cause->getMessage(), 'AWS HTTP error:'))), 240);
+        }
+
+        return Str::limit($exception->getMessage(), 240);
     }
 
     /** A saved, encrypted credential — or null if there is none or it can no longer be decrypted. */

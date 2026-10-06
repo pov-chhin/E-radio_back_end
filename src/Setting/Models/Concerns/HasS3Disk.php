@@ -41,6 +41,10 @@ trait HasS3Disk
             'endpoint' => $this->s3_endpoint ?: null,
             'url' => $this->s3_url ?: null,
             'use_path_style_endpoint' => (bool) $this->s3_use_path_style_endpoint,
+            // aws-sdk-php >= 3.337 adds a CRC32 checksum to every upload by default; many S3-compatible stores
+            // (RustFS, MinIO, Ceph, …) reject it. Only send checksums when the operation requires one.
+            'request_checksum_calculation' => 'when_required',
+            'response_checksum_validation' => 'when_required',
             // No `visibility`: no ACL header is sent, so it works on buckets with ACLs disabled and on R2/RustFS.
             // Public read access is the bucket's own policy.
             'throw' => false,
