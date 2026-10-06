@@ -12,15 +12,15 @@ use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Services\OpusAudioProcessor;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Src\Setting\Models\RustfsSetting;
 use Src\Setting\Models\StorageSetting;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesAdminUser;
+use Tests\Concerns\UsesRemoteStorage;
 use Tests\TestCase;
 
 class MediaContentUploadsTest extends TestCase
 {
-    use CreatesAdminUser, RefreshDatabase;
+    use CreatesAdminUser, RefreshDatabase, UsesRemoteStorage;
 
     protected function setUp(): void
     {
@@ -380,35 +380,6 @@ class MediaContentUploadsTest extends TestCase
         Storage::disk('public')->assertMissing($originalThumbnail);
     }
 
-    /** @return array<string, array{string, string}> storage type chosen in the settings => the disk it uploads to */
-    public static function remoteStorages(): array
-    {
-        return ['S3-compatible' => ['s3', 'media_s3'], 'RustFS' => ['rustfs', 'media_rustfs']];
-    }
-
-    /**
-     * Selects the remote storage the way the settings page would and swaps its disk for an in-memory double, so
-     * nothing leaves the test. The config is applied first: applying rebuilds the disk, so the double goes in after.
-     */
-    private function useRemoteStorage(string $driver, string $disk): void
-    {
-        if ($driver === 's3') {
-            StorageSetting::firstOrFail()->update(['driver' => 's3', 's3_key' => 'k', 's3_secret' => 's', 's3_bucket' => 'b', 's3_region' => 'auto']);
-        } else {
-            RustfsSetting::firstOrFail()->update(['s3_key' => 'k', 's3_secret' => 's']);
-            StorageSetting::firstOrFail()->update(['driver' => 'rustfs']);
-        }
-
-        StorageSetting::firstOrFail()->applyToConfig();
-        Storage::fake($disk, ['url' => 'https://cdn.example.com']);
-    }
-
-    private function backToLocalStorage(): void
-    {
-        StorageSetting::firstOrFail()->update(['driver' => 'local']);
-        StorageSetting::firstOrFail()->applyToConfig();
-    }
-
     private function createWithThumbnail(string $slug = 'qa-track'): MediaContent
     {
         $this->post('/admin/media-contents', [
@@ -431,6 +402,56 @@ class MediaContentUploadsTest extends TestCase
         Storage::disk($disk)->assertExists($mediaContent->thumbnail);
         Storage::disk('public')->assertMissing($mediaContent->thumbnail);
         $this->assertSame('https://cdn.example.com/'.$mediaContent->thumbnail, $mediaContent->thumbnail_url);
+    }
+
+    public function test_private_remote_media_uses_temporary_signed_urls_for_browser_playback(): void
+    {
+        $this->useRemoteStorage('minio', 'media_minio');
+        config(['filesystems.disks.media_minio.temporary_urls' => true]);
+        Storage::disk('media_minio')->buildTemporaryUrlsUsing(
+            fn (string $path) => 'https://storage.example.test/'.$path.'?signed=1',
+        );
+
+        $mediaContent = new MediaContent([
+            'thumbnail' => 'media-contents/thumbnails/cover.webp',
+            'thumbnail_disk' => 'media_minio',
+            'stream' => 'media-contents/streams/song.opus',
+            'stream_disk' => 'media_minio',
+        ]);
+
+        $this->assertSame(
+            'https://storage.example.test/media-contents/thumbnails/cover.webp?signed=1',
+            $mediaContent->thumbnail_url,
+        );
+        $this->assertSame(
+            'https://storage.example.test/media-contents/streams/song.opus?signed=1',
+            $mediaContent->stream_url,
+        );
+    }
+
+    public function test_local_media_urls_follow_the_current_request_host(): void
+    {
+        $mediaContent = MediaContent::create([
+            'category_id' => $this->category()->id,
+            'title' => 'Local track',
+            'slug' => 'local-track',
+            'media_type' => 'audio',
+            'processing_status' => 'ready',
+            'thumbnail' => 'media-contents/thumbnails/cover.webp',
+            'stream' => 'media-contents/streams/song.opus',
+            'is_published' => false,
+        ]);
+
+        app()->instance('request', \Illuminate\Http\Request::create('https://radio.example.test/admin/media-contents'));
+
+        $this->assertSame(
+            'https://radio.example.test/storage/'.$mediaContent->thumbnail,
+            $mediaContent->thumbnail_url,
+        );
+        $this->assertSame(
+            'https://radio.example.test/storage/'.$mediaContent->stream,
+            $mediaContent->stream_url,
+        );
     }
 
     #[DataProvider('remoteStorages')]

@@ -6,13 +6,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Src\Catalog\Models\Artist;
 use Tests\Concerns\CreatesAdminUser;
+use Tests\Concerns\UsesRemoteStorage;
 use Tests\TestCase;
 
 class ArtistManagementTest extends TestCase
 {
-    use CreatesAdminUser, RefreshDatabase;
+    use CreatesAdminUser, RefreshDatabase, UsesRemoteStorage;
 
     protected function setUp(): void
     {
@@ -83,6 +85,38 @@ class ArtistManagementTest extends TestCase
         $this->assertSame([300, 300], $this->dimensionsOf($artist->photo));
         $this->assertIsWebp($artist->photo);
         $this->assertStringContainsString('/storage/', $artist->photo_url);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_photo_and_cover_are_stored_on_the_chosen_remote_storage_and_the_artist_remembers_it(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+
+        $this->post('/admin/artists', [
+            'name' => 'Cloud Artist',
+            'slug' => 'cloud-artist',
+            'status' => 'active',
+            'photo' => UploadedFile::fake()->image('photo.jpg', 800, 600),
+            'cover' => UploadedFile::fake()->image('cover.jpg', 1600, 900),
+        ])->assertRedirect(route('admin.artists.index'));
+
+        $artist = Artist::where('slug', 'cloud-artist')->firstOrFail();
+        $this->assertSame($disk, $artist->photo_disk);
+        $this->assertSame($disk, $artist->cover_disk);
+        Storage::disk($disk)->assertExists($artist->photo);
+        Storage::disk($disk)->assertExists($artist->cover);
+        Storage::disk('public')->assertMissing($artist->photo);
+        $this->assertSame('https://cdn.example.com/'.$artist->photo, $artist->photo_url);
+        $this->assertSame('https://cdn.example.com/'.$artist->cover, $artist->cover_url);
+
+        $photo = $artist->photo;
+        $cover = $artist->cover;
+        $this->backToLocalStorage();
+
+        $this->delete("/admin/artists/{$artist->id}")->assertRedirect();
+
+        Storage::disk($disk)->assertMissing($photo);
+        Storage::disk($disk)->assertMissing($cover);
     }
 
     public function test_a_pasted_photo_url_is_downloaded_cropped_and_converted_to_webp(): void

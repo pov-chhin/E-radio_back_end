@@ -28,7 +28,7 @@
         @error("{$prefix}_endpoint") <em>{{ $message }}</em> @enderror
     </label>
     <label><span>Public URL <span class="muted" style="font-weight:400">— optional</span></span>
-        <input name="{{ $prefix }}_url" type="text" value="{{ old("{$prefix}_url", $setting->s3_url) }}" placeholder="https://cdn.example.com" spellcheck="false">
+        <input name="{{ $prefix }}_url" type="text" value="{{ old("{$prefix}_url", $setting->s3_url) }}" placeholder="{{ $setting->envPublicUrl() ? 'From .env: '.$setting->envPublicUrl().' — leave blank to use it' : 'https://cdn.example.com' }}" spellcheck="false">
         @error("{$prefix}_url") <em>{{ $message }}</em> @enderror
     </label>
 </div>

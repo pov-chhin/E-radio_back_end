@@ -137,7 +137,7 @@ class MediaContent extends Model
 
         return str_starts_with($value, 'http://') || str_starts_with($value, 'https://')
             ? $value
-            : MediaStorage::disk($disk)->url($value);
+            : MediaStorage::url($value, $disk);
     }
 
     /** 'private' (not published), 'scheduled' (published, but published_at is still in the future), or 'public'. */

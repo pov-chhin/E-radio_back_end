@@ -2,13 +2,13 @@
 
 namespace Src\RadioSceaper\Models;
 
+use App\Support\MediaStorage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class RadioSceaperStation extends Model
 {
-    protected $fillable = ['name', 'description', 'stream_url', 'cover', 'bitrate', 'votes', 'tags', 'radio_browser_uuid', 'is_published'];
+    protected $fillable = ['name', 'description', 'stream_url', 'cover', 'cover_disk', 'bitrate', 'votes', 'tags', 'radio_browser_uuid', 'is_published'];
 
     protected function casts(): array
     {
@@ -27,7 +27,7 @@ class RadioSceaperStation extends Model
         );
     }
 
-    /** `cover` stores a local `public` disk path (uploads) or, for scraped stations, may one day be an external URL — resolve either to something an <img> can use. */
+    /** `cover` stores a path on the disk named in `cover_disk` (null = local public) or, for scraped stations, may one day be an external URL — resolve either to something an <img> can use. */
     protected function coverUrl(): Attribute
     {
         return Attribute::make(get: function () {
@@ -37,7 +37,7 @@ class RadioSceaperStation extends Model
 
             return str_starts_with($this->cover, 'http://') || str_starts_with($this->cover, 'https://')
                 ? $this->cover
-                : Storage::disk('public')->url($this->cover);
+                : MediaStorage::url($this->cover, $this->cover_disk);
         });
     }
 }

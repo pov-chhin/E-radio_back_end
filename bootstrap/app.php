@@ -26,5 +26,5 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // A failed validation flashes the submitted input back into the session; keep storage secrets out of it.
-        $exceptions->dontFlash(['s3_secret', 'rustfs_secret']);
+        $exceptions->dontFlash(['s3_secret', 'rustfs_secret', 'minio_secret']);
     })->create();

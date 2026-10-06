@@ -5,17 +5,19 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Src\Catalog\Models\Artist;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Models\Program;
 use Src\Catalog\Models\Tag;
 use Tests\Concerns\CreatesAdminUser;
+use Tests\Concerns\UsesRemoteStorage;
 use Tests\TestCase;
 
 class CatalogManagementTest extends TestCase
 {
-    use CreatesAdminUser, RefreshDatabase;
+    use CreatesAdminUser, RefreshDatabase, UsesRemoteStorage;
 
     protected function setUp(): void
     {
@@ -163,6 +165,33 @@ class CatalogManagementTest extends TestCase
         $image = imagecreatefromstring(Storage::disk('public')->get($program->cover_image));
         $this->assertSame([1280, 960], [imagesx($image), imagesy($image)]);
         $this->assertStringContainsString('/storage/', $program->cover_image_url);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_a_program_cover_image_is_stored_on_the_chosen_remote_storage_and_the_program_remembers_it(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
+
+        $this->post('/admin/programs', [
+            'tag_id' => $type->id,
+            'name' => 'Cloud Program',
+            'slug' => 'cloud-program',
+            'cover_image' => UploadedFile::fake()->image('cover.jpg', 800, 600),
+        ])->assertRedirect();
+
+        $program = Program::where('slug', 'cloud-program')->firstOrFail();
+        $this->assertSame($disk, $program->cover_image_disk);
+        Storage::disk($disk)->assertExists($program->cover_image);
+        Storage::disk('public')->assertMissing($program->cover_image);
+        $this->assertSame('https://cdn.example.com/'.$program->cover_image, $program->cover_image_url);
+
+        $cover = $program->cover_image;
+        $this->backToLocalStorage();
+
+        $this->delete("/admin/programs/{$program->id}")->assertRedirect();
+
+        Storage::disk($disk)->assertMissing($cover);
     }
 
     public function test_a_small_program_cover_image_is_not_scaled_up_or_cropped(): void

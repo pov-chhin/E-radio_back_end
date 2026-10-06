@@ -3,6 +3,7 @@
 namespace Src\CmsAdmin\Http\Controllers\Concerns;
 
 use App\Support\MediaStorage;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Src\Catalog\Services\HlsAudioProcessor;
 use Src\Catalog\Services\ImageVariantProcessor;
@@ -54,6 +55,42 @@ trait ResolvesUploadedMedia
         }
 
         return $existingPath;
+    }
+
+    /**
+     * resolveImageField() for a slot that follows Settings → Storage: a new upload or pasted URL lands in the
+     * image folder of the storage the admin chose, and the record remembers that disk in its `{$field}_disk`
+     * column (NULL = local) so switching storage later only affects new uploads. A removed image leaves no
+     * disk behind; an untouched one keeps its own.
+     *
+     * @return array<string, ?string> the field's path and its disk column, ready to merge into the validated data
+     */
+    private function resolveStoredImage(
+        ImageVariantProcessor $imageProcessor,
+        Request $request,
+        string $field,
+        ?Model $existing,
+        int $width,
+        int $height,
+        bool $crop = true,
+    ): array {
+        $diskColumn = "{$field}_disk";
+        $replaced = $request->hasFile($field) || $request->filled("{$field}_url");
+
+        $path = $this->resolveImageField(
+            $imageProcessor, $request, $field, $existing?->{$field},
+            config('services.media_storage.image_directory'), $width, $height,
+            crop: $crop, disk: MediaStorage::current(), existingDisk: $existing?->{$diskColumn},
+        );
+
+        return [
+            $field => $path,
+            $diskColumn => match (true) {
+                $replaced => MediaStorage::column(),
+                $path === null => null,
+                default => $existing?->{$diskColumn},
+            },
+        ];
     }
 
     /**

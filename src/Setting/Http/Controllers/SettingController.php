@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Src\Setting\Models\MinioSetting;
 use Src\Setting\Models\RadioScraperSetting;
 use Src\Setting\Models\RustfsSetting;
 use Src\Setting\Models\StorageSetting;
@@ -22,11 +23,13 @@ class SettingController extends Controller
     {
         $storageSetting = StorageSetting::firstOrFail();
         $rustfsSetting = RustfsSetting::firstOrFail();
+        $minioSetting = MinioSetting::firstOrFail();
 
         return view('setting::edit', [
             'setting' => RadioScraperSetting::firstOrFail(),
             'storageSetting' => $storageSetting,
             'rustfsSetting' => $rustfsSetting,
+            'minioSetting' => $minioSetting,
             // Secrets are never sent back to the browser — the page only needs to know whether one is saved.
             's3Key' => $this->savedCredential($storageSetting, 's3_key'),
             's3HasSecret' => $this->savedCredential($storageSetting, 's3_secret') !== null,
@@ -38,6 +41,12 @@ class SettingController extends Controller
                 && $this->savedCredential($rustfsSetting, 's3_secret') === null,
             // The RustFS storage type can only be picked once its connection is complete.
             'rustfsReady' => $rustfsSetting->s3Disk() !== null,
+            'minioKey' => $this->savedCredential($minioSetting, 's3_key'),
+            'minioHasSecret' => $this->savedCredential($minioSetting, 's3_secret') !== null,
+            'minioFromEnv' => $minioSetting->hasEnvCredentials()
+                && $this->savedCredential($minioSetting, 's3_key') === null
+                && $this->savedCredential($minioSetting, 's3_secret') === null,
+            'minioReady' => $minioSetting->s3Disk() !== null,
         ]);
     }
 
@@ -75,6 +84,10 @@ class SettingController extends Controller
                     if ($value === 'rustfs' && RustfsSetting::firstOrFail()->s3Disk() === null) {
                         $fail('Set up the RustFS connection in the RustFS tab first.');
                     }
+
+                    if ($value === 'minio' && MinioSetting::firstOrFail()->s3Disk() === null) {
+                        $fail('Set up the MinIO connection in the MinIO tab first.');
+                    }
                 },
             ],
             'image_directory' => $folder,
@@ -91,9 +104,7 @@ class SettingController extends Controller
         $setting->applyToConfig();
 
         // Refuse to switch to storage that cannot be written to: every upload afterwards would fail.
-        if ($setting->usesS3() || $setting->usesRustfs()) {
-            $disk = $setting->usesS3() ? MediaStorage::S3 : MediaStorage::RUSTFS;
-
+        if ($disk = $setting->remoteDisk()) {
             if ($error = $this->connectionError($disk)) {
                 return back()->withInput($request->except('s3_secret'))->withErrors(['storage_connection' => $error]);
             }
@@ -101,40 +112,90 @@ class SettingController extends Controller
 
         $setting->save();
 
-        return back()
-            ->with('status', $setting->driver === 'local' ? 'Storage settings saved.' : 'Storage settings saved — connected to the bucket.')
-            ->with('settings_tab', 'storage');
+        return $this->withPublicReadCheck(
+            back()
+                ->with('status', $setting->driver === 'local' ? 'Storage settings saved.' : 'Storage settings saved — connected to the bucket.')
+                ->with('settings_tab', 'storage'),
+            $setting->remoteDisk(),
+        );
+    }
+
+    /**
+     * Makes the files of one remote storage publicly readable (the "Make files public" button) — images and audio
+     * are loaded straight from the bucket, so a bucket that only the app can read leaves broken links everywhere.
+     */
+    public function makePublic(Request $request): RedirectResponse
+    {
+        $disk = $request->validate([
+            'disk' => ['required', Rule::in([MediaStorage::S3, MediaStorage::RUSTFS, MediaStorage::MINIO])],
+        ])['disk'];
+        $tab = [MediaStorage::RUSTFS => 'rustfs', MediaStorage::MINIO => 'minio'][$disk] ?? 'storage';
+        $back = back()->with('settings_tab', $tab);
+
+        if (! config("filesystems.disks.{$disk}")) {
+            return $back->with('error', 'Set up and save that connection first.');
+        }
+
+        try {
+            MediaStorage::makePublic($disk);
+        } catch (Throwable $exception) {
+            return $back->with('error', 'Could not change the bucket policy: '.$this->storageFailureReason($exception).' The access key needs permission to set bucket policies — or make the image and audio folders readable in the storage server\'s own console instead.');
+        }
+
+        return $this->withPublicReadCheck($back->with('status', 'Bucket policy updated — image and audio files can be read without signing in.'), $disk);
+    }
+
+    /** Adds the reason files cannot be read publicly, if that is so, to a redirect that already carries the save result. */
+    private function withPublicReadCheck(RedirectResponse $response, ?string $disk): RedirectResponse
+    {
+        $problem = $disk ? MediaStorage::publicReadError($disk) : null;
+
+        return $problem ? $response->with('public_read_warning', ['disk' => $disk, 'message' => $problem]) : $response;
     }
 
     public function updateRustfs(Request $request): RedirectResponse
     {
-        $rustfs = RustfsSetting::firstOrFail();
+        return $this->updateServerConnection($request, RustfsSetting::firstOrFail(), 'rustfs', 'RustFS', MediaStorage::RUSTFS);
+    }
 
-        $data = $request->validate($this->connectionRules('rustfs', $rustfs, required: true, endpointRequired: true));
+    public function updateMinio(Request $request): RedirectResponse
+    {
+        return $this->updateServerConnection($request, MinioSetting::firstOrFail(), 'minio', 'MinIO', MediaStorage::MINIO);
+    }
 
-        $rustfs->fill($this->connectionAttributes('rustfs', $data, $request));
-        $rustfs->applyToConfig();
+    /**
+     * Saves a self-hosted store's connection (the RustFS and MinIO tabs). $prefix names its form inputs and tab,
+     * $disk is the Laravel disk the connection defines; nothing is stored unless a small file can really be
+     * written to the bucket.
+     */
+    private function updateServerConnection(Request $request, RustfsSetting|MinioSetting $connection, string $prefix, string $label, string $disk): RedirectResponse
+    {
+        $data = $request->validate($this->connectionRules($prefix, $connection, required: true, endpointRequired: true));
 
-        if ($error = $this->connectionError(MediaStorage::RUSTFS)) {
-            return back()->withInput($request->except('rustfs_secret'))->withErrors(['rustfs_connection' => $error]);
+        $connection->fill($this->connectionAttributes($prefix, $data, $request));
+        $connection->applyToConfig();
+
+        if ($error = $this->connectionError($disk)) {
+            return back()->withInput($request->except("{$prefix}_secret"))->withErrors(["{$prefix}_connection" => $error]);
         }
 
-        $rustfs->save();
-        // If RustFS is the selected storage, uploads follow the new connection straight away.
+        $connection->save();
+        // If this store is the selected storage, uploads follow the new connection straight away.
         StorageSetting::firstOrFail()->applyToConfig();
 
-        return back()
-            ->with('status', 'RustFS connection saved — connected to the bucket.')
-            ->with('settings_tab', 'rustfs');
+        return $this->withPublicReadCheck(
+            back()->with('status', "{$label} connection saved — connected to the bucket.")->with('settings_tab', $prefix),
+            $disk,
+        );
     }
 
     /**
      * Validation rules for one set of S3-style connection fields. $prefix names the form's inputs ('s3' on the
-     * Storage tab, 'rustfs' on the RustFS tab) so the two forms never share old input or errors.
+     * Storage tab, 'rustfs' / 'minio' on their tabs) so the forms never share old input or errors.
      *
      * @return array<string, array<int, mixed>>
      */
-    private function connectionRules(string $prefix, StorageSetting|RustfsSetting $setting, bool $required, bool $endpointRequired): array
+    private function connectionRules(string $prefix, StorageSetting|RustfsSetting|MinioSetting $setting, bool $required, bool $endpointRequired): array
     {
         $savedKey = $this->savedCredential($setting, 's3_key');
         $savedSecret = $this->savedCredential($setting, 's3_secret');
@@ -202,8 +263,21 @@ class SettingController extends Controller
                 continue;
             }
 
+            // MinIO's own wording when the request reached its web console's port instead of the S3 API's.
+            if (str_contains((string) $cause->getAwsErrorMessage(), 'must be made to API port')) {
+                return 'That address is MinIO\'s web console, not its S3 API ("S3 API Requests must be made to API port"). Use the address that serves the API — usually port 9000 — and keep the console address for signing in to the web UI.';
+            }
+
             if ($cause->getAwsErrorCode()) {
                 return trim("{$cause->getAwsErrorCode()}: {$cause->getAwsErrorMessage()} (HTTP {$cause->getStatusCode()})");
+            }
+
+            // The reply was not an S3 error document at all — typically a web page, because the address is a web
+            // console or a proxy rather than the storage API. The SDK's own wording only says "parsing XML failed".
+            if (str_contains($cause->getMessage(), 'Error parsing XML')) {
+                $status = $cause->getStatusCode() ?: 'no status';
+
+                return "The address answered, but not like an S3 API (HTTP {$status}, no S3 error in the reply). Check the endpoint is the storage API address — for MinIO usually port 9000 — and not the web console.";
             }
 
             // The reason follows "AWS HTTP error:" (a newline, not a space, separates it for cURL failures).
@@ -214,7 +288,7 @@ class SettingController extends Controller
     }
 
     /** A saved, encrypted credential — or null if there is none or it can no longer be decrypted. */
-    private function savedCredential(StorageSetting|RustfsSetting $setting, string $attribute): ?string
+    private function savedCredential(StorageSetting|RustfsSetting|MinioSetting $setting, string $attribute): ?string
     {
         try {
             return $setting->{$attribute} ?: null;

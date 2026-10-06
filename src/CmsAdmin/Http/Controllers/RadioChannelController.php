@@ -18,8 +18,6 @@ class RadioChannelController extends Controller
 {
     use ResolvesUploadedMedia;
 
-    private const COVER_DIRECTORY = 'radio-channels/covers';
-
     /** The longest side a cover is kept at; smaller pictures are left as they are. */
     private const COVER_MAX_SIZE = 1280;
 
@@ -112,7 +110,7 @@ class RadioChannelController extends Controller
 
     public function destroy(RadioSceaperStation $radioChannel): RedirectResponse
     {
-        $this->deleteStoredMedia($radioChannel->cover);
+        $this->deleteStoredMedia($radioChannel->cover, $radioChannel->cover_disk);
         $radioChannel->delete();
 
         return back()->with('status', 'Channel deleted.');
@@ -131,11 +129,10 @@ class RadioChannelController extends Controller
             'tags' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $data['cover'] = $this->resolveImageField(
-            $this->imageProcessor, $request, 'cover', $radioChannel?->cover,
-            self::COVER_DIRECTORY, self::COVER_MAX_SIZE, self::COVER_MAX_SIZE,
-            crop: false,
-        );
+        $data = [
+            ...$data,
+            ...$this->resolveStoredImage($this->imageProcessor, $request, 'cover', $radioChannel, self::COVER_MAX_SIZE, self::COVER_MAX_SIZE, crop: false),
+        ];
 
         unset($data['cover_url']);
 

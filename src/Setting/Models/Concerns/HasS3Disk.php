@@ -37,6 +37,12 @@ trait HasS3Disk
             return null;
         }
 
+        if ($this->requiresEndpoint() && blank($this->s3_endpoint)) {
+            return null;
+        }
+
+        $publicUrl = $this->s3_url ?: $this->envPublicUrl();
+
         return [
             'driver' => 's3',
             'key' => $key,
@@ -44,7 +50,9 @@ trait HasS3Disk
             'region' => $this->s3_region,
             'bucket' => $this->s3_bucket,
             'endpoint' => $this->s3_endpoint ?: null,
-            'url' => $this->s3_url ?: null,
+            'url' => $publicUrl,
+            // With no explicit public/CDN address, media access is authenticated through short-lived signed URLs.
+            'temporary_urls' => blank($publicUrl),
             'use_path_style_endpoint' => (bool) $this->s3_use_path_style_endpoint,
             // aws-sdk-php >= 3.337 adds a CRC32 checksum to every upload by default; many S3-compatible stores
             // (RustFS, MinIO, Ceph, …) reject it. Only send checksums when the operation requires one.
@@ -62,6 +70,18 @@ trait HasS3Disk
     protected function envCredential(string $part): ?string
     {
         return null;
+    }
+
+    /** The public address files are read from when none is saved (AWS_URL / MINIO_URL / RUSTFS_URL in .env); null for no fallback. */
+    public function envPublicUrl(): ?string
+    {
+        return null;
+    }
+
+    /** True for a self-hosted store, where a blank endpoint would silently mean Amazon S3 instead. */
+    protected function requiresEndpoint(): bool
+    {
+        return false;
     }
 
     /** True when the environment supplies a complete key and secret to fall back to. */

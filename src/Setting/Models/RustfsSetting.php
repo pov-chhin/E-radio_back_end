@@ -34,6 +34,11 @@ class RustfsSetting extends Model
         return config("services.rustfs.{$part}") ?: null;
     }
 
+    public function envPublicUrl(): ?string
+    {
+        return config('services.rustfs.url') ?: null;
+    }
+
     /** Defines the `media_rustfs` disk from this row; returns it, or null while the credentials are incomplete. */
     public function applyToConfig(): ?array
     {

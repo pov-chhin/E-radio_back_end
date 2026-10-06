@@ -82,6 +82,26 @@ return [
         // Used while no keys are saved in Settings → RustFS, so the admin does not have to type them in.
         'key' => env('RUSTFS_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID')),
         'secret' => env('RUSTFS_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY')),
+        // The address files are read from, used while no Public URL is saved in Settings → RustFS.
+        'url' => env('RUSTFS_URL'),
+    ],
+
+    // Defaults the MinIO connection (Settings → MinIO) is created with. The endpoint is MinIO's S3 API address
+    // (usually port 9000) — not the web console — so there is no default: the admin enters it.
+    'minio' => [
+        'endpoint' => env('MINIO_ENDPOINT'),
+        // Optional MinIO Console fallback. It lets this app proxy private objects when only the console (not the
+        // S3 API port) is exposed publicly. These credentials are used server-side and never sent to clients.
+        'console_url' => env('MINIO_CONSOLE_URL'),
+        'root_user' => env('MINIO_ROOT_USER'),
+        'root_password' => env('MINIO_ROOT_PASSWORD'),
+        'bucket' => env('MINIO_BUCKET', 'e-radio-media'),
+        'region' => env('MINIO_REGION', 'us-east-1'),
+        // Used while no keys are saved in Settings → MinIO, so the admin does not have to type them in.
+        'key' => env('MINIO_ACCESS_KEY_ID'),
+        'secret' => env('MINIO_SECRET_ACCESS_KEY'),
+        // The address files are read from, used while no Public URL is saved in Settings → MinIO.
+        'url' => env('MINIO_URL'),
     ],
 
 ];

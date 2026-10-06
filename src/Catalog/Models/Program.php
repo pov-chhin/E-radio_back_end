@@ -2,16 +2,16 @@
 
 namespace Src\Catalog\Models;
 
+use App\Support\MediaStorage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\Storage;
 
 class Program extends Model
 {
-    protected $fillable = ['category_id', 'tag_id', 'name', 'slug', 'description', 'cover_image', 'is_published'];
+    protected $fillable = ['category_id', 'tag_id', 'name', 'slug', 'description', 'cover_image', 'cover_image_disk', 'is_published'];
 
     protected function casts(): array
     {
@@ -47,7 +47,7 @@ class Program extends Model
             ->ofMany(['published_at' => 'max', 'id' => 'max'], fn ($query) => $query->publiclyVisible());
     }
 
-    /** `cover_image` stores a local `public` disk path (uploads) or, for older rows, a plain external URL — resolve either to something an <img> can use. */
+    /** `cover_image` stores a path on the disk named in `cover_image_disk` (null = local public) or, for older rows, a plain external URL — resolve either to something an <img> can use. */
     protected function coverImageUrl(): Attribute
     {
         return Attribute::make(get: function () {
@@ -57,7 +57,7 @@ class Program extends Model
 
             return str_starts_with($this->cover_image, 'http://') || str_starts_with($this->cover_image, 'https://')
                 ? $this->cover_image
-                : Storage::disk('public')->url($this->cover_image);
+                : MediaStorage::url($this->cover_image, $this->cover_image_disk);
         });
     }
 }

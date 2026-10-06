@@ -19,10 +19,10 @@ class ArtistController extends Controller
 
     public const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 
-    /** [field => [directory, width, height]] — the exact variant every photo/URL for that slot gets cropped and converted to. */
+    /** [field => [width, height]] — the exact variant every photo/URL for that slot gets cropped and converted to. */
     private const IMAGE_SPECS = [
-        'photo' => ['artists/photos', 300, 300],
-        'cover' => ['artists/covers', 1200, 400],
+        'photo' => [300, 300],
+        'cover' => [1200, 400],
     ];
 
     public function __construct(private readonly ImageVariantProcessor $imageProcessor) {}
@@ -60,8 +60,8 @@ class ArtistController extends Controller
 
     public function destroy(Artist $artist): RedirectResponse
     {
-        $this->deleteStoredMedia($artist->photo);
-        $this->deleteStoredMedia($artist->cover);
+        $this->deleteStoredMedia($artist->photo, $artist->photo_disk);
+        $this->deleteStoredMedia($artist->cover, $artist->cover_disk);
         $artist->delete();
 
         return redirect()->route('admin.artists.index')->with('status', 'Artist deleted.');
@@ -93,8 +93,8 @@ class ArtistController extends Controller
         $data['verified'] = $request->boolean('verified');
         $data['social_links'] = array_filter($request->input('social_links', []), fn ($url) => filled($url));
 
-        foreach (self::IMAGE_SPECS as $field => [$directory, $width, $height]) {
-            $data[$field] = $this->resolveImageField($this->imageProcessor, $request, $field, $artist?->{$field}, $directory, $width, $height);
+        foreach (self::IMAGE_SPECS as $field => [$width, $height]) {
+            $data = [...$data, ...$this->resolveStoredImage($this->imageProcessor, $request, $field, $artist, $width, $height)];
         }
 
         unset($data['photo_url'], $data['cover_url']);

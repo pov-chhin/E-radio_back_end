@@ -6,13 +6,16 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Src\RadioSceaper\Models\RadioSceaperStation;
+use Src\Setting\Models\StorageSetting;
 use Tests\Concerns\CreatesAdminUser;
+use Tests\Concerns\UsesRemoteStorage;
 use Tests\TestCase;
 
 class CmsAdminRadioChannelTest extends TestCase
 {
-    use CreatesAdminUser, RefreshDatabase;
+    use CreatesAdminUser, RefreshDatabase, UsesRemoteStorage;
 
     protected function setUp(): void
     {
@@ -281,6 +284,122 @@ class CmsAdminRadioChannelTest extends TestCase
         ])->assertStatus(422);
 
         $this->assertDatabaseMissing('radio_sceaper_stations', ['name' => 'Broken Cover Radio']);
+    }
+
+    private function createChannelWithCover(string $name = 'Cover Radio'): RadioSceaperStation
+    {
+        $this->post('/admin/radio-channels', [
+            'name' => $name,
+            'cover' => UploadedFile::fake()->image('cover.jpg', 800, 600),
+        ])->assertRedirect(route('admin.radio-channels.index'));
+
+        return RadioSceaperStation::where('name', $name)->firstOrFail();
+    }
+
+    public function test_a_cover_uploaded_with_local_storage_has_no_disk_and_lands_in_the_image_folder(): void
+    {
+        $channel = $this->createChannelWithCover();
+
+        $this->assertNull($channel->cover_disk);
+        $this->assertStringStartsWith('media-contents/thumbnails/', $channel->cover);
+        Storage::disk('public')->assertExists($channel->cover);
+        $this->assertStringContainsString('/storage/', $channel->cover_url);
+    }
+
+    public function test_the_admin_configured_image_folder_is_used_for_covers(): void
+    {
+        StorageSetting::firstOrFail()->update(['image_directory' => 'custom/images']);
+        StorageSetting::firstOrFail()->applyToConfig();
+
+        $channel = $this->createChannelWithCover();
+
+        $this->assertStringStartsWith('custom/images/', $channel->cover);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_a_cover_is_stored_on_the_chosen_remote_storage_and_the_channel_remembers_it(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+
+        $channel = $this->createChannelWithCover();
+
+        $this->assertSame($disk, $channel->cover_disk);
+        Storage::disk($disk)->assertExists($channel->cover);
+        Storage::disk('public')->assertMissing($channel->cover);
+        $this->assertSame('https://cdn.example.com/'.$channel->cover, $channel->cover_url);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_a_pasted_cover_url_is_stored_on_the_chosen_remote_storage(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        Http::fake(['cdn.example.com/*' => Http::response($this->fakeImageBytes(800, 600), 200)]);
+
+        $this->post('/admin/radio-channels', [
+            'name' => 'URL Cover Radio',
+            'cover_url' => 'https://cdn.example.com/cover.png',
+        ])->assertRedirect();
+
+        $channel = RadioSceaperStation::where('name', 'URL Cover Radio')->firstOrFail();
+        $this->assertSame($disk, $channel->cover_disk);
+        Storage::disk($disk)->assertExists($channel->cover);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_switching_storage_leaves_old_covers_where_they_are_and_replacing_one_cleans_up_the_old_disk(string $driver, string $disk): void
+    {
+        $channel = $this->createChannelWithCover();
+        $localCover = $channel->cover;
+
+        $this->useRemoteStorage($driver, $disk);
+        // Still resolves against the local disk after the switch.
+        $this->assertStringContainsString('/storage/', $channel->fresh()->cover_url);
+        Storage::disk('public')->assertExists($localCover);
+
+        $this->put("/admin/radio-channels/{$channel->id}", [
+            'name' => 'Cover Radio',
+            'cover' => UploadedFile::fake()->image('new.jpg', 800, 600),
+        ])->assertRedirect();
+
+        $channel->refresh();
+        $this->assertSame($disk, $channel->cover_disk);
+        Storage::disk($disk)->assertExists($channel->cover);
+        Storage::disk('public')->assertMissing($localCover);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_saving_without_a_new_cover_keeps_the_cover_and_the_disk_it_lives_on(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        $channel = $this->createChannelWithCover();
+        $this->backToLocalStorage();
+
+        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Renamed Radio'])->assertRedirect();
+
+        $channel->refresh();
+        $this->assertSame($disk, $channel->cover_disk);
+        Storage::disk($disk)->assertExists($channel->cover);
+        $this->assertSame('https://cdn.example.com/'.$channel->cover, $channel->cover_url);
+    }
+
+    #[DataProvider('remoteStorages')]
+    public function test_removing_or_deleting_a_remote_cover_deletes_the_file_from_that_disk(string $driver, string $disk): void
+    {
+        $this->useRemoteStorage($driver, $disk);
+        $removed = $this->createChannelWithCover('Removed Cover Radio');
+        $deleted = $this->createChannelWithCover('Deleted Cover Radio');
+        $removedCover = $removed->cover;
+        $deletedCover = $deleted->cover;
+        $this->backToLocalStorage();
+
+        $this->put("/admin/radio-channels/{$removed->id}", ['name' => 'Removed Cover Radio', 'remove_cover' => '1'])->assertRedirect();
+        $this->delete("/admin/radio-channels/{$deleted->id}")->assertRedirect();
+
+        $removed->refresh();
+        $this->assertNull($removed->cover);
+        $this->assertNull($removed->cover_disk);
+        Storage::disk($disk)->assertMissing($removedCover);
+        Storage::disk($disk)->assertMissing($deletedCover);
     }
 
     public function test_it_saves_and_shows_a_channel_description(): void

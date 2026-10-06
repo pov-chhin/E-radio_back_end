@@ -23,8 +23,17 @@
         <!-- Never let a developer's real S3/RustFS keys in .env leak into the tests -->
         <env name="AWS_ACCESS_KEY_ID" value=""/>
         <env name="AWS_SECRET_ACCESS_KEY" value=""/>
+        <env name="AWS_URL" value=""/>
+        <env name="RUSTFS_URL" value=""/>
+        <env name="MINIO_URL" value=""/>
         <env name="RUSTFS_ACCESS_KEY_ID" value=""/>
         <env name="RUSTFS_SECRET_ACCESS_KEY" value=""/>
+        <env name="MINIO_ENDPOINT" value=""/>
+        <env name="MINIO_ACCESS_KEY_ID" value=""/>
+        <env name="MINIO_SECRET_ACCESS_KEY" value=""/>
+        <env name="MINIO_CONSOLE_URL" value=""/>
+        <env name="MINIO_ROOT_USER" value=""/>
+        <env name="MINIO_ROOT_PASSWORD" value=""/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>

@@ -5,7 +5,9 @@
 @php
     $storageFields = ['driver', 'image_directory', 'audio_directory', 's3_key', 's3_secret', 's3_bucket', 's3_region', 's3_endpoint', 's3_url', 'storage_connection'];
     $rustfsFields = ['rustfs_key', 'rustfs_secret', 'rustfs_bucket', 'rustfs_region', 'rustfs_endpoint', 'rustfs_url', 'rustfs_connection'];
+    $minioFields = ['minio_key', 'minio_secret', 'minio_bucket', 'minio_region', 'minio_endpoint', 'minio_url', 'minio_connection'];
     $activeTab = match (true) {
+        $errors->hasAny($minioFields), session('settings_tab') === 'minio' => 'minio',
         $errors->hasAny($rustfsFields), session('settings_tab') === 'rustfs' => 'rustfs',
         $errors->hasAny($storageFields), session('settings_tab') === 'storage' => 'storage',
         default => 'radio-scraper',
@@ -26,6 +28,7 @@
             <button type="button" class="{{ $activeTab === 'radio-scraper' ? 'active' : '' }}" data-settings-tab="radio-scraper">Radio Scraper</button>
             <button type="button" class="{{ $activeTab === 'storage' ? 'active' : '' }}" data-settings-tab="storage">Storage</button>
             <button type="button" class="{{ $activeTab === 'rustfs' ? 'active' : '' }}" data-settings-tab="rustfs">RustFS</button>
+            <button type="button" class="{{ $activeTab === 'minio' ? 'active' : '' }}" data-settings-tab="minio">MinIO</button>
         </nav>
 
         <div>
@@ -81,6 +84,13 @@
                                 <small>Your own RustFS server, using the connection saved in the RustFS tab.@unless($rustfsReady) <i class="storage-type-note">Set it up in the RustFS tab first.</i>@endunless</small>
                             </span>
                         </label>
+                        <label class="storage-type">
+                            <input type="radio" name="driver" value="minio" data-storage-driver @checked($driver === 'minio') @disabled(! $minioReady && $driver !== 'minio')>
+                            <span>
+                                <b>MinIO</b>
+                                <small>Your own MinIO server, using the connection saved in the MinIO tab.@unless($minioReady) <i class="storage-type-note">Set it up in the MinIO tab first.</i>@endunless</small>
+                            </span>
+                        </label>
                     </fieldset>
                     @error('driver') <em class="field-error">{{ $message }}</em> @enderror
 
@@ -123,35 +133,39 @@
                 <div class="form-actions"><span></span><button type="submit" class="primary-button">Save</button></div>
             </form>
 
-            <form method="POST" action="{{ route('admin.settings.rustfs.update') }}" class="panel settings-form" data-settings-panel="rustfs" @unless($activeTab === 'rustfs') hidden @endunless>
-                @csrf
-                @method('PUT')
+            @if($storageSetting->remoteDisk())
+                @include('setting::partials.public-access', ['panel' => 'storage', 'disk' => $storageSetting->remoteDisk()])
+            @endif
 
-                <div class="form-section">
-                    <h3>RustFS Settings</h3>
-                    <p>The connection to your RustFS server. Once it is saved, choose <b>RustFS</b> under Storage to upload new media content to it. Files already saved stay where they are.</p>
+            @include('setting::partials.server-tab', [
+                'prefix' => 'rustfs',
+                'name' => 'RustFS',
+                'route' => 'admin.settings.rustfs.update',
+                'disk' => \App\Support\MediaStorage::RUSTFS,
+                'setting' => $rustfsSetting,
+                'savedKey' => $rustfsKey,
+                'hasSecret' => $rustfsHasSecret,
+                'fromEnv' => $rustfsFromEnv,
+                'ready' => $rustfsReady,
+                'endpointHint' => 'http://s3.example.com',
+                'hint' => 'The endpoint is the address of the RustFS S3 API, and the bucket must already exist. Leave Public URL empty to serve files from the endpoint itself, or fill it in if the bucket is published under another address. Saving tests the connection by writing and deleting a small file.',
+                'activeTab' => $activeTab,
+            ])
 
-                    @error('rustfs_connection')
-                        <div class="inline-warning danger" style="margin:0 0 16px">{{ $message }}</div>
-                    @enderror
-                    @if($rustfsSetting->s3CredentialsUnreadable())
-                        <div class="inline-warning" style="margin:0 0 16px">The saved RustFS credentials can no longer be read (the application key has changed). Enter the access key and secret again.</div>
-                    @endif
-
-                    @include('setting::partials.connection-fields', [
-                        'prefix' => 'rustfs',
-                        'setting' => $rustfsSetting,
-                        'savedKey' => $rustfsKey,
-                        'hasSecret' => $rustfsHasSecret,
-                        'fromEnv' => $rustfsFromEnv,
-                        'endpointRequired' => true,
-                        'endpointHint' => 'http://s3.example.com',
-                    ])
-                    <p class="muted storage-hint">The endpoint is the address of the RustFS S3 API, and the bucket must already exist. Leave Public URL empty to serve files from the endpoint itself, or fill it in if the bucket is published under another address. Saving tests the connection by writing and deleting a small file.</p>
-                </div>
-
-                <div class="form-actions"><span>@if($rustfsReady && $rustfsFromEnv) <span class="badge green">Using the keys from .env</span> @elseif($rustfsReady) <span class="badge green">Connection saved</span> @else <span class="badge amber">Not set up yet</span> @endif</span><button type="submit" class="primary-button">Save</button></div>
-            </form>
+            @include('setting::partials.server-tab', [
+                'prefix' => 'minio',
+                'name' => 'MinIO',
+                'route' => 'admin.settings.minio.update',
+                'disk' => \App\Support\MediaStorage::MINIO,
+                'setting' => $minioSetting,
+                'savedKey' => $minioKey,
+                'hasSecret' => $minioHasSecret,
+                'fromEnv' => $minioFromEnv,
+                'ready' => $minioReady,
+                'endpointHint' => 'http://minio.example.com:9000',
+                'hint' => 'The endpoint is the address of the MinIO S3 API — usually port 9000, not the web console (usually 9001) — and the bucket must already exist. Leave Public URL empty to serve files from the endpoint itself, or fill it in if the bucket is published under another address. Saving tests the connection by writing and deleting a small file.',
+                'activeTab' => $activeTab,
+            ])
         </div>
     </div>
 @endsection
