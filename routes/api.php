@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:20,1,auth-google');
 
 // Forgotten password: emailed code → reset token → new password. The third
 // throttle argument names each limit's own bucket — without it every
