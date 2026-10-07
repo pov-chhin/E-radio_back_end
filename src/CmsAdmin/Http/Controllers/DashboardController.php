@@ -3,6 +3,7 @@
 namespace Src\CmsAdmin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Support\AdminCache;
 use App\Support\AvatarUrl;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -22,19 +23,39 @@ class DashboardController extends Controller
     /** How many online people the dashboard lists by name; the stat card still counts everyone. */
     private const ONLINE_LIST_LIMIT = 6;
 
+    /** The counts and lists change slowly, so a minute-old dashboard is fine and saves about nine queries a load. */
+    private const OVERVIEW_CACHE_SECONDS = 60;
+
+    /** "Users online" is the one number an admin watches move, so it is cached only briefly. */
+    private const ONLINE_CACHE_SECONDS = 15;
+
     public function index(): View
     {
-        $online = $this->onlineActivity();
-        $countries = $this->usersByCountry();
+        $overview = AdminCache::remember('dashboard:overview', self::OVERVIEW_CACHE_SECONDS, fn () => $this->overview());
+        $online = AdminCache::remember('dashboard:online', self::ONLINE_CACHE_SECONDS, fn () => $this->onlineSnapshot());
 
         return view('cms-admin::dashboard', [
+            'stats' => [...$overview['stats'], 'users_online' => $online['count']],
+            // Not cached: an admin flips this on the settings page and expects the dashboard to follow at once.
+            'scraperSetting' => RadioScraperSetting::first(),
+            'recentChannels' => $overview['recentChannels'],
+            'recentPodcasts' => $overview['recentPodcasts'],
+            'topMusic' => $overview['topMusic'],
+            'onlineUsers' => $online['users'],
+            'countries' => $overview['countries'],
+            'locatedUsers' => $overview['countries']->sum(),
+        ]);
+    }
+
+    /** What the dashboard shows apart from who is online and the scraper setting — the cache-miss read from MySQL. */
+    private function overview(): array
+    {
+        return [
             'stats' => [
                 'channels_total' => RadioSceaperStation::count(),
                 'channels_published' => RadioSceaperStation::where('is_published', true)->count(),
                 'users_total' => DB::table('users')->count(),
-                'users_online' => $online->count(),
             ],
-            'scraperSetting' => RadioScraperSetting::first(),
             'recentChannels' => RadioSceaperStation::latest()->take(5)->get(),
             'recentPodcasts' => Program::with('type')
                 ->withCount('mediaContents')
@@ -47,10 +68,16 @@ class DashboardController extends Controller
                 ->orderByDesc('play_count')
                 ->take(10)
                 ->get(),
-            'onlineUsers' => $this->onlineUsers($online),
-            'countries' => $countries,
-            'locatedUsers' => $countries->sum(),
-        ]);
+            'countries' => $this->usersByCountry(),
+        ];
+    }
+
+    /** @return array{count: int, users: Collection} everyone online, and the most recent few of them by name */
+    private function onlineSnapshot(): array
+    {
+        $online = $this->onlineActivity();
+
+        return ['count' => $online->count(), 'users' => $this->onlineUsers($online)];
     }
 
     /**
