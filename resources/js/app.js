@@ -4,6 +4,7 @@ import Quill from 'quill';
 import Hls from 'hls.js';
 import 'quill/dist/quill.snow.css';
 import TopbarMenus from './components/TopbarMenus.vue';
+import { playSocial, socialSource, stopSocial } from './social-player';
 
 // The page prints the strings the scripts show (see partials/locale-head.blade.php); a missing key falls back to English.
 const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replace(`:${name}`, value), window.i18n?.[key] ?? key);
@@ -316,17 +317,38 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') qsa(
 
 const previewAudio = qs('[data-preview-audio]');
 const resetPreviewButtons = () => qsa('[data-preview-toggle].is-playing').forEach(button => { button.classList.remove('is-playing'); button.innerHTML = `<i class="fa fa-play"></i> ${t('Play')}`; });
+const showStopButton = button => {
+    button.classList.add('is-playing');
+    button.innerHTML = `<i class="fa fa-stop"></i> ${t('Stop')}`;
+};
+// A YouTube / Facebook link plays in the site's own player, off-screen (audio only), not through the <audio> element.
+let socialPlaying = false;
+const stopPreviewAudio = () => { previewAudio?.pause(); if (previewAudio) clearStreamSource(previewAudio); };
 qsa('[data-preview-toggle]').forEach(button => button.addEventListener('click', () => {
     const wasPlaying = button.classList.contains('is-playing');
     resetPreviewButtons();
+    socialPlaying = false;
+    stopSocial();
+    const social = socialSource(button.dataset.streamUrl);
+    if (wasPlaying) { stopPreviewAudio(); return; }
+    if (social) {
+        stopPreviewAudio();
+        const finish = () => { socialPlaying = false; resetPreviewButtons(); };
+        socialPlaying = true;
+        playSocial(social, {
+            onEnd: finish,
+            onError: () => { finish(); window.alert(t('This link cannot be played here — some videos do not allow embedded playback.')); },
+        });
+        showStopButton(button);
+        return;
+    }
     if (!previewAudio) return;
-    if (wasPlaying) { previewAudio.pause(); clearStreamSource(previewAudio); return; }
     setStreamSource(previewAudio, button.dataset.streamUrl, resetPreviewButtons);
     previewAudio.play().catch(() => resetPreviewButtons());
-    button.classList.add('is-playing');
-    button.innerHTML = `<i class="fa fa-stop"></i> ${t('Stop')}`;
+    showStopButton(button);
 }));
-previewAudio?.addEventListener('pause', resetPreviewButtons);
+// stopPreviewAudio() fires a late "pause" — it must not reset the button of a link that has just started playing.
+previewAudio?.addEventListener('pause', () => { if (!socialPlaying) resetPreviewButtons(); });
 previewAudio?.addEventListener('ended', resetPreviewButtons);
 previewAudio?.addEventListener('error', resetPreviewButtons);
 

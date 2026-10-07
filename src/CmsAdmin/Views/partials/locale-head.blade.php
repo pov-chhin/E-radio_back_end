@@ -11,7 +11,7 @@
         'Private', 'Public', 'Scheduled', 'Write the description…', 'Level :depth', 'under :name', 'Copied!',
         'Upload failed', 'Close', 'Uploading…', 'about :seconds s left', 'Upload complete',
         'Saving the media record. Audio conversion will continue in the background.', 'Almost done…',
-        'Play', 'Stop', 'user', 'users', 'The server returned HTTP :status. Please try again.',
+        'Play', 'Stop', 'This link cannot be played here — some videos do not allow embedded playback.', 'user', 'users', 'The server returned HTTP :status. Please try again.',
         'The connection was interrupted. Check the server and try again.',
     ];
     $i18n = [];
