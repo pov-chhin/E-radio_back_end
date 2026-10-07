@@ -321,7 +321,7 @@ const showStopButton = button => {
     button.classList.add('is-playing');
     button.innerHTML = `<i class="fa fa-stop"></i> ${t('Stop')}`;
 };
-// A YouTube / Facebook link plays in the site's own player, off-screen (audio only), not through the <audio> element.
+// A YouTube / Facebook / Vimeo link plays in the site's own player, off-screen (audio only), not through the <audio> element.
 let socialPlaying = false;
 const stopPreviewAudio = () => { previewAudio?.pause(); if (previewAudio) clearStreamSource(previewAudio); };
 qsa('[data-preview-toggle]').forEach(button => button.addEventListener('click', () => {

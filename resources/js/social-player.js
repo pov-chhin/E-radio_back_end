@@ -1,7 +1,9 @@
-// Plays a pasted YouTube / Facebook link as audio only: the site's own player sits off-screen, so only the sound
-// is heard. Nothing is downloaded or saved — the link is streamed by YouTube / Facebook straight to the browser.
+// Plays a pasted YouTube / Facebook / Vimeo link as audio only: the site's own player sits off-screen, so only the
+// sound is heard. Nothing is downloaded or saved — the link is streamed by the site straight to the browser.
 
 const YOUTUBE_ID = /^[\w-]{11}$/;
+// An unlisted Vimeo video carries a hash after its id (vimeo.com/123456789/abcdef1234), or as ?h= on the player link.
+const VIMEO_HASH = /^[0-9a-f]{8,}$/i;
 
 const parse = link => { try { return new URL(link); } catch { return null; } };
 const hostOf = url => url.hostname.toLowerCase();
@@ -16,13 +18,33 @@ const youtubeId = url => {
     return YOUTUBE_ID.test(id ?? '') ? id : null;
 };
 
-/** What a link needs to be played — `{ kind: 'youtube', id }` or `{ kind: 'facebook', link }` — or null for anything else (a plain audio file or stream). */
+// vimeo.com/123, /123/hash, /channels/name/123, /groups/name/videos/123, /album|showcase/9/video/123, player.vimeo.com/video/123
+const vimeoVideo = url => {
+    if (!isHost(url, 'vimeo.com')) return null;
+
+    const parts = url.pathname.split('/').filter(Boolean);
+    const numeric = part => /^\d+$/.test(part ?? '');
+    const marked = parts.findIndex((part, index) => /^videos?$/.test(part) && numeric(parts[index + 1]));
+    // A showcase or album page is a list, not a video — its own number is not a video id.
+    const index = marked >= 0 ? marked + 1 : (['album', 'showcase'].includes(parts[0]) ? -1 : parts.findIndex(numeric));
+    if (index < 0) return null;
+
+    const hash = url.searchParams.get('h') ?? (VIMEO_HASH.test(parts[index + 1] ?? '') ? parts[index + 1] : null);
+
+    return { id: parts[index], hash };
+};
+
+/** What a link needs to be played — `{ kind: 'youtube', id }`, `{ kind: 'vimeo', id, hash }` or `{ kind: 'facebook', link }` — or null for anything else (a plain audio file or stream). */
 export const socialSource = link => {
     const url = parse(link);
     if (!url || !['http:', 'https:'].includes(url.protocol)) return null;
 
     const id = youtubeId(url);
     if (id) return { kind: 'youtube', id };
+
+    const vimeo = vimeoVideo(url);
+    if (vimeo) return { kind: 'vimeo', ...vimeo };
+
     if (isHost(url, 'facebook.com') || hostOf(url) === 'fb.watch') return { kind: 'facebook', link: url.href };
 
     return null;
@@ -77,6 +99,49 @@ const playYouTube = (id, { onEnd, onError }) => {
     };
 };
 
+let vimeoApi = null;
+const loadVimeoApi = () => vimeoApi ??= new Promise((resolve, reject) => {
+    if (window.Vimeo?.Player) return resolve(window.Vimeo);
+    const script = document.createElement('script');
+    script.src = 'https://player.vimeo.com/api/player.js';
+    script.onload = () => resolve(window.Vimeo);
+    script.onerror = () => { vimeoApi = null; script.remove(); reject(new Error('The Vimeo player could not be loaded.')); };
+    document.head.append(script);
+});
+
+// A private video, or one whose owner restricts where it may be embedded, shows an error page inside the frame
+// and never starts — so a video that has not begun playing after this long counts as unplayable.
+const VIMEO_START_TIMEOUT = 15000;
+
+const playVimeo = ({ id, hash }, { onEnd, onError }) => {
+    let frame = null;
+    let timer = null;
+    let stopped = false;
+    loadVimeoApi().then(Vimeo => {
+        if (stopped) return;
+        frame = document.createElement('iframe');
+        frame.src = `https://player.vimeo.com/video/${id}?${new URLSearchParams({ ...(hash ? { h: hash } : {}), autoplay: '1', controls: '0', playsinline: '1' })}`;
+        frame.allow = 'autoplay; encrypted-media';
+        frame.width = '320';
+        frame.height = '180';
+        frame.title = '';
+        stage().append(frame);
+
+        const player = new Vimeo.Player(frame);
+        timer = setTimeout(onError, VIMEO_START_TIMEOUT);
+        player.on('playing', () => clearTimeout(timer));
+        player.on('ended', onEnd);
+        player.on('error', onError);
+        player.ready().then(() => player.play()).catch(() => { /* autoplay can already have started it; a real failure trips the timeout */ });
+    }).catch(() => onError());
+
+    return () => {
+        stopped = true;
+        clearTimeout(timer);
+        frame?.remove();
+    };
+};
+
 // Facebook's video plugin reports nothing back to the page, so it has no "ended" or "failed" signal: it plays until stopped.
 const playFacebook = link => {
     const frame = document.createElement('iframe');
@@ -108,5 +173,9 @@ export const playSocial = (source, { onEnd = () => {}, onError = () => {} } = {}
         onEnd: () => { stopSocial(); onEnd(); },
         onError: () => { stopSocial(); onError(); },
     };
-    stopCurrent = source.kind === 'youtube' ? playYouTube(source.id, handlers) : playFacebook(source.link);
+    stopCurrent = {
+        youtube: () => playYouTube(source.id, handlers),
+        vimeo: () => playVimeo(source, handlers),
+        facebook: () => playFacebook(source.link),
+    }[source.kind]();
 };
