@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <p class="eyebrow">{{ __('Taxonomy') }}</p>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px">
                 <h1>{{ __('Article') }}</h1>
                 {{-- One tab per group (Song; Program = News / Health / Economy/Finance; Podcasts); each submits the GET form with its key. --}}

@@ -8,15 +8,8 @@
         $canEditEpisodes = auth('admin')->user()?->hasPermission('edit-media-content');
     @endphp
 
-    <div class="page-heading">
-        <div>
-            <p class="eyebrow">{{ __('Catalog') }}</p>
-            <h1>{{ __('Edit Podcast') }}</h1>
-            <p>{{ __('Update :name.', ['name' => $program->name]) }}</p>
-        </div>
-    </div>
-
-    <form method="POST" action="{{ route('admin.programs.update', $program) }}" class="panel form-card" enctype="multipart/form-data">
+    {{-- No page heading here: the bar at the top of the form carries the back arrow, the status and the title. --}}
+    <form method="POST" action="{{ route('admin.programs.update', $program) }}" class="editor-form" enctype="multipart/form-data">
         @method('PUT')
         @include('cms-admin::programs._form')
     </form>

@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <p class="eyebrow">{{ __('Taxonomy') }}</p>
             <h1>{{ __('Edit Category') }}</h1>
             <p>{{ __('Update :name.', ['name' => $category->name]) }}</p>
         </div>

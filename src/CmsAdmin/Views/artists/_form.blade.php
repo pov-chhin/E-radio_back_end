@@ -1,12 +1,12 @@
 @csrf
 
 <label class="toggle-setting">
-    <span><b>{{ __('Verified') }}</b><small>{{ __("Shows a verified badge on the artist's profile.") }}</small></span>
+    <span><b>{{ __('Active') }}</b><small>{{ __("Shows an active badge on the artist's profile.") }}</small></span>
     <span class="switch"><input type="checkbox" name="verified" value="1" @checked(old('verified', $artist->verified ?? false))><i></i></span>
 </label>
 
 <div class="form-grid" style="margin-bottom:24px">
-    <label>{{ __('Photo') }} <small class="muted" style="font-weight:400">{{ __('— cropped to WebP, 300×300') }}</small>
+    <label>{{ __('Profile') }} <small class="muted" style="font-weight:400">{{ __('— cropped to WebP, 300×300') }}</small>
         @if(isset($artist) && $artist->photo)
             <img src="{{ $artist->photo_url }}" alt="" style="width:60px;height:60px;border-radius:8px;object-fit:cover">
             <span class="check-row" style="margin:0"><input type="checkbox" name="remove_photo" value="1"> {{ __('Remove current photo') }}</span>

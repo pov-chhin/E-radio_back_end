@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <p class="eyebrow">{{ __('Taxonomy') }}</p>
             <h1>{{ __('New Tag') }}</h1>
             <p>{{ __('Add a tag anywhere in the tree — leave parent blank for a top-level tag.') }}</p>
         </div>

@@ -124,7 +124,7 @@ class ProgramController extends Controller
             'cover_image' => ['nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:8192'],
             'cover_image_url' => ['nullable', 'string', 'max:2048', 'url'],
             'remove_cover_image' => ['nullable', 'boolean'],
-        ], [], ['tag_id' => __('podcast type')]);
+        ], [], ['tag_id' => __('podcast type'), 'name' => __('title')]);
 
         // A program with a type is a Podcast; one still without a type keeps the category it has.
         if ($data['tag_id'] !== null) {

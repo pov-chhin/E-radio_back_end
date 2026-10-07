@@ -146,6 +146,197 @@ class CmsPodcastAdminTest extends TestCase
         }
     }
 
+    public function test_the_podcast_form_has_a_big_title_a_slug_under_it_and_its_settings_in_a_sidebar(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast('Morning Brief');
+
+        foreach (['/admin/podcasts/create', "/admin/podcasts/{$podcast->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+
+            // The title is the field `name`, called Title: a big input like the media editor's, with no "Name" label.
+            $this->assertMatchesRegularExpression('/<input id="name" name="name" type="text" class="editor-title-input" placeholder="Podcast title" aria-label="Title"/', $form, $url);
+            $this->assertStringNotContainsString('<label>Name', $form, $url);
+            // The slug sits right under it, in the media editor's slug row.
+            $this->assertMatchesRegularExpression('/id="name".*?<label class="editor-slug-row">Slug\s*<input id="slug" name="slug" type="text" placeholder="Made from the title as you type"/s', $form, $url);
+            // The description is a card; Published, the type and the cover are in the sidebar.
+            $this->assertMatchesRegularExpression('/<div class="editor-main">.*?<h4>Description<\/h4>\s*<div class="rich-editor" data-rich-text><\/div>\s*<textarea id="description" name="description" data-rich-text-source hidden>/s', $form, $url);
+            $sidebar = substr($form, strpos($form, '<aside class="editor-sidebar">'));
+            $this->assertStringContainsString('name="is_published"', $sidebar, $url);
+            $this->assertMatchesRegularExpression('/<label>Podcast type\s*<select id="tag_id"/', $sidebar, $url);
+            $this->assertStringContainsString('name="cover_image"', $sidebar, $url);
+            // The sidebar's order, like the media editor's: the picture first, then Status, then Details.
+            $cards = [strpos($sidebar, '<h4>Cover image</h4>'), strpos($sidebar, '<h4>Status</h4>'), strpos($sidebar, '<h4>Details</h4>')];
+            $this->assertNotContains(false, $cards, $url);
+            $sorted = $cards;
+            sort($sorted);
+            $this->assertSame($sorted, $cards, $url);
+            $this->assertStringNotContainsString('class="panel form-card"', $form, $url);
+        }
+        $this->get('/admin/podcasts/create')->assertSee('Create podcast');
+        $this->get("/admin/podcasts/{$podcast->id}/edit")->assertSee('Save changes');
+    }
+
+    public function test_the_description_uses_the_rich_text_editor_like_media_content(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast('Morning Brief');
+        $media = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+
+        foreach (['/admin/podcasts/create', "/admin/podcasts/{$podcast->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+
+            // The same two pieces the media form gives its editor: the container the page's script turns into the
+            // editor, and the hidden textarea that carries its HTML back with the form.
+            $this->assertStringContainsString('<div class="editor-block description-grow">', $form, $url);
+            $this->assertStringContainsString('<div class="rich-editor" data-rich-text></div>', $form);
+            $this->assertStringContainsString('<div class="rich-editor" data-rich-text></div>', $media);
+            $this->assertMatchesRegularExpression('/<textarea id="description" name="description" data-rich-text-source hidden>/', $form, $url);
+            // No plain box any more.
+            $this->assertStringNotContainsString('podcast-description', $form, $url);
+            // The card grows to the bottom of the sidebar, as the media editor's does.
+            $this->assertStringContainsString('.editor-layout > .editor-main { align-self: stretch; }', $form, $url);
+            $this->assertStringContainsString('.editor-block.description-grow { flex: 1 1 auto; display: flex; flex-direction: column; }', $form, $url);
+            $this->assertStringContainsString('.description-grow .rich-editor .ql-editor { flex: 1 1 auto; height: auto; }', $form, $url);
+        }
+    }
+
+    public function test_a_description_is_given_to_the_editor_as_html(): void
+    {
+        $this->signIn();
+        $source = fn (Program $podcast) => preg_match('/<textarea id="description"[^>]*>(.*?)<\/textarea>/s', $this->get("/admin/podcasts/{$podcast->id}/edit")->getContent(), $m) ? html_entity_decode($m[1], ENT_QUOTES) : null;
+
+        // Written before the editor: plain text, whose lines are kept as paragraphs.
+        $plain = $this->podcast('Plain Show');
+        $plain->update(['description' => "First line.
+Second line, with & ampersand and \"quotes\"."]);
+        $this->assertSame('<p>First line.</p><p>Second line, with &amp; ampersand and &quot;quotes&quot;.</p>', $source($plain));
+
+        // Text that holds something tag-shaped counts as HTML and goes in as it is (the editor reads it as markup).
+        $tagged = $this->podcast('Tagged Show');
+        $tagged->update(['description' => 'Use <em>this</em> word']);
+        $this->assertSame('Use <em>this</em> word', $source($tagged));
+
+        // Already HTML from the editor: given back as it is.
+        $rich = $this->podcast('Rich Show');
+        $rich->update(['description' => '<p>Hello <strong>world</strong></p><ul><li>One</li></ul>']);
+        $this->assertSame('<p>Hello <strong>world</strong></p><ul><li>One</li></ul>', $source($rich));
+
+        // None: nothing in the box.
+        $none = $this->podcast('Empty Show');
+        $none->update(['description' => null]);
+        $this->assertSame('', $source($none));
+
+        // The page itself never carries a description as live markup — only escaped, inside the hidden box.
+        $page = $this->get("/admin/podcasts/{$rich->id}/edit")->getContent();
+        $this->assertStringNotContainsString('<strong>world</strong>', $page);
+        $this->assertStringContainsString('&lt;strong&gt;world&lt;/strong&gt;', $page);
+    }
+
+    public function test_a_description_from_the_editor_is_saved_as_the_html_it_sends(): void
+    {
+        $this->signIn();
+        $html = '<p>About the <strong>show</strong></p><ol><li>One</li><li>Two</li></ol><blockquote>Quote</blockquote>';
+
+        $this->post('/admin/podcasts', ['tag_id' => $this->types()['health']->id, 'name' => 'Rich Show', 'slug' => '', 'description' => $html])->assertRedirect();
+        $program = Program::where('slug', 'rich-show')->firstOrFail();
+        $this->assertSame($html, $program->description);
+
+        $update = '<p>Changed</p>';
+        $this->put("/admin/podcasts/{$program->id}", ['name' => 'Rich Show', 'slug' => 'rich-show', 'description' => $update])->assertRedirect();
+        $this->assertSame($update, $program->fresh()->description);
+
+        // An emptied editor sends nothing, and the description is cleared.
+        $this->put("/admin/podcasts/{$program->id}", ['name' => 'Rich Show', 'slug' => 'rich-show', 'description' => ''])->assertRedirect();
+        $this->assertNull($program->fresh()->description);
+    }
+
+    public function test_the_save_button_is_in_a_bar_at_the_top_of_the_form_and_only_there(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast('Morning Brief');
+
+        foreach (['/admin/podcasts/create' => ['New Podcast', 'Create podcast'], "/admin/podcasts/{$podcast->id}/edit" => ['Morning Brief', 'Save changes']] as $url => [$title, $button]) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $form = substr($html, $start = strpos($html, 'class="editor-form"'), strpos($html, '</form>', $start) - $start);
+
+            // The bar: back to the list, what the Published switch says, the title, and the button on the right —
+            // and it comes before the title field and everything else in the form.
+            $this->assertMatchesRegularExpression(
+                '/<div class="editor-topbar">\s*<a href="'.preg_quote(e(route('admin.programs.index')), '/').'" class="icon-button" aria-label="Back to podcasts">.*?<strong class="editor-topbar-title">'.preg_quote($title, '/').'<\/strong>\s*<div class="editor-topbar-actions">\s*<button type="submit" class="primary-button">'.preg_quote($button, '/').'<\/button>/s',
+                $form,
+                $url,
+            );
+            $this->assertLessThan(strpos($form, 'id="name"'), strpos($form, $button), $url);
+
+            // One submit button in the form, none left under the description.
+            $this->assertSame(1, substr_count($form, 'type="submit"'), $url);
+            $this->assertSame(1, substr_count($form, $button), $url);
+            $this->assertStringNotContainsString('podcast-submit', $form, $url);
+        }
+    }
+
+    public function test_the_bar_badge_says_published_or_draft_and_follows_the_switch(): void
+    {
+        $this->signIn();
+        // (The helper makes published podcasts.)
+        $draft = $this->podcast('Quiet Draft');
+        $draft->update(['is_published' => false]);
+        $live = $this->podcast('Live Show');
+
+        $badge = fn (string $html) => preg_match('/<span class="badge (\w+)" data-published-badge>([^<]*)<\/span>/', $html, $m) ? [$m[1], $m[2]] : null;
+
+        $this->assertSame(['slate', 'Draft'], $badge($this->get('/admin/podcasts/create')->getContent()));
+        $this->assertSame(['slate', 'Draft'], $badge($this->get("/admin/podcasts/{$draft->id}/edit")->getContent()));
+        $this->assertSame(['green', 'Published'], $badge($this->get("/admin/podcasts/{$live->id}/edit")->getContent()));
+
+        // The switch carries the hook the page's script uses to flip the badge.
+        $this->assertMatchesRegularExpression('/<input type="checkbox" name="is_published" value="1" data-published-switch checked>/', $this->get("/admin/podcasts/{$live->id}/edit")->getContent());
+        $this->assertDoesNotMatchRegularExpression('/data-published-switch checked/', $this->get("/admin/podcasts/{$draft->id}/edit")->getContent());
+    }
+
+    public function test_the_slug_follows_the_title_only_while_it_is_empty(): void
+    {
+        $this->signIn();
+        $existing = $this->podcast('Morning Brief');
+
+        // The page's script: a new podcast's slug follows its title; one that has a slug keeps it.
+        $script = fn (string $url) => $this->get($url)->assertOk()->getContent();
+        foreach (['/admin/podcasts/create', "/admin/podcasts/{$existing->id}/edit"] as $url) {
+            $html = $script($url);
+            $this->assertStringContainsString("let following = slug.value === '';", $html, $url);
+            $this->assertStringContainsString("title.addEventListener('input', () => { if (following) slug.value = slugify(title.value); });", $html, $url);
+            $this->assertStringContainsString("slug.addEventListener('input', () => { following = slug.value === ''; });", $html, $url);
+        }
+        // The saved slug is what an edit starts with, so the script finds it filled and leaves it alone.
+        $this->assertStringContainsString('value="'.$existing->slug.'"', $this->get("/admin/podcasts/{$existing->id}/edit")->getContent());
+        $this->assertDoesNotMatchRegularExpression('/id="slug"[^>]*value="[^"]+"/', $this->get('/admin/podcasts/create')->getContent());
+
+        // And with the slug left empty (a Khmer title, or a form posted without the script) the server still makes it.
+        $this->post('/admin/podcasts', ['tag_id' => $this->types()['health']->id, 'name' => 'Evening News Brief', 'slug' => ''])->assertRedirect();
+        $this->assertNotNull(Program::where('slug', 'evening-news-brief')->first());
+    }
+
+    public function test_a_missing_title_says_title(): void
+    {
+        $this->signIn();
+
+        $this->post('/admin/podcasts', ['tag_id' => $this->types()['health']->id, 'name' => '', 'slug' => ''])
+            ->assertSessionHasErrors(['name' => 'The title field is required.']);
+    }
+
+    public function test_the_podcast_form_is_translated_into_khmer(): void
+    {
+        $this->signIn();
+        $this->put('/admin/locale', ['locale' => 'km'])->assertRedirect();
+
+        $form = $this->get('/admin/podcasts/create')->assertOk()->getContent();
+
+        $this->assertStringContainsString('placeholder="ចំណងជើងផតខាស្ត"', $form);
+        $this->assertStringContainsString('aria-label="ចំណងជើង"', $form);
+        $this->assertStringContainsString('placeholder="បង្កើតពីចំណងជើងពេលអ្នកវាយ"', $form);
+    }
+
     public function test_the_type_field_lists_the_podcast_tags(): void
     {
         $this->signIn();

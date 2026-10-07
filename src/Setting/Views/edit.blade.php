@@ -7,6 +7,7 @@
     $rustfsFields = ['rustfs_key', 'rustfs_secret', 'rustfs_bucket', 'rustfs_region', 'rustfs_endpoint', 'rustfs_url', 'rustfs_connection'];
     $activeTab = match (true) {
         $errors->has('locale'), session('settings_tab') === 'language' => 'language',
+        $errors->has('url'), session('settings_tab') === 'radio-studio' => 'radio-studio',
         $errors->hasAny($rustfsFields), session('settings_tab') === 'rustfs' => 'rustfs',
         $errors->hasAny($storageFields), session('settings_tab') === 'storage' => 'storage',
         default => 'radio-scraper',
@@ -28,6 +29,7 @@
             <button type="button" class="{{ $activeTab === 'storage' ? 'active' : '' }}" data-settings-tab="storage">{{ __('Storage') }}</button>
             <button type="button" class="{{ $activeTab === 'rustfs' ? 'active' : '' }}" data-settings-tab="rustfs">RustFS</button>
             <button type="button" class="{{ $activeTab === 'language' ? 'active' : '' }}" data-settings-tab="language">{{ __('Language') }}</button>
+            <button type="button" class="{{ $activeTab === 'radio-studio' ? 'active' : '' }}" data-settings-tab="radio-studio">{{ __('Radio Studio') }}</button>
         </nav>
 
         <div>
@@ -147,6 +149,23 @@
                         @endforeach
                     </fieldset>
                     @error('locale') <em class="field-error">{{ $message }}</em> @enderror
+                </div>
+
+                <div class="form-actions"><span></span><button type="submit" class="primary-button">{{ __('Save') }}</button></div>
+            </form>
+
+            <form method="POST" action="{{ route('admin.settings.radio-studio.update') }}" class="panel settings-form" data-settings-panel="radio-studio" @unless($activeTab === 'radio-studio') hidden @endunless>
+                @csrf
+                @method('PUT')
+
+                <div class="form-section">
+                    <h3>{{ __('Radio Studio Settings') }}</h3>
+                    <p>{{ __('Where the Radio Studio link in the sidebar goes. It opens in a new tab. Leave it empty to hide the link.') }}</p>
+
+                    <label>{{ __('Radio Studio address') }}
+                        <input id="radio_studio_url" name="url" type="url" inputmode="url" maxlength="2048" placeholder="https://studio.example.com/dashboard" value="{{ old('url', $studioSetting->url) }}">
+                        @error('url') <em>{{ $message }}</em> @enderror
+                    </label>
                 </div>
 
                 <div class="form-actions"><span></span><button type="submit" class="primary-button">{{ __('Save') }}</button></div>

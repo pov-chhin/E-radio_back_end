@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Src\Setting\Models\LanguageSetting;
 use Src\Setting\Models\RadioScraperSetting;
+use Src\Setting\Models\RadioStudioSetting;
 use Src\Setting\Models\RustfsSetting;
 use Src\Setting\Models\StorageSetting;
 use Throwable;
@@ -29,6 +30,7 @@ class SettingController extends Controller
             'storageSetting' => $storageSetting,
             'rustfsSetting' => $rustfsSetting,
             'languageSetting' => LanguageSetting::firstOrFail(),
+            'studioSetting' => RadioStudioSetting::firstOrFail(),
             // Secrets are never sent back to the browser — the page only needs to know whether one is saved.
             's3Key' => $this->savedCredential($storageSetting, 's3_key'),
             's3HasSecret' => $this->savedCredential($storageSetting, 's3_secret') !== null,
@@ -151,6 +153,20 @@ class SettingController extends Controller
         LanguageSetting::firstOrFail()->update($data);
 
         return back()->with('status', __('Language settings saved.'))->with('settings_tab', 'language');
+    }
+
+    /** The sidebar's Radio Studio link. http or https only, since it goes straight into a link; empty hides the link. */
+    public function updateRadioStudio(Request $request): RedirectResponse
+    {
+        $data = $request->validate(
+            ['url' => ['nullable', 'url:http,https', 'max:2048']],
+            [],
+            ['url' => __('Radio Studio address')],
+        );
+
+        RadioStudioSetting::firstOrFail()->update($data);
+
+        return back()->with('status', __('Radio Studio settings saved.'))->with('settings_tab', 'radio-studio');
     }
 
     public function updateRustfs(Request $request): RedirectResponse

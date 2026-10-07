@@ -88,6 +88,10 @@ class ArtistController extends Controller
             'status' => ['required', Rule::in(self::STATUSES)],
             'social_links' => ['nullable', 'array'],
             'social_links.*' => ['nullable', 'string', 'max:2048', 'url'],
+        ], [], [
+            // The picture is called "Profile" on the form, so its messages say so too.
+            'photo' => __('profile'),
+            'photo_url' => __('profile URL'),
         ]);
 
         $data['verified'] = $request->boolean('verified');

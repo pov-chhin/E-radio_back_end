@@ -11,11 +11,14 @@
         $adminNav = [
             ['route' => 'admin.dashboard', 'pattern' => 'admin.dashboard', 'label' => 'Overview', 'icon' => 'th-large', 'permission' => null],
             ['route' => 'admin.radio-channels.index', 'pattern' => 'admin.radio-channels.*', 'label' => 'Radio Channels', 'icon' => 'server', 'permission' => 'view-radio-channels'],
-            ['route' => 'admin.programs.index', 'pattern' => 'admin.programs.*', 'label' => 'Podcasts', 'icon' => 'podcast', 'permission' => 'view-programs', 'section' => 'Catalog',
+            // The radio studio lives on its own site: a link out (new tab), shown to whoever sees Radio Channels. Its
+            // address is edited under Settings → Radio Studio; with none set there is no link.
+            ['url' => \Src\Setting\Models\RadioStudioSetting::studioUrl(), 'label' => 'Radio Studio', 'icon' => 'headphones', 'permission' => 'view-radio-channels'],
+            ['route' => 'admin.programs.index', 'pattern' => 'admin.programs.*', 'label' => 'Podcasts', 'icon' => 'podcast', 'permission' => 'view-programs', 'section' => 'Taxonomy',
                 'active' => fn () => request()->routeIs('admin.programs.*') || (request()->routeIs('admin.media-contents.*') && request()->filled('podcast'))],
             ['route' => 'admin.music.index', 'pattern' => 'admin.music.*', 'label' => 'Article', 'icon' => 'newspaper-o', 'permission' => 'view-media-content',
                 'active' => fn () => request()->routeIs('admin.music.*') || (request()->routeIs('admin.media-contents.*') && ! request()->filled('podcast'))],
-            ['route' => 'admin.categories.index', 'pattern' => 'admin.categories.*', 'label' => 'Categories', 'icon' => 'sitemap', 'permission' => 'view-categories', 'section' => 'Catalog'],
+            ['route' => 'admin.categories.index', 'pattern' => 'admin.categories.*', 'label' => 'Categories', 'icon' => 'sitemap', 'permission' => 'view-categories', 'section' => 'Taxonomy'],
             ['route' => 'admin.tags.index', 'pattern' => 'admin.tags.*', 'label' => 'Tags', 'icon' => 'tags', 'permission' => 'view-tags'],
             ['route' => 'admin.artists.index', 'pattern' => 'admin.artists.*', 'label' => 'Artists', 'icon' => 'microphone', 'permission' => 'view-artists'],
             ['route' => 'admin.users.index', 'pattern' => 'admin.users.*', 'label' => 'Admin Users', 'icon' => 'users', 'permission' => 'view-users', 'section' => 'Access control'],
@@ -30,6 +33,7 @@
         @php $currentSection = null; @endphp
         @foreach($adminNav as $item)
             @continue($item['permission'] && ! $admin?->hasPermission($item['permission']))
+            @continue(array_key_exists('url', $item) && blank($item['url']))
             @if(($item['section'] ?? null) && $item['section'] !== $currentSection)
                 <p class="nav-section">{{ __($item['section']) }}</p>
                 @php $currentSection = $item['section']; @endphp
@@ -51,6 +55,12 @@
                         @endforeach
                     </div>
                 </details>
+            @elseif(isset($item['url']))
+                {{-- An address outside this panel: opens in a new tab and is never the current page. --}}
+                <a href="{{ $item['url'] }}" target="_blank" rel="noopener">
+                    <span class="nav-icon fa fa-{{ $item['icon'] }}"></span><span>{{ __($item['label']) }}</span>
+                    <span class="fa fa-external-link" aria-hidden="true" style="margin-left:auto;font-size:10px;opacity:.55"></span>
+                </a>
             @else
                 <a href="{{ route($item['route']) }}" @class(['active' => isset($item['active']) ? $item['active']() : request()->routeIs($item['pattern'])])>
                     <span class="nav-icon fa fa-{{ $item['icon'] }}"></span><span>{{ __($item['label']) }}</span>

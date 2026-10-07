@@ -71,6 +71,98 @@ class ArtistManagementTest extends TestCase
         $this->assertNull($artist->photo);
     }
 
+    public function test_the_verified_switch_is_worded_active_on_the_form_and_in_the_list(): void
+    {
+        $on = Artist::create(['name' => 'Switched On', 'slug' => 'switched-on', 'status' => 'active', 'verified' => true]);
+        $off = Artist::create(['name' => 'Switched Off', 'slug' => 'switched-off', 'status' => 'active', 'verified' => false]);
+
+        // The form: the same switch (still the artist's `verified`), now called Active.
+        foreach (['/admin/artists/create', "/admin/artists/{$on->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+            $this->assertMatchesRegularExpression('/<span><b>Active<\/b><small>Shows an active badge on the artist(?:\'|&#039;)s profile\.<\/small><\/span>\s*<span class="switch"><input type="checkbox" name="verified"/', $form, $url);
+        }
+        $this->assertMatchesRegularExpression('/name="verified" value="1" checked/', $this->get("/admin/artists/{$on->id}/edit")->getContent());
+        $this->assertDoesNotMatchRegularExpression('/name="verified" value="1" checked/', $this->get("/admin/artists/{$off->id}/edit")->getContent());
+
+        // The list: an Active column, "Active" with the tick for a switched-on artist and "Inactive" for the rest.
+        $list = $this->get('/admin/artists')->assertOk()->getContent();
+        $this->assertStringContainsString('<th>Active</th>', $list);
+        $this->assertSame(1, substr_count($list, '<span class="badge green"><i class="fa fa-check"></i> Active</span>'));
+        $this->assertSame(1, substr_count($list, '<span class="badge slate">Inactive</span>'));
+
+        // The word is gone everywhere.
+        foreach ([$list, $this->get('/admin/artists/create')->getContent()] as $page) {
+            $this->assertStringNotContainsString('Verified', $page);
+            $this->assertStringNotContainsString('Unverified', $page);
+        }
+
+        // Saving it works as it did.
+        $this->post('/admin/artists', ['name' => 'New One', 'slug' => 'new-one', 'status' => 'active', 'verified' => '1'])->assertSessionHasNoErrors();
+        $this->assertTrue(Artist::where('slug', 'new-one')->firstOrFail()->verified);
+        $this->put("/admin/artists/{$on->id}", ['name' => 'Switched On', 'slug' => 'switched-on', 'status' => 'active'])->assertSessionHasNoErrors();
+        $this->assertFalse($on->fresh()->verified);
+    }
+
+    public function test_active_is_translated_into_khmer_on_the_form_and_in_the_list(): void
+    {
+        Artist::create(['name' => 'Switched On', 'slug' => 'switched-on', 'status' => 'active', 'verified' => true]);
+        $this->put('/admin/locale', ['locale' => 'km'])->assertRedirect();
+
+        $form = $this->get('/admin/artists/create')->assertOk()->getContent();
+        $this->assertStringContainsString('<span><b>សកម្ម</b><small>បង្ហាញសញ្ញាសកម្មនៅលើប្រវត្តិរូបសិល្បករ។</small></span>', $form);
+
+        $list = $this->get('/admin/artists')->assertOk()->getContent();
+        $this->assertStringContainsString('<th>សកម្ម</th>', $list);
+        $this->assertStringNotContainsString('បានផ្ទៀងផ្ទាត់', $list);
+    }
+
+    public function test_the_300x300_picture_is_called_profile_on_the_form(): void
+    {
+        $artist = Artist::create(['name' => 'Some Artist', 'slug' => 'some-artist', 'status' => 'active']);
+
+        foreach (['/admin/artists/create', "/admin/artists/{$artist->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+
+            // "Profile — cropped to WebP, 300×300" and "Cover — …": the first label of the two image fields.
+            $this->assertMatchesRegularExpression('/<label>Profile <small[^>]*>— cropped to WebP, 300×300<\/small>/', $form, $url);
+            $this->assertStringNotContainsString('<label>Photo', $form, $url);
+            // Only the label changed: the field is still the artist's `photo`.
+            $this->assertStringContainsString('data-image-field="photo"', $form, $url);
+            $this->assertMatchesRegularExpression('/<input id="photo" name="photo" type="file"|name="photo" type="file"/', $form, $url);
+        }
+    }
+
+    public function test_a_profile_picture_that_is_not_an_image_says_profile_in_the_message(): void
+    {
+        $this->post('/admin/artists', [
+            'name' => 'Some Artist', 'slug' => 'some-artist', 'status' => 'active',
+            'photo' => UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasErrors('photo');
+
+        $message = session('errors')->first('photo');
+        $this->assertStringContainsString('profile', $message);
+        $this->assertStringNotContainsString('photo', $message);
+
+        $this->post('/admin/artists', [
+            'name' => 'Some Artist', 'slug' => 'some-artist', 'status' => 'active', 'photo_url' => 'not a url',
+        ])->assertSessionHasErrors('photo_url');
+        $this->assertSame('The profile URL field must be a valid URL.', session('errors')->first('photo_url'));
+    }
+
+    public function test_profile_is_translated_into_khmer_and_does_not_clash_with_bio(): void
+    {
+        $this->put('/admin/locale', ['locale' => 'km'])->assertRedirect();
+
+        $form = $this->get('/admin/artists/create')->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression('/<label>រូបតំណាង <small/', $form);
+        $this->assertStringNotContainsString('<label>Profile', $form);
+        // "Bio" keeps its own Khmer word (ប្រវត្តិរូប), so the two labels on the form are different words.
+        $this->assertSame('រូបតំណាង', trans('Profile', [], 'km'));
+        $this->assertNotSame(trans('Bio', [], 'km'), trans('Profile', [], 'km'));
+        $this->assertNotSame('Bio', trans('Bio', [], 'km'), 'Bio has a Khmer translation to differ from');
+    }
+
     public function test_uploading_a_photo_is_cropped_to_300x300_and_converted_to_webp(): void
     {
         $this->post('/admin/artists', [

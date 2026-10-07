@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <p class="eyebrow">{{ __('Taxonomy') }}</p>
             <h1>{{ __('Artists') }}</h1>
             <p>{{ __('Artist profiles — bio, photo, socials, and verification status.') }}</p>
         </div>
@@ -17,7 +17,7 @@
             <thead>
                 <tr>
                     <th>{{ __('Name') }}</th>
-                    <th>{{ __('Verified') }}</th>
+                    <th>{{ __('Active') }}</th>
                     <th>{{ __('Status') }}</th>
                     <th class="right">{{ __('Actions') }}</th>
                 </tr>
@@ -40,9 +40,9 @@
                         </td>
                         <td>
                             @if($artist->verified)
-                                <span class="badge green"><i class="fa fa-check"></i> {{ __('Verified') }}</span>
+                                <span class="badge green"><i class="fa fa-check"></i> {{ __('Active') }}</span>
                             @else
-                                <span class="badge slate">{{ __('Unverified') }}</span>
+                                <span class="badge slate">{{ __('Inactive') }}</span>
                             @endif
                         </td>
                         <td>

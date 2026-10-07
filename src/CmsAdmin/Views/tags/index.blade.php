@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <p class="eyebrow">{{ __('Taxonomy') }}</p>
             <h1>{{ __('Tags') }}</h1>
             <p>{{ __('The nested "By Tag" tree used to filter and describe content — genres, topics, moods.') }}</p>
         </div>

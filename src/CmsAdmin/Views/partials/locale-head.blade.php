@@ -1,9 +1,19 @@
-{{-- Goes in every layout's <head>: Khmer needs a font that has its glyphs; the system ones are the fallback while this loads. --}}
+{{-- Goes in every layout's <head>: Khmer needs a font that has its glyphs. Khmer OS Battambang is the one set: it is on
+     the Khmer computers that have the Khmer OS fonts, and Noto Sans Khmer (loaded here) stands in on the ones that
+     don't while the system fonts cover the first moments. --}}
 @if(app()->getLocale() === 'km')
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;700&display=swap">
-    <style>html[lang="km"]{font-family:"Noto Sans Khmer","Khmer UI","Leelawadee UI",Inter,"Segoe UI",system-ui,sans-serif}</style>
+    {{-- The dashboard and the map tooltips set their own font (Nunito, which has no Khmer), and the description
+         editor sets Helvetica on itself, so each of those is named here too. --}}
+    <style>
+        html[lang="km"],
+        html[lang="km"] .dash,
+        html[lang="km"] .jvm-tooltip,
+        html[lang="km"] .ql-container,
+        html[lang="km"] .ql-toolbar { font-family: "Khmer OS Battambang", "Noto Sans Khmer", "Khmer UI", "Leelawadee UI", Inter, "Segoe UI", system-ui, sans-serif; }
+    </style>
 @endif
 {{-- Strings that resources/js/app.js shows; it reads them from window.i18n and falls back to the English key. --}}
 @php

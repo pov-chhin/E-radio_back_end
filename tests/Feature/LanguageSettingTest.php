@@ -58,8 +58,27 @@ class LanguageSettingTest extends TestCase
             ->assertOk()
             ->assertSee('lang="km"', false)
             ->assertSee(self::KHMER_SETTINGS)
+            // Khmer OS Battambang first; Noto Sans Khmer is loaded to stand in where it isn't installed.
             ->assertSee('Noto Sans Khmer', false);
         $this->get('/admin/users')->assertOk()->assertSee(self::KHMER_ADMIN_USERS);
+    }
+
+    public function test_the_khmer_panel_uses_khmer_os_battambang_and_english_does_not(): void
+    {
+        $this->put('/admin/settings/language', ['locale' => 'km'])->assertRedirect();
+
+        $khmer = $this->get('/admin/users')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/html\[lang="km"\],[^{]*\{\s*font-family: "Khmer OS Battambang", "Noto Sans Khmer"/', $khmer);
+        // Everywhere that sets a font of its own: the dashboard, the map tooltips and the description editor.
+        foreach (['html[lang="km"] .dash', 'html[lang="km"] .jvm-tooltip', 'html[lang="km"] .ql-container', 'html[lang="km"] .ql-toolbar'] as $selector) {
+            $this->assertStringContainsString($selector, $khmer);
+        }
+
+        // The language switch in the account menu gives the same page in English with none of it.
+        $this->put('/admin/locale', ['locale' => 'en'])->assertRedirect();
+        $english = $this->get('/admin/users')->assertOk()->getContent();
+        $this->assertStringNotContainsString('Khmer OS Battambang', $english);
+        $this->assertStringNotContainsString('Noto Sans Khmer', $english);
     }
 
     public function test_an_unsupported_language_is_refused(): void
