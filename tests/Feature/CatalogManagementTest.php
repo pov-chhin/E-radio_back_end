@@ -137,7 +137,7 @@ class CatalogManagementTest extends TestCase
     {
         $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
 
-        $this->post('/admin/programs', [
+        $this->post('/admin/podcasts', [
             'tag_id' => $type->id,
             'name' => 'QA Program',
             'slug' => 'qa-program',
@@ -151,7 +151,7 @@ class CatalogManagementTest extends TestCase
     {
         $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
 
-        $this->post('/admin/programs', [
+        $this->post('/admin/podcasts', [
             'tag_id' => $type->id,
             'name' => 'QA Program',
             'slug' => 'qa-program',
@@ -173,7 +173,7 @@ class CatalogManagementTest extends TestCase
         $this->useRemoteStorage($driver, $disk);
         $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
 
-        $this->post('/admin/programs', [
+        $this->post('/admin/podcasts', [
             'tag_id' => $type->id,
             'name' => 'Cloud Program',
             'slug' => 'cloud-program',
@@ -189,7 +189,7 @@ class CatalogManagementTest extends TestCase
         $cover = $program->cover_image;
         $this->backToLocalStorage();
 
-        $this->delete("/admin/programs/{$program->id}")->assertRedirect();
+        $this->delete("/admin/podcasts/{$program->id}")->assertRedirect();
 
         Storage::disk($disk)->assertMissing($cover);
     }
@@ -198,7 +198,7 @@ class CatalogManagementTest extends TestCase
     {
         $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
 
-        $this->post('/admin/programs', [
+        $this->post('/admin/podcasts', [
             'tag_id' => $type->id,
             'name' => 'QA Program',
             'slug' => 'qa-program',
@@ -213,7 +213,7 @@ class CatalogManagementTest extends TestCase
     public function test_checking_remove_cover_image_clears_it_and_deletes_the_file(): void
     {
         $type = Tag::where('slug', 'health')->whereNotNull('parent_id')->firstOrFail();
-        $this->post('/admin/programs', [
+        $this->post('/admin/podcasts', [
             'tag_id' => $type->id,
             'name' => 'QA Program',
             'slug' => 'qa-program',
@@ -222,7 +222,7 @@ class CatalogManagementTest extends TestCase
         $program = Program::where('slug', 'qa-program')->firstOrFail();
         $originalCoverImage = $program->cover_image;
 
-        $this->put("/admin/programs/{$program->id}", [
+        $this->put("/admin/podcasts/{$program->id}", [
             'tag_id' => $type->id,
             'name' => 'QA Program',
             'slug' => 'qa-program',

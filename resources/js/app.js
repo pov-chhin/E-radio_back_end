@@ -56,39 +56,6 @@ qs('[data-menu-toggle]')?.addEventListener('click', () => sidebar?.classList.tog
 // Checking a tag-tree parent's own checkbox shouldn't also collapse/expand it.
 qsa('.tag-tree-node > summary label').forEach(label => label.addEventListener('click', event => event.stopPropagation()));
 
-// Filter the media editor's tag tree while retaining ancestors of matching tags.
-const tagSearch = qs('[data-tag-search]');
-const searchableTagTree = qs('[data-tag-tree]');
-if (tagSearch && searchableTagTree) {
-    const visitTagNode = (element, term) => {
-        if (!element.matches('details')) {
-            const matches = !term || element.textContent.toLowerCase().includes(term);
-            element.hidden = !matches;
-            return matches;
-        }
-
-        const summary = element.querySelector(':scope > summary');
-        const children = element.querySelector(':scope > .tag-tree-children');
-        const ownMatches = !term || summary?.textContent.toLowerCase().includes(term);
-        const childMatches = children
-            ? [...children.children].map(child => visitTagNode(child, term)).some(Boolean)
-            : false;
-        const matches = ownMatches || childMatches;
-
-        element.hidden = !matches;
-        if (term && childMatches) element.open = true;
-        return matches;
-    };
-
-    tagSearch.addEventListener('input', () => {
-        const term = tagSearch.value.trim().toLowerCase();
-        const hasMatches = [...searchableTagTree.children]
-            .map(child => visitTagNode(child, term))
-            .some(Boolean);
-        qs('[data-tag-search-empty]')?.toggleAttribute('hidden', hasMatches);
-    });
-}
-
 // Tree view / Column view toggle for the tag picker.
 qsa('[data-tag-view-tab]').forEach(button => button.addEventListener('click', () => {
     qsa('[data-tag-view-tab]').forEach(tab => tab.classList.toggle('active', tab === button));

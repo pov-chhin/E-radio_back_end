@@ -70,7 +70,7 @@ class CmsPodcastAdminTest extends TestCase
     {
         $this->signIn();
 
-        $this->get('/admin/programs')
+        $this->get('/admin/podcasts')
             ->assertOk()
             ->assertSee('Podcasts')
             ->assertSee('New <i class="fa fa-plus"', false)
@@ -83,7 +83,7 @@ class CmsPodcastAdminTest extends TestCase
         $this->podcast('Healthy Habits', type: 'health');
         $this->podcast('Morning Brief');
 
-        $html = $this->get('/admin/programs')->assertOk()->assertSee('Healthy Habits')->assertSee('Morning Brief')->getContent();
+        $html = $this->get('/admin/podcasts')->assertOk()->assertSee('Healthy Habits')->assertSee('Morning Brief')->getContent();
         // The tabs are the tags under Podcast — not the categories.
         foreach (['health', 'economyfinance', 'education', 'politic', 'civilization'] as $slug) {
             $this->assertStringContainsString('name="type" value="'.$slug.'"', $html);
@@ -94,7 +94,7 @@ class CmsPodcastAdminTest extends TestCase
         // "All" is the lit tab until one is picked.
         $this->assertMatchesRegularExpression('/value="" [^>]*class="active">All</', $html);
 
-        $picked = $this->get('/admin/programs?type=health')
+        $picked = $this->get('/admin/podcasts?type=health')
             ->assertOk()
             ->assertSee('Healthy Habits')
             ->assertDontSee('Morning Brief');
@@ -106,33 +106,42 @@ class CmsPodcastAdminTest extends TestCase
         $this->signIn();
         $this->podcast('Morning Brief');
 
-        $this->get('/admin/programs?type=nope')->assertOk()->assertSee('Morning Brief');
+        $this->get('/admin/podcasts?type=nope')->assertOk()->assertSee('Morning Brief');
         // The old category links mean nothing now.
-        $this->get('/admin/programs?category=health')->assertOk()->assertSee('Morning Brief');
-        $this->get('/admin/programs?type=education')
+        $this->get('/admin/podcasts?category=health')->assertOk()->assertSee('Morning Brief');
+        $this->get('/admin/podcasts?type=education')
             ->assertOk()
             ->assertDontSee('Morning Brief')
             ->assertSee('No podcasts in Education yet.');
     }
 
-    public function test_new_opens_a_podcast_type_menu_and_the_form_starts_on_the_pick(): void
+    public function test_new_is_a_plain_link_to_the_create_page_and_the_form_starts_on_the_open_type(): void
     {
         $this->signIn();
         $types = $this->types();
 
-        $html = $this->get('/admin/programs')->assertOk()->getContent();
-        foreach ($types->keys() as $slug) {
-            $this->assertStringContainsString('href="'.route('admin.programs.create', ['type' => $slug]).'"', $html);
+        // No drop-down of types: one link straight to the create page (the type is picked on the form).
+        $html = $this->get('/admin/podcasts')->assertOk()->getContent();
+        $this->assertStringContainsString('<a href="'.route('admin.programs.create').'" class="primary-button">New ', $html);
+        foreach (['<details', 'program-new-menu', 'role="menuitem"', 'Select podcast type', 'Select a podcast type for the new podcast'] as $menu) {
+            $this->assertStringNotContainsString($menu, $html);
         }
-        $this->assertStringNotContainsString('href="'.route('admin.programs.create', ['type' => 'news']).'"', $html);
+        foreach ($types->keys() as $slug) {
+            $this->assertStringNotContainsString('href="'.route('admin.programs.create', ['type' => $slug]).'"', $html);
+        }
+
+        // On a type's tab the link carries that type, so the form opens on it.
+        $health = $this->get('/admin/podcasts?type=health')->assertOk()->getContent();
+        $this->assertStringContainsString('<a href="'.e(route('admin.programs.create', ['type' => 'health'])).'" class="primary-button">New ', $health);
+        $this->assertStringNotContainsString('<details', $health);
 
         $select = fn (string $html) => substr($html, $start = strpos($html, '<select id="tag_id"'), strpos($html, '</select>', $start) - $start);
 
-        $picked = $select($this->get('/admin/programs/create?type=education')->assertOk()->getContent());
+        $picked = $select($this->get('/admin/podcasts/create?type=education')->assertOk()->getContent());
         $this->assertMatchesRegularExpression('/<option value="'.$types['education']->id.'" selected>Education</', $picked);
 
         // Unknown picks and no pick leave the placeholder showing.
-        foreach (['/admin/programs/create?type=nope', '/admin/programs/create'] as $url) {
+        foreach (['/admin/podcasts/create?type=nope', '/admin/podcasts/create'] as $url) {
             $this->assertStringNotContainsString(' selected>', $select($this->get($url)->getContent()));
         }
     }
@@ -141,7 +150,7 @@ class CmsPodcastAdminTest extends TestCase
     {
         $this->signIn();
 
-        $form = $this->get('/admin/programs/create')->assertOk()->getContent();
+        $form = $this->get('/admin/podcasts/create')->assertOk()->getContent();
         $this->assertMatchesRegularExpression('/<label>Podcast type\s*<select id="tag_id"/', $form);
         $this->assertStringContainsString('Select a podcast type…', $form);
         // The tags under Podcast, and nothing else — no categories, no other trees.
@@ -154,11 +163,10 @@ class CmsPodcastAdminTest extends TestCase
         }
         $this->assertStringNotContainsString('id="category_id"', $form);
 
-        $list = $this->get('/admin/programs')->assertOk()->getContent();
+        $list = $this->get('/admin/podcasts')->assertOk()->getContent();
         $this->assertStringContainsString('<th>Podcast type</th>', $list);
-        $this->assertStringContainsString('Select podcast type', $list);
 
-        $this->post('/admin/programs', ['name' => 'No Type', 'slug' => ''])
+        $this->post('/admin/podcasts', ['name' => 'No Type', 'slug' => ''])
             ->assertSessionHasErrors(['tag_id' => 'The podcast type field is required.']);
     }
 
@@ -167,14 +175,14 @@ class CmsPodcastAdminTest extends TestCase
         $this->signIn();
         $health = $this->types()['health'];
 
-        $this->post('/admin/programs', ['tag_id' => $health->id, 'name' => 'Healthy Habits', 'slug' => ''])->assertRedirect();
+        $this->post('/admin/podcasts', ['tag_id' => $health->id, 'name' => 'Healthy Habits', 'slug' => ''])->assertRedirect();
 
         $program = Program::where('slug', 'healthy-habits')->firstOrFail();
         $this->assertSame($health->id, $program->tag_id);
         $this->assertSame($this->category()->id, $program->category_id);
 
         // Only the tags under Podcast count as types.
-        $this->post('/admin/programs', ['tag_id' => Tag::where('slug', 'song')->value('id'), 'name' => 'Not A Type', 'slug' => ''])
+        $this->post('/admin/podcasts', ['tag_id' => Tag::where('slug', 'song')->value('id'), 'name' => 'Not A Type', 'slug' => ''])
             ->assertSessionHasErrors('tag_id');
     }
 
@@ -183,12 +191,12 @@ class CmsPodcastAdminTest extends TestCase
         $this->signIn();
         $legacy = $this->podcast('Old News', Category::where('slug', 'news')->firstOrFail());
 
-        $this->put("/admin/programs/{$legacy->id}", ['name' => 'Old News Renamed', 'slug' => ''])->assertRedirect();
+        $this->put("/admin/podcasts/{$legacy->id}", ['name' => 'Old News Renamed', 'slug' => ''])->assertRedirect();
         $legacy->refresh();
         $this->assertNull($legacy->tag_id);
         $this->assertSame('news', $legacy->category->slug);
 
-        $this->put("/admin/programs/{$legacy->id}", ['tag_id' => $this->types()['politic']->id, 'name' => 'Old News Renamed', 'slug' => ''])->assertRedirect();
+        $this->put("/admin/podcasts/{$legacy->id}", ['tag_id' => $this->types()['politic']->id, 'name' => 'Old News Renamed', 'slug' => ''])->assertRedirect();
         $legacy->refresh();
         $this->assertSame($this->types()['politic']->id, $legacy->tag_id);
         $this->assertSame($this->category()->id, $legacy->category_id);
@@ -199,13 +207,13 @@ class CmsPodcastAdminTest extends TestCase
         $this->signIn();
         $payload = ['tag_id' => $this->types()['health']->id, 'name' => 'Morning Brief', 'slug' => '', 'is_published' => '1'];
 
-        $response = $this->post('/admin/programs', $payload);
+        $response = $this->post('/admin/podcasts', $payload);
         $first = Program::where('slug', 'morning-brief')->firstOrFail();
         $response
             ->assertRedirect(route('admin.programs.edit', $first))
             ->assertSessionHas('status', 'Podcast created. Add its first episode below.');
 
-        $this->post('/admin/programs', $payload)->assertRedirect();
+        $this->post('/admin/podcasts', $payload)->assertRedirect();
         $this->assertDatabaseHas('programs', ['slug' => 'morning-brief-2']);
     }
 
@@ -213,7 +221,7 @@ class CmsPodcastAdminTest extends TestCase
     {
         $this->signIn();
 
-        $this->post('/admin/programs', ['tag_id' => $this->types()['health']->id, 'name' => '???', 'slug' => ''])
+        $this->post('/admin/podcasts', ['tag_id' => $this->types()['health']->id, 'name' => '???', 'slug' => ''])
             ->assertRedirect();
 
         $this->assertDatabaseHas('programs', ['slug' => 'podcast']);
@@ -224,7 +232,7 @@ class CmsPodcastAdminTest extends TestCase
         $this->signIn();
         $podcast = $this->podcast();
 
-        $this->put("/admin/programs/{$podcast->id}", [
+        $this->put("/admin/podcasts/{$podcast->id}", [
             'name' => 'Morning Brief Renamed',
             'slug' => '',
         ])->assertRedirect(route('admin.programs.index'));
@@ -240,7 +248,7 @@ class CmsPodcastAdminTest extends TestCase
         $this->episode($podcast, 'Live One', ['is_published' => true, 'published_at' => now()->subDay()]);
         $this->episode($podcast, 'Draft One');
 
-        $this->get('/admin/programs')->assertOk()->assertSee('2 <small class="muted">· 1 live</small>', false);
+        $this->get('/admin/podcasts')->assertOk()->assertSee('2 <small class="muted">· 1 live</small>', false);
     }
 
     public function test_a_podcast_page_lists_only_its_own_episodes(): void
@@ -252,7 +260,7 @@ class CmsPodcastAdminTest extends TestCase
         $this->episode($podcast, 'Silent Episode');
         $this->episode($other, 'Someone Elses Episode');
 
-        $this->get("/admin/programs/{$podcast->id}/edit")
+        $this->get("/admin/podcasts/{$podcast->id}/edit")
             ->assertOk()
             ->assertSee('2 episodes')
             ->assertSee('Pilot Episode')
@@ -270,7 +278,7 @@ class CmsPodcastAdminTest extends TestCase
         $this->signIn();
         $podcast = $this->podcast();
 
-        $this->get("/admin/programs/{$podcast->id}/edit")
+        $this->get("/admin/podcasts/{$podcast->id}/edit")
             ->assertOk()
             ->assertSee('0 episodes')
             ->assertSee('No episodes yet.');
@@ -282,7 +290,7 @@ class CmsPodcastAdminTest extends TestCase
         $podcast = $this->podcast();
         $this->episode($podcast, 'Pilot Episode');
 
-        $this->get("/admin/programs/{$podcast->id}/edit")
+        $this->get("/admin/podcasts/{$podcast->id}/edit")
             ->assertOk()
             ->assertSee('Pilot Episode')
             ->assertDontSee('Add episode')
@@ -300,7 +308,7 @@ class CmsPodcastAdminTest extends TestCase
             ->assertSee('New episode')
             ->assertSee('Episode title')
             ->assertSee('name="podcast" value="'.$podcast->id.'"', false)
-            ->assertSee("/admin/programs/{$podcast->id}/edit", false);
+            ->assertSee("/admin/podcasts/{$podcast->id}/edit", false);
 
         $html = $response->getContent();
         $this->assertMatchesRegularExpression('/<select id="category_id".*?<option value="'.$health->id.'"[^>]* selected>/s', $html);
@@ -319,11 +327,12 @@ class CmsPodcastAdminTest extends TestCase
             $this->assertMatchesRegularExpression('/<option value="'.$category->id.'"/', $html);
             $this->assertMatchesRegularExpression('/<(details|label)[^>]* data-category-id="'.$category->id.'"/', $html);
         }
-        // Ambient Music is neither a category option nor a tree in the picker: it has its own card.
+        // Ambient Music has its tree in the picker like any category (it shows when "New Ambient Music" picks
+        // that category), but it is not a category option here.
         $this->assertDoesNotMatchRegularExpression('/<option value="'.$ambient->id.'"/', $html);
-        $this->assertStringNotContainsString('data-category-id="'.$ambient->id.'"', $html);
+        $this->assertMatchesRegularExpression('/<(details|label)[^>]* data-category-id="'.$ambient->id.'"/', $html);
         // Nested tags aren't marked — only the trees themselves are switched.
-        $this->assertSame(Category::count() - 1, substr_count($html, ' data-category-id="'));
+        $this->assertSame(Category::count(), substr_count($html, ' data-category-id="'));
     }
 
     public function test_only_tags_from_the_categorys_own_tree_are_saved(): void
@@ -348,38 +357,32 @@ class CmsPodcastAdminTest extends TestCase
         $this->assertSame([$root->id, $local->id], $saved);
     }
 
-    public function test_the_form_has_an_ambient_music_card_of_the_moods_under_the_description(): void
+    public function test_the_form_has_no_ambient_music_card_and_the_moods_are_in_the_tags_box(): void
     {
         $this->signIn();
         $moods = Tag::where('slug', 'ambient-music')->whereNull('parent_id')->firstOrFail()->children()->orderBy('id')->get();
 
         $html = $this->get('/admin/media-contents/create')->assertOk()->getContent();
 
-        // After the Description block, before the sidebar.
-        $description = strpos($html, '<h4>Description</h4>');
-        $card = strpos($html, '<h4>Ambient Music</h4>');
-        $sidebar = strpos($html, 'editor-sidebar');
-        $this->assertGreaterThan($description, $card);
-        $this->assertLessThan($sidebar, $card);
+        // No card of moods under the Description any more.
+        $this->assertStringNotContainsString('data-ambient-card', $html);
+        $this->assertStringNotContainsString('<h4>Ambient Music</h4>', $html);
+        $this->assertStringNotContainsString('Tick the moods', $html);
+        $this->assertStringNotContainsString('Ambient Music card', $html);
 
-        $cardHtml = substr($html, $card, strpos($html, '</div>', strpos($html, 'grid-template-columns', $card)) - $card);
+        // The moods are the Ambient Music tree of the Tags box, listed once, where the category picks it.
         foreach ($moods as $mood) {
-            $this->assertStringContainsString('name="tags[]" value="'.$mood->id.'"', $cardHtml);
-            $this->assertStringContainsString($mood->name, $cardHtml);
+            $this->assertSame(1, substr_count($html, 'name="tags[]" value="'.$mood->id.'"'));
         }
-        $this->assertSame(6, substr_count($cardHtml, 'name="tags[]"'));
-        // Nothing else is offered there, and the moods aren't repeated in the Tags box.
-        $this->assertStringNotContainsString('Podcast</span>', $cardHtml);
-        $this->assertSame(1, substr_count($html, 'name="tags[]" value="'.$moods->first()->id.'"'));
     }
 
-    public function test_the_moods_a_track_has_are_ticked_when_it_is_edited(): void
+    public function test_the_moods_an_ambient_music_item_has_are_ticked_in_the_tags_box_when_it_is_edited(): void
     {
         $this->signIn();
         $moods = Tag::where('slug', 'ambient-music')->whereNull('parent_id')->firstOrFail()->children()->orderBy('id')->get();
         $track = MediaContent::create([
-            'category_id' => Category::where('slug', 'song')->firstOrFail()->id,
-            'title' => 'Calm Song', 'slug' => 'calm-song', 'media_type' => 'audio',
+            'category_id' => Category::where('slug', 'ambient-music')->firstOrFail()->id,
+            'title' => 'Calm Waves', 'slug' => 'calm-waves', 'media_type' => 'audio',
         ]);
         $track->tags()->attach($moods[1]->id);
 
@@ -387,6 +390,28 @@ class CmsPodcastAdminTest extends TestCase
 
         $this->assertMatchesRegularExpression('/name="tags\[\]" value="'.$moods[1]->id.'" checked/', $html);
         $this->assertDoesNotMatchRegularExpression('/name="tags\[\]" value="'.$moods[0]->id.'" checked/', $html);
+    }
+
+    public function test_saving_a_song_keeps_the_moods_it_already_carries(): void
+    {
+        $this->signIn();
+        $song = Category::where('slug', 'song')->firstOrFail();
+        $mood = Tag::where('slug', 'ambient-music')->whereNull('parent_id')->firstOrFail()->children()->orderBy('id')->firstOrFail();
+        $songRoot = Tag::where('slug', 'song')->whereNull('parent_id')->firstOrFail();
+        $track = MediaContent::create(['category_id' => $song->id, 'title' => 'Calm Song', 'slug' => 'calm-song', 'media_type' => 'audio']);
+        $track->tags()->sync([$mood->id]);
+
+        // The form no longer lists the moods for a song, so it posts none of them back: they must survive.
+        $this->put("/admin/media-contents/{$track->id}", [
+            'category_id' => $song->id,
+            'title' => 'Calm Song',
+            'slug' => 'calm-song',
+            'media_type' => 'audio',
+            'status' => 'private',
+            'tags' => [$songRoot->id],
+        ])->assertRedirect();
+
+        $this->assertEqualsCanonicalizing([$songRoot->id, $mood->id], $track->fresh()->tags->pluck('id')->all());
     }
 
     public function test_a_song_can_carry_ambient_moods_but_not_other_categories_tags(): void
@@ -410,7 +435,7 @@ class CmsPodcastAdminTest extends TestCase
         $this->assertSame([$songRoot->id, $mood->id], $saved);
     }
 
-    public function test_ambient_music_content_keeps_its_moods_and_the_tags_box_points_to_the_card(): void
+    public function test_ambient_music_content_keeps_its_moods_and_they_can_be_unticked_in_the_tags_box(): void
     {
         $this->signIn();
         $ambient = Category::where('slug', 'ambient-music')->firstOrFail();
@@ -428,12 +453,24 @@ class CmsPodcastAdminTest extends TestCase
         $saved = MediaContent::where('slug', 'deep-focus')->firstOrFail()->tags->pluck('id')->sort()->values()->all();
         $this->assertSame([$moods[0]->id, $moods[3]->id], $saved);
 
-        // Filed under it already, the item keeps that category to edit — with the Tags box pointing at the card.
+        // Filed under it already, the item keeps that category to edit, with its moods ticked in the Tags box.
         $track = MediaContent::where('slug', 'deep-focus')->firstOrFail();
         $this->get("/admin/media-contents/{$track->id}/edit")
             ->assertOk()
-            ->assertSee('data-elsewhere="1"', false)
-            ->assertSee('data-tag-elsewhere-hint', false);
+            ->assertSee('name="tags[]" value="'.$moods[0]->id.'" checked', false)
+            ->assertDontSee('data-elsewhere', false)
+            ->assertDontSee('data-tag-elsewhere-hint', false);
+
+        // Unticking one there takes it off (an Ambient Music item's moods are all on the form).
+        $this->put("/admin/media-contents/{$track->id}", [
+            'category_id' => $ambient->id,
+            'title' => 'Deep Focus',
+            'slug' => 'deep-focus',
+            'media_type' => 'audio',
+            'status' => 'private',
+            'tags' => [$moods[0]->id],
+        ])->assertRedirect();
+        $this->assertSame([$moods[0]->id], $track->fresh()->tags->pluck('id')->all());
     }
 
     public function test_the_category_select_does_not_offer_ambient_music(): void

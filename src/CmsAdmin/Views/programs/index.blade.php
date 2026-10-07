@@ -20,31 +20,9 @@
             </div>
             <p>{{ __('Shows and their episodes, as listeners see them in the app.') }}</p>
         </div>
-        {{-- "New +" opens the list of categories; picking one starts the new program in it. --}}
-        <details class="program-new-menu" style="position:relative">
-            <summary class="primary-button" style="list-style:none;cursor:pointer" aria-haspopup="menu">{{ __('New') }} <i class="fa fa-plus" aria-hidden="true"></i></summary>
-            <div role="menu" aria-label="{{ __('Select a podcast type for the new podcast') }}" style="position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:210px;padding:6px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 28px rgba(25,25,50,.14)">
-                <p class="muted" style="margin:0;padding:8px 12px 6px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">{{ __('Select podcast type') }}</p>
-                @foreach($types as $type)
-                    <a role="menuitem" href="{{ route('admin.programs.create', ['type' => $type->slug]) }}">{{ $type->name }}</a>
-                @endforeach
-            </div>
-        </details>
+        {{-- One straight link to the create page; the podcast type is picked on the form (an open type tab is already selected there). --}}
+        <a href="{{ route('admin.programs.create', $activeType ? ['type' => $activeType->slug] : []) }}" class="primary-button">{{ __('New') }} <i class="fa fa-plus" aria-hidden="true"></i></a>
     </div>
-
-    <style>
-        .program-new-menu > summary::-webkit-details-marker { display: none; }
-        .program-new-menu a[role=menuitem] { display: block; padding: 9px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; color: inherit; text-decoration: none; }
-        .program-new-menu a[role=menuitem]:hover { background: #f4f4f8; }
-    </style>
-    <script>
-        // Close the menu when something else is clicked.
-        document.addEventListener('click', event => {
-            document.querySelectorAll('.program-new-menu[open]').forEach(menu => {
-                if (!menu.contains(event.target)) menu.open = false;
-            });
-        });
-    </script>
 
     <div class="data-table-wrap">
         <table class="data-table">

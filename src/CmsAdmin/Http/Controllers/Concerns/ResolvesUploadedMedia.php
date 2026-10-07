@@ -5,8 +5,10 @@ namespace Src\CmsAdmin\Http\Controllers\Concerns;
 use App\Support\MediaStorage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Src\Catalog\Services\HlsAudioProcessor;
 use Src\Catalog\Services\ImageVariantProcessor;
+use Src\Catalog\Services\UnreadableImageException;
 
 /**
  * Shared by every controller with a field that accepts either a file upload
@@ -36,16 +38,30 @@ trait ResolvesUploadedMedia
         ?string $disk = null,
         ?string $existingDisk = null,
     ): ?string {
+        // The new image is read before the old one is touched, and one that can't be read comes back as that
+        // field's error on the form (with what was typed kept) instead of an error page — the old image stays.
         if ($request->hasFile($field)) {
+            try {
+                $path = $imageProcessor->process($request->file($field), $directory, $width, $height, crop: $crop, disk: $disk);
+            } catch (UnreadableImageException $e) {
+                throw ValidationException::withMessages([$field => $e->getMessage()]);
+            }
+
             $this->deleteStoredMedia($existingPath, $existingDisk);
 
-            return $imageProcessor->process($request->file($field), $directory, $width, $height, crop: $crop, disk: $disk);
+            return $path;
         }
 
         if ($request->filled("{$field}_url")) {
+            try {
+                $path = $imageProcessor->processFromUrl($request->input("{$field}_url"), $directory, $width, $height, crop: $crop, disk: $disk);
+            } catch (UnreadableImageException $e) {
+                throw ValidationException::withMessages(["{$field}_url" => $e->getMessage()]);
+            }
+
             $this->deleteStoredMedia($existingPath, $existingDisk);
 
-            return $imageProcessor->processFromUrl($request->input("{$field}_url"), $directory, $width, $height, crop: $crop, disk: $disk);
+            return $path;
         }
 
         if ($request->boolean("remove_{$field}")) {

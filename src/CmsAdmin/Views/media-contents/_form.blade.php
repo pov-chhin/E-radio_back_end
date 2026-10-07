@@ -17,7 +17,16 @@
         <a href="{{ route('admin.media-contents.index') }}" class="icon-button" aria-label="{{ __('Back to media content') }}"><i class="fa fa-arrow-left"></i></a>
     @endif
     <span class="badge {{ $statusTone }}" data-status-badge>{{ __(ucfirst($currentStatus)) }}</span>
-    <strong class="editor-topbar-title">{{ isset($mediaContent) ? $mediaContent->title : (($podcast ?? null) ? __('New episode') : __('New media content')) }}</strong>
+    @php
+        $newTitle = ! isset($mediaContent) && ! ($podcast ?? null);
+        // From the Article page an edit's header names the category too; its top bar keeps the item's own title.
+        $editTitle = isset($mediaContent) && ($fromMusic ?? false);
+    @endphp
+    <strong class="editor-topbar-title" @if($newTitle) data-title-template="{{ __('New :category Media Content', ['category' => ':category']) }}" data-title-plain="{{ __('New media content') }}" data-title-plain-crumb="{{ __('New Media Content') }}" @elseif($editTitle) data-title-template="{{ __('Edit :category Media Content', ['category' => ':category']) }}" data-title-plain-crumb="{{ __('Edit Media Content') }}" @endif>{{
+        isset($mediaContent)
+            ? $mediaContent->title
+            : (($podcast ?? null) ? __('New episode') : (($titleCategory ?? null) ? __('New :category Media Content', ['category' => $titleCategory->name]) : __('New media content')))
+    }}</strong>
     <div class="editor-topbar-actions">
         <button type="submit" class="secondary-button" data-save-draft>{{ __('Save draft') }}</button>
         <button type="submit" class="primary-button">{{ isset($mediaContent) ? __('Update') : __('Publish') }}</button>
@@ -39,6 +48,18 @@
         <button type="button" class="secondary-button" data-upload-cancel>{{ __('Cancel upload') }}</button>
     </div>
 </div>
+
+{{-- The Description card follows the height of the sidebar beside it (Tags): the sidebar is its full height — no
+     scroll box of its own, the page scrolls — the main column is as tall as the taller of the two, the card takes the
+     room left under Content, and the editor fills the card. One column (narrow screens): nothing to follow, the
+     editor keeps its minimum. --}}
+<style>
+    .editor-layout > .editor-sidebar { position: static; max-height: none; overflow: visible; }
+    .editor-layout > .editor-main { align-self: stretch; }
+    .editor-block.description-grow { flex: 1 1 auto; display: flex; flex-direction: column; }
+    .description-grow .rich-editor { flex: 1 1 auto; display: flex; flex-direction: column; height: auto; min-height: 0; }
+    .description-grow .rich-editor .ql-editor { flex: 1 1 auto; height: auto; }
+</style>
 
 <div class="editor-layout">
     <div class="editor-main">
@@ -104,26 +125,10 @@
             </div>
         </div>
 
-        <div class="editor-block">
+        <div class="editor-block description-grow">
             <h4>{{ __('Description') }}</h4>
             <div class="rich-editor" data-rich-text></div>
             <textarea id="description" name="description" data-rich-text-source hidden>{{ old('description', $mediaContent->description ?? '') }}</textarea>
-        </div>
-
-        {{-- The moods of the Ambient Music category, for any content to carry. --}}
-        <div class="editor-block" data-ambient-card>
-            <h4>{{ __('Ambient Music') }}</h4>
-            <p class="muted" style="margin:0 0 12px;font-size:10px">{{ __('Tick the moods this suits — listeners find it under Ambient Music.') }}</p>
-            @php $ambientSelected = collect(old('tags', isset($mediaContent) ? $mediaContent->tags->pluck('id')->all() : [])); @endphp
-            @if($ambientTags->isEmpty())
-                <p class="muted">{!! __('No Ambient Music tags yet — :link.', ['link' => '<a href="'.e(route('admin.tags.create')).'">'.e(__('create one')).'</a>']) !!}</p>
-            @else
-                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px 18px">
-                    @foreach($ambientTags as $ambientTag)
-                        <label class="check-row" style="margin:0"><input type="checkbox" name="tags[]" value="{{ $ambientTag->id }}" @checked($ambientSelected->contains($ambientTag->id))> {{ $ambientTag->name }}</label>
-                    @endforeach
-                </div>
-            @endif
         </div>
     </div>
 
@@ -172,33 +177,57 @@
 
         <div class="sidebar-box">
             <h4>{{ __('Details') }}</h4>
+            @php
+                $lockedCategoryId = $lockedCategoryId ?? null;
+                $hiddenFields = $hiddenFields ?? [];
+                $podcastRequired = $podcastRequired ?? false;
+            @endphp
             <label>{{ __('Category') }}
-                <select id="category_id" name="category_id" required>
+                {{-- "New Song" fixes the category; a disabled select posts nothing, so a hidden field carries it. --}}
+                @if($lockedCategoryId)<input type="hidden" name="category_id" value="{{ $lockedCategoryId }}">@endif
+                <select id="category_id" @if($lockedCategoryId) disabled @else name="category_id" required @endif>
                     <option value="">{{ __('Select a category…') }}</option>
                     @foreach($categories as $category)
-                        <option value="{{ $category->id }}" @if($category->id === $ambientCategoryId) data-elsewhere="1" @endif @selected((int) old('category_id', $mediaContent->category_id ?? $podcast?->category_id ?? $defaultCategoryId ?? '') === $category->id)>{{ $category->name }}</option>
+                        <option value="{{ $category->id }}" @selected((int) old('category_id', $mediaContent->category_id ?? $podcast?->category_id ?? $defaultCategoryId ?? '') === $category->id)>{{ $category->name }}</option>
                     @endforeach
                 </select>
                 @error('category_id') <em>{{ $message }}</em> @enderror
             </label>
-            <label>{{ __('Podcast') }}
-                <select id="program_id" name="program_id">
-                    <option value="">{{ __('No podcast') }}</option>
-                    @foreach($programs as $program)
-                        <option value="{{ $program->id }}" data-category-id="{{ $program->category_id }}" @selected((int) old('program_id', $mediaContent->program_id ?? $podcast?->id ?? '') === $program->id)>{{ $program->name }}</option>
-                    @endforeach
-                </select>
-                @error('program_id') <em>{{ $message }}</em> @enderror
-            </label>
-            <label>{{ __('Artist') }}
-                <select id="artist_id" name="artist_id">
-                    <option value="">{{ __('No artist') }}</option>
-                    @foreach($artists as $artist)
-                        <option value="{{ $artist->id }}" @selected((int) old('artist_id', $mediaContent->artist_id ?? '') === $artist->id)>{{ $artist->stage_name ?: $artist->name }}</option>
-                    @endforeach
-                </select>
-                @error('artist_id') <em>{{ $message }}</em> @enderror
-            </label>
+            {{-- "New Song" / "New Program" leave the Podcast (and Program also the Artist) field out; the form's script copes without it. --}}
+            @unless(in_array('podcast', $hiddenFields, true))
+                <label>
+                    <span style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        {{ __('Podcast') }}
+                        {{-- A new podcast is made on its own page, in a new tab so this form isn't lost; reload here to pick it. --}}
+                        @if(auth('admin')->user()?->hasPermission('create-programs'))
+                            <a href="{{ route('admin.programs.create') }}" target="_blank" rel="noopener" class="primary-button compact" style="height:24px;padding:0 11px;font-size:9px;box-shadow:none" title="{{ __('Create a new podcast (opens in a new tab)') }}">{{ __('New') }}</a>
+                        @endif
+                    </span>
+                    <select id="program_id" name="program_id">
+                        {{-- "New Podcast" has no "No podcast": a placeholder shows until one is picked, and can't be picked again. --}}
+                        @if($podcastRequired)
+                            <option value="" disabled hidden @selected(! old('program_id', $mediaContent->program_id ?? $podcast?->id ?? ''))>{{ __('Select a podcast…') }}</option>
+                        @else
+                            <option value="">{{ __('No podcast') }}</option>
+                        @endif
+                        @foreach($programs as $program)
+                            <option value="{{ $program->id }}" data-category-id="{{ $program->category_id }}" @selected((int) old('program_id', $mediaContent->program_id ?? $podcast?->id ?? '') === $program->id)>{{ $program->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('program_id') <em>{{ $message }}</em> @enderror
+                </label>
+            @endunless
+            @unless(in_array('artist', $hiddenFields, true))
+                <label>{{ __('Artist') }}
+                    <select id="artist_id" name="artist_id">
+                        <option value="">{{ __('No artist') }}</option>
+                        @foreach($artists as $artist)
+                            <option value="{{ $artist->id }}" @selected((int) old('artist_id', $mediaContent->artist_id ?? '') === $artist->id)>{{ $artist->stage_name ?: $artist->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('artist_id') <em>{{ $message }}</em> @enderror
+                </label>
+            @endunless
         </div>
 
         <div class="sidebar-box">
@@ -207,17 +236,17 @@
             @if($tagTree->isEmpty())
                 <p class="muted">{!! __('No tags yet — :link.', ['link' => '<a href="'.e(route('admin.tags.create')).'">'.e(__('create one')).'</a>']) !!}</p>
             @else
-                <label class="tag-search">
-                    <span class="fa fa-search" aria-hidden="true"></span>
-                    <input type="search" placeholder="{{ __('Search tags…') }}" aria-label="{{ __('Search tags') }}" data-tag-search>
+                {{-- International / Local: hides the other branch of the tree; only offered while the tree on show has them. --}}
+                <label class="tag-region" style="margin:0 0 9px">
+                    <select data-tag-region aria-label="{{ __('Filter tags by region') }}">
+                        <option value="international">{{ __('International') }}</option>
+                        <option value="local">{{ __('Local') }}</option>
+                    </select>
                 </label>
                 <div class="tag-tree" data-tag-tree>
-                    {{-- The Ambient Music tree is picked in its own card under the description. --}}
-                    @include('cms-admin::partials.tag-tree', ['nodes' => $tagTree->reject(fn ($node) => $ambientCategoryId !== null && $node->category_id === $ambientCategoryId), 'selectedTags' => $selectedTags])
+                    @include('cms-admin::partials.tag-tree', ['nodes' => $tagTree, 'selectedTags' => $selectedTags])
                 </div>
-                <p class="tag-search-empty muted" data-tag-search-empty hidden>{{ __('No matching tags.') }}</p>
-                <p class="muted" data-tag-category-hint hidden>{{ __('Choose a category to pick its tags.') }}</p>
-                <p class="muted" data-tag-elsewhere-hint hidden>{{ __('Ambient Music tags are picked in the Ambient Music card under the description.') }}</p>
+                <p class="muted" style="margin:0;font-size:10px" data-tag-category-hint hidden>{{ __('Choose a category to pick its tags.') }}</p>
             @endif
         </div>
     </aside>
@@ -247,32 +276,102 @@
     })();
 
     // Tags follow the Category: only the tree that belongs to the picked category is shown, and
-    // switching category clears the tags of the tree it hides.
+    // switching category clears the tags of the tree it hides. With no category yet there is no tree to show,
+    // so the empty box is left out and only the hint shows.
     (() => {
         const select = document.getElementById('category_id');
         const tree = document.querySelector('[data-tag-tree]');
         if (!select || !tree) return;
         const hint = document.querySelector('[data-tag-category-hint]');
-        const elsewhereHint = document.querySelector('[data-tag-elsewhere-hint]');
         const roots = [...tree.children].filter(node => node.dataset.categoryId !== undefined);
 
         const apply = clear => {
             const id = select.value;
-            // A category whose tags are picked in a card of their own has nothing to show here.
-            const elsewhere = select.selectedOptions[0]?.dataset.elsewhere === '1';
             // A category with no tags of its own doesn't narrow anything.
-            const narrowed = elsewhere || roots.some(node => node.dataset.categoryId === id);
+            const narrowed = roots.some(node => node.dataset.categoryId === id);
             roots.forEach(node => {
                 // Trees that sit under no category are offered whatever the category is.
                 const show = id !== '' && (!narrowed || node.dataset.categoryId === id || node.dataset.categoryId === '');
                 node.style.display = show ? '' : 'none';
                 if (!show && clear) node.querySelectorAll('input[type=checkbox]').forEach(input => { input.checked = false; });
             });
+            tree.style.display = roots.some(node => node.style.display !== 'none') ? '' : 'none';
             hint?.toggleAttribute('hidden', id !== '');
-            elsewhereHint?.toggleAttribute('hidden', !elsewhere);
         };
 
         select.addEventListener('change', () => apply(true));
         apply(false);
+    })();
+
+    // Region filter for the tag picker: International or Local is always picked (there is no "all"). The other
+    // branch is hidden wherever it appears (under Song, under Economy/Finance, …) and the picked one is listed
+    // on its own: its row and the rows above it (Song) are left out, so the list starts at Genre. A region with
+    // no branches of its own stays where it is. It only narrows what is shown: a ticked tag in a hidden branch
+    // stays ticked. The select is offered only while the tree on show has regions, and it starts on
+    // International — or on the region an item already has a ticked tag in.
+    (() => {
+        const tree = document.querySelector('[data-tag-tree]');
+        const select = document.querySelector('[data-tag-region]');
+        if (!tree || !select) return;
+        const field = select.closest('label');
+        const nameOf = node => node.querySelector('span')?.textContent.trim().toLowerCase();
+        const summaryOf = node => node.querySelector(':scope > summary');
+        const childrenOf = node => node.querySelector(':scope > .tag-tree-children');
+        const parentNode = node => node.parentElement.closest('details.tag-tree-node');
+        const regionNodes = [...tree.querySelectorAll('details.tag-tree-node, label.tag-tree-leaf')]
+            .filter(node => ['international', 'local'].includes(nameOf(node)));
+        const openBefore = new Map();
+        const regionsOnShow = () => regionNodes.filter(node => node.closest('[data-category-id]').style.display !== 'none');
+
+        const apply = () => {
+            field.style.display = regionsOnShow().length ? '' : 'none';
+
+            // Back to the whole tree: restore the rows, indents and open state that were flattened.
+            tree.querySelectorAll('details.tag-tree-node').forEach(node => {
+                summaryOf(node).style.display = '';
+                childrenOf(node).style.marginLeft = '';
+                if (openBefore.has(node)) { node.open = openBefore.get(node); openBefore.delete(node); }
+            });
+            regionNodes.forEach(node => { node.style.display = nameOf(node) === select.value ? '' : 'none'; });
+
+            regionNodes.filter(node => nameOf(node) === select.value && node.matches('details')).forEach(region => {
+                for (let node = region; node; node = parentNode(node)) {
+                    if (!openBefore.has(node)) openBefore.set(node, node.open);
+                    node.open = true;
+                    summaryOf(node).style.display = 'none';
+                    childrenOf(node).style.marginLeft = '0';
+                }
+            });
+        };
+
+        // Start on the region an item already has a ticked tag in (a song filed under Local), else the first one.
+        const startRegion = () => {
+            const tagged = regionsOnShow().find(node => node.querySelector('input:checked'));
+            select.value = tagged ? nameOf(tagged) : select.options[0].value;
+        };
+
+        select.addEventListener('change', apply);
+        // A new category brings a different tree (whose ticked tags were cleared): start it afresh.
+        document.getElementById('category_id')?.addEventListener('change', () => { startRegion(); apply(); });
+        startRegion();
+        apply();
+    })();
+
+    // The title names the category picked — "New Song Media Content", "Edit Song Media Content" — in the page
+    // header and the browser tab, and for a new item in the top bar too (an edited item's top bar keeps its own
+    // title); with none picked it reads "New Media Content" / "Edit Media Content". (The server renders the first.)
+    (() => {
+        const title = document.querySelector('[data-title-template]');
+        const select = document.getElementById('category_id');
+        if (!title || !select) return;
+        const crumb = document.querySelector('.breadcrumbs strong');
+
+        select.addEventListener('change', () => {
+            const name = select.value ? select.selectedOptions[0].textContent.trim() : '';
+            const named = name ? title.dataset.titleTemplate.replace(':category', name) : null;
+            if (title.dataset.titlePlain !== undefined) title.textContent = named ?? title.dataset.titlePlain;
+            if (crumb) crumb.textContent = named ?? title.dataset.titlePlainCrumb;
+            document.title = document.title.replace(/^.*?( · )/, () => (named ?? title.dataset.titlePlainCrumb) + ' · ');
+        });
     })();
 </script>

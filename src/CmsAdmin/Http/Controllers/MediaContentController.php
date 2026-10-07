@@ -31,6 +31,18 @@ class MediaContentController extends Controller
 
     private const AMBIENT_SLUG = 'ambient-music';
 
+    /**
+     * The form behind each "New …" button of the Article page, keyed by the category it starts on: the
+     * categories the select offers (just one fixes it; null keeps them all), the fields left off, and — for
+     * a podcast episode — `podcast_required`: the Podcast select has no "No podcast" to fall back on.
+     */
+    private const ARTICLE_FORMS = [
+        'song' => ['categories' => ['song'], 'hide' => ['podcast']],
+        'news' => ['categories' => ['news', 'health', 'economyfinance'], 'hide' => ['podcast', 'artist']],
+        'ambient-music' => ['categories' => ['ambient-music'], 'hide' => ['podcast']],
+        'podcast' => ['categories' => ['podcast'], 'hide' => [], 'podcast_required' => true],
+    ];
+
     public function __construct(private readonly ImageVariantProcessor $imageProcessor) {}
 
     public function index(): View
@@ -40,16 +52,37 @@ class MediaContentController extends Controller
         return view('cms-admin::media-contents.index', compact('mediaContents'));
     }
 
-    public function create(Request $request): View
+    public function create(Request $request, ?string $category = null): View
     {
-        $options = $this->formOptions();
+        // The category comes in the path (/create/song); the older ?category=song still works.
+        $requested = $category ?? $request->query('category');
+
+        // A category in the path is the Article page's "New Song" / "New Program" / "New Podcast" / "New Ambient
+        // Music" link, so it also means the form came from that page (back arrow, saving returns there); the
+        // older ?category=…&from=music says so itself, and a bare ?category=… is the whole form.
+        $fromMusic = $category !== null || $this->fromMusic($request);
+
+        // Those buttons: fewer categories and fields (see ARTICLE_FORMS). "New Ambient Music" is the one place
+        // Ambient Music is offered as a category.
+        $articleForm = $fromMusic && is_string($requested) ? $this->articleFormFor($requested) : null;
+        $options = $this->formOptions(withAmbient: in_array(self::AMBIENT_SLUG, $articleForm['categories'] ?? [], true));
+        $defaultCategory = is_string($requested) ? $options['categories']->firstWhere('slug', $requested) : null;
+        if ($articleForm['categories'] ?? null) {
+            $options['categories'] = $options['categories']->whereIn('slug', $articleForm['categories'])->values();
+        }
 
         return view('cms-admin::media-contents.create', [
             ...$options,
-            'podcast' => $this->podcastFrom($request),
-            'fromMusic' => $this->fromMusic($request),
+            'podcast' => $podcast = $this->podcastFrom($request),
+            // "New Song Media Content": the title names the category the form starts on (not for an episode of a podcast).
+            'titleCategory' => $podcast ? null : $options['categories']->firstWhere('id', $defaultCategory?->id),
+            'fromMusic' => $fromMusic,
             // The category picked in the Music page's "New +" menu.
-            'defaultCategoryId' => $options['categories']->firstWhere('slug', $request->query('category'))?->id,
+            'defaultCategoryId' => $defaultCategory?->id,
+            // A single category is fixed rather than offered.
+            'lockedCategoryId' => ($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null,
+            'hiddenFields' => $articleForm['hide'] ?? [],
+            'podcastRequired' => $articleForm['podcast_required'] ?? false,
         ]);
     }
 
@@ -75,14 +108,69 @@ class MediaContentController extends Controller
 
     public function edit(Request $request, MediaContent $mediaContent): View
     {
-        $mediaContent->loadMissing('tags', 'artist', 'author');
+        return $this->editForm($request, $mediaContent, $this->fromMusic($request));
+    }
+
+    /**
+     * The Article page's Edit link, /edit/news/16: the item's category and its id in the path. The path says it
+     * came from the Article page (back arrow, saving returns there), so it needs no ?from=music. A category that
+     * isn't the item's own goes to the right address.
+     */
+    public function editIn(Request $request, string $category, MediaContent $mediaContent): View|RedirectResponse
+    {
+        $mediaContent->loadMissing('category');
+
+        if ($mediaContent->category->slug !== $category) {
+            return redirect()->route('admin.media-contents.edit-in', [
+                ...$request->query(),
+                'category' => $mediaContent->category->slug,
+                'media_content' => $mediaContent,
+            ]);
+        }
+
+        return $this->editForm($request, $mediaContent, true);
+    }
+
+    /**
+     * Editing from the Article page is the same form as its "New …" button for the item's category: the
+     * categories offered (one fixes it), the fields left off, and the title naming the category.
+     */
+    private function editForm(Request $request, MediaContent $mediaContent, bool $fromMusic): View
+    {
+        $mediaContent->loadMissing('tags', 'artist', 'author', 'category');
+
+        $articleForm = $fromMusic ? $this->articleFormFor($mediaContent->category->slug) : null;
+        $options = $this->formOptions($mediaContent);
+        if ($articleForm['categories'] ?? null) {
+            $options['categories'] = $options['categories']->whereIn('slug', $articleForm['categories'])->values();
+        }
 
         return view('cms-admin::media-contents.edit', [
             'mediaContent' => $mediaContent,
-            ...$this->formOptions($mediaContent),
+            ...$options,
             'podcast' => $this->podcastFrom($request),
-            'fromMusic' => $this->fromMusic($request),
+            'fromMusic' => $fromMusic,
+            'titleCategory' => $fromMusic ? $mediaContent->category : null,
+            'lockedCategoryId' => ($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null,
+            'hiddenFields' => $articleForm['hide'] ?? [],
+            'podcastRequired' => $articleForm['podcast_required'] ?? false,
         ]);
+    }
+
+    /** The Article page's form for a category: the entry keyed by it, or the one whose categories include it. */
+    private function articleFormFor(string $slug): ?array
+    {
+        if (isset(self::ARTICLE_FORMS[$slug])) {
+            return self::ARTICLE_FORMS[$slug];
+        }
+
+        foreach (self::ARTICLE_FORMS as $form) {
+            if (in_array($slug, $form['categories'] ?? [], true)) {
+                return $form;
+            }
+        }
+
+        return null;
     }
 
     public function update(Request $request, MediaContent $mediaContent): RedirectResponse
@@ -91,8 +179,17 @@ class MediaContentController extends Controller
         $data = $this->validateMediaContent($request, $mediaContent);
         $data = $this->applyPublishState($request, $data, $mediaContent);
 
+        // The Article page's form leaves some fields off (see ARTICLE_FORMS): a save from it leaves those as they
+        // are instead of clearing them, so an item keeps a podcast or an artist the form doesn't show.
+        if ($this->fromMusic($request)) {
+            $hidden = $this->articleFormFor((string) Category::whereKey($data['category_id'])->value('slug'))['hide'] ?? [];
+            foreach (array_intersect_key(['podcast' => 'program_id', 'artist' => 'artist_id'], array_flip($hidden)) as $column) {
+                unset($data[$column]);
+            }
+        }
+
         $mediaContent->update($data);
-        $mediaContent->tags()->sync($this->tagIdsFor($request, $mediaContent->category_id));
+        $mediaContent->tags()->sync($this->tagIdsFor($request, $mediaContent->category_id, $mediaContent));
         $processing = $this->applyStreamInput($request, $mediaContent);
 
         if (! $wasPublished && $mediaContent->fresh()->status === 'public') {
@@ -150,45 +247,48 @@ class MediaContentController extends Controller
      * this keeps a stale or hand-made request from saving others. A category with no tags of its own
      * doesn't limit its tags.
      *
+     * The form only lists the moods under the Ambient Music category, so saving an item filed elsewhere
+     * (`$existing`, when editing) keeps the moods it already carries instead of dropping them unseen.
+     *
      * @return array<int, int>
      */
-    private function tagIdsFor(Request $request, int $categoryId): array
+    private function tagIdsFor(Request $request, int $categoryId, ?MediaContent $existing = null): array
     {
         $tagIds = array_map('intval', $request->input('tags', []));
         $own = Tag::where('category_id', $categoryId)->pluck('id')->all();
+        $ambientCategoryId = $this->ambientCategoryId();
 
-        if ($own === []) {
-            return $tagIds;
+        if ($own !== []) {
+            $allowed = [
+                ...$own,
+                ...($ambientCategoryId ? Tag::where('category_id', $ambientCategoryId)->pluck('id')->all() : []),
+                ...Tag::whereNull('category_id')->pluck('id')->all(),
+            ];
+
+            $tagIds = array_values(array_intersect($tagIds, $allowed));
         }
 
-        $ambientCategoryId = $this->ambientCategoryId();
-        $allowed = [
-            ...$own,
-            ...($ambientCategoryId ? Tag::where('category_id', $ambientCategoryId)->pluck('id')->all() : []),
-            ...Tag::whereNull('category_id')->pluck('id')->all(),
-        ];
+        if ($existing && $ambientCategoryId && $categoryId !== $ambientCategoryId) {
+            $moods = $existing->tags()->where('tags.category_id', $ambientCategoryId)->pluck('tags.id')->all();
+            $tagIds = array_values(array_unique([...$tagIds, ...$moods]));
+        }
 
-        return array_values(array_intersect($tagIds, $allowed));
+        return $tagIds;
     }
 
     /**
-     * Ambient Music is picked with the moods card rather than as a category, so the Category select
-     * leaves it out — unless the item being edited is already filed under it.
+     * Ambient Music is no ordinary category to pick, so the Category select leaves it out — unless the item
+     * being edited is already filed under it, or the form is "New Ambient Music".
      */
-    private function formOptions(?MediaContent $editing = null): array
+    private function formOptions(?MediaContent $editing = null, bool $withAmbient = false): array
     {
         return [
             'categories' => Category::orderBy('sort_order')->get()
-                ->reject(fn (Category $category) => $category->slug === self::AMBIENT_SLUG && $editing?->category_id !== $category->id)
+                ->reject(fn (Category $category) => $category->slug === self::AMBIENT_SLUG && ! $withAmbient && $editing?->category_id !== $category->id)
                 ->values(),
             'programs' => Program::with('category')->orderBy('name')->get(),
             'artists' => Artist::orderBy('name')->get(),
             'tagTree' => Tag::tree(),
-            'ambientCategoryId' => $ambientCategoryId = $this->ambientCategoryId(),
-            // The moods of the Ambient Music card: the tags directly under that category's top-level tag.
-            'ambientTags' => $ambientCategoryId
-                ? Tag::where('category_id', $ambientCategoryId)->whereHas('parent', fn ($query) => $query->whereNull('parent_id'))->orderBy('id')->get()
-                : collect(),
         ];
     }
 

@@ -278,10 +278,11 @@ class CmsAdminRadioChannelTest extends TestCase
     {
         Http::fake(['cdn.example.com/*' => Http::response('', 404)]);
 
+        // Rejected as an error on the cover URL field (it used to be a bare 422 page), and nothing is saved.
         $this->post('/admin/radio-channels', [
             'name' => 'Broken Cover Radio',
             'cover_url' => 'https://cdn.example.com/missing.png',
-        ])->assertStatus(422);
+        ])->assertSessionHasErrors(['cover_url' => 'Could not download that image URL.']);
 
         $this->assertDatabaseMissing('radio_sceaper_stations', ['name' => 'Broken Cover Radio']);
     }

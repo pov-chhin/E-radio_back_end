@@ -56,15 +56,27 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         ->middlewareFor(['create', 'store'], 'permission:create-artists')
         ->middlewareFor(['edit', 'update'], 'permission:edit-artists')
         ->middlewareFor(['destroy'], 'permission:delete-artists');
-    Route::resource('programs', ProgramController::class)->except(['show'])
+    // Podcasts live at /admin/podcasts; the route names, parameter and permissions keep their "programs" names.
+    Route::resource('podcasts', ProgramController::class)->except(['show'])
+        ->names('programs')
+        ->parameters(['podcasts' => 'program'])
         ->middlewareFor(['index'], 'permission:view-programs')
         ->middlewareFor(['create', 'store'], 'permission:create-programs')
         ->middlewareFor(['edit', 'update'], 'permission:edit-programs')
         ->middlewareFor(['destroy'], 'permission:delete-programs');
     Route::get('music', [MusicController::class, 'index'])->name('music.index')->middleware('permission:view-media-content');
-    Route::resource('media-contents', MediaContentController::class)->except(['show'])
+    // The create form can start on a category: /admin/media-contents/create/song (the older ?category=song still works).
+    Route::get('media-contents/create/{category?}', [MediaContentController::class, 'create'])->name('media-contents.create')
+        ->where('category', '[a-z0-9-]+')
+        ->middleware('permission:create-media-content');
+    // The Article page's Edit link: /admin/media-contents/edit/news/16 — the item's category, then its id (the plain
+    // /admin/media-contents/16/edit stays for every other page).
+    Route::get('media-contents/edit/{category}/{media_content}', [MediaContentController::class, 'editIn'])->name('media-contents.edit-in')
+        ->where(['category' => '[a-z0-9-]+', 'media_content' => '[0-9]+'])
+        ->middleware('permission:edit-media-content');
+    Route::resource('media-contents', MediaContentController::class)->except(['show', 'create'])
         ->middlewareFor(['index'], 'permission:view-media-content')
-        ->middlewareFor(['create', 'store'], 'permission:create-media-content')
+        ->middlewareFor(['store'], 'permission:create-media-content')
         ->middlewareFor(['edit', 'update'], 'permission:edit-media-content')
         ->middlewareFor(['destroy'], 'permission:delete-media-content');
 });

@@ -8,23 +8,20 @@
             <p class="eyebrow">{{ __('Catalog') }}</p>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px">
                 <h1>{{ __('Article') }}</h1>
-                {{-- One tab per category; each submits the GET form with its slug. --}}
+                {{-- One tab per group (Song; Program = News / Health / Economy/Finance; Podcasts); each submits the GET form with its key. --}}
                 <form method="GET" action="{{ route('admin.music.index') }}" aria-label="{{ __('Filter by category') }}">
                     <div class="tag-view-toggle">
-                        <button type="submit" name="category" value="" style="padding:7px 14px;font-size:10px" @class(['active' => ! $activeCategory])>{{ __('All') }}</button>
-                        @foreach($categories as $category)
-                            <button type="submit" name="category" value="{{ $category->slug }}" style="padding:7px 14px;font-size:10px" @class(['active' => $activeCategory?->is($category)])>{{ $category->name }}</button>
+                        <button type="submit" name="category" value="" style="padding:7px 14px;font-size:10px" @class(['active' => ! $activeTab])>{{ __('All') }}</button>
+                        @foreach($tabs as $tab)
+                            <button type="submit" name="category" value="{{ $tab['key'] }}" style="padding:7px 14px;font-size:10px" @class(['active' => $activeTab && $activeTab['key'] === $tab['key']])>{{ $tab['label'] }}</button>
                         @endforeach
                     </div>
                 </form>
             </div>
-            <p>{{ __('Songs, plus News, Health and Economy/Finance content, by category.') }}</p>
+            <p>{{ __('Songs, Program (News, Health and Economy/Finance) and Podcasts.') }}</p>
         </div>
-        {{-- One straight link that follows the tab: "New Health" on the Health tab; All starts a Song. --}}
-        @php $newCategory = $activeCategory ?? $categories->firstWhere('slug', 'song'); @endphp
-        @if($newCategory)
-            <a href="{{ route('admin.media-contents.create', ['category' => $newCategory->slug, 'from' => 'music']) }}" class="primary-button">{{ __('New :name', ['name' => $newCategory->name]) }} <i class="fa fa-plus" aria-hidden="true"></i></a>
-        @endif
+        {{-- One straight link that follows the tab: "New Program" on the Program tab (it opens on News; the form's category list picks Health or Economy/Finance); All starts a Song. --}}
+        <a href="{{ route('admin.media-contents.create', ['category' => $newTab['new']]) }}" class="primary-button">{{ __('New :name', ['name' => $newTab['new_name']]) }} <i class="fa fa-plus" aria-hidden="true"></i></a>
     </div>
 
     <div class="data-table-wrap">
@@ -43,7 +40,7 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($mediaContents as $mediaContent)
+                @foreach($mediaContents as $mediaContent)
                     <tr>
                         <td>
                             <div class="media-title-cell">
@@ -60,7 +57,8 @@
                                 </span>
                             </div>
                         </td>
-                        <td class="muted">{{ $mediaContent->category->name }}</td>
+                        {{-- "All" names the group (Song, Program, Podcasts, Ambient Music) rather than News / Health / Economy/Finance; a tab shows the category itself. --}}
+                        <td class="muted">{{ $activeTab ? $mediaContent->category->name : ($groupLabels[$mediaContent->category->slug] ?? $mediaContent->category->name) }}</td>
                         <td class="muted" data-order="{{ (int) $mediaContent->stream_size }}">{{ $mediaContent->stream_size_label }}</td>
                         <td>
                             @if($mediaContent->processing_status === 'processing')
@@ -97,7 +95,7 @@
                                 @if($mediaContent->processing_status === 'ready' && $mediaContent->stream_url)
                                     <button type="button" class="secondary-button compact" data-preview-toggle data-stream-url="{{ $mediaContent->stream_url }}"><i class="fa fa-play"></i> {{ __('Play') }}</button>
                                 @endif
-                                <a href="{{ route('admin.media-contents.edit', [$mediaContent, 'from' => 'music']) }}" class="secondary-button compact">{{ __('Edit') }}</a>
+                                <a href="{{ route('admin.media-contents.edit-in', ['category' => $mediaContent->category->slug, 'media_content' => $mediaContent]) }}" class="secondary-button compact">{{ __('Edit') }}</a>
                                 <form method="POST" action="{{ route('admin.media-contents.destroy', $mediaContent) }}" onsubmit="return confirm(@js(__('Delete this article?')))">
                                     @csrf
                                     @method('DELETE')
@@ -107,17 +105,13 @@
                             </div>
                         </td>
                     </tr>
-                @empty
-                    <tr class="empty-row">
-                        <td colspan="9">{{ $activeCategory ? __('Nothing in :name yet.', ['name' => $activeCategory->name]) : __('Nothing here yet.') }}</td>
-                    </tr>
-                @endforelse
+                @endforeach
             </tbody>
         </table>
     </div>
 
-    {{-- DataTables: search, click-to-sort headers and paging over the rows above. It needs at least one real row,
-         so an empty tab keeps its "Nothing here yet." line. Loaded from the same CDN as the icon font. --}}
+    {{-- DataTables: search, click-to-sort headers and paging over the rows above, on every tab — an empty one
+         too, which says so through `emptyTable`. Loaded from the same CDN as the icon font. --}}
     <style>
         #article-table_wrapper .dt-layout-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; padding: 12px 18px; }
         #article-table_wrapper .dt-layout-row.dt-layout-table { display: block; padding: 0; }
@@ -137,11 +131,13 @@
         #article-table th.dt-ordering-asc .dt-column-order::after { content: '\25B2'; opacity: 1; }
         #article-table th.dt-ordering-desc .dt-column-order::after { content: '\25BC'; opacity: 1; }
         #article-table th.dt-orderable-none .dt-column-order { display: none; }
+        /* DataTables' own "nothing here" cell: centred across the table, like the empty row it replaces. */
+        #article-table td.dt-empty { text-align: center; padding: 54px 18px; color: var(--muted); }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net/2.1.8/dataTables.min.js"></script>
     <script>
-        if (window.jQuery && jQuery.fn.DataTable && document.querySelector('#article-table tbody tr:not(.empty-row)')) {
+        if (window.jQuery && jQuery.fn.DataTable) {
             jQuery('#article-table').DataTable({
                 order: [],                                   // keep the newest-first order until a header is clicked
                 pageLength: 10,
@@ -151,6 +147,7 @@
                     search: '',
                     searchPlaceholder: @js(__('Search articles…')),
                     lengthMenu: @js(__('_MENU_ per page')),
+                    emptyTable: @js($activeTab ? __('Nothing in :name yet.', ['name' => $activeTab['label']]) : __('Nothing here yet.')),
                     zeroRecords: @js(__('No matching articles.')),
                     info: @js(__('Showing _START_–_END_ of _TOTAL_')),
                     infoEmpty: '',
