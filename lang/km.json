@@ -763,5 +763,9 @@
     "Could not check public access: :reason": "មិនអាចពិនិត្យការចូលមើលសាធារណៈបានទេ៖ :reason",
     "Account menu": "ម៉ឺនុយគណនី",
     "Admin home": "ទំព័រដើមរបស់អ្នកគ្រប់គ្រង",
-    "Main navigation": "ការរុករកមេ"
+    "Main navigation": "ការរុករកមេ",
+    "Live radio": "វិទ្យុផ្សាយផ្ទាល់",
+    "Streaming live": "ផ្សាយផ្ទាល់",
+    "Show password": "បង្ហាញពាក្យសម្ងាត់",
+    "Hide password": "លាក់ពាក្យសម្ងាត់"
 }
