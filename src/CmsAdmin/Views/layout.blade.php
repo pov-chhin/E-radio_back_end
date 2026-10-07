@@ -49,29 +49,48 @@
                         <a href="{{ route('admin.notifications.index') }}">{{ __('View all notifications') }}</a>
                     </div>
                 </div>
-                <a class="secondary-button compact" href="{{ url('/') }}" target="_blank" rel="noopener">{{ __('View site') }}</a>
                 <div class="dropdown-anchor">
                     <button class="user-menu-toggle" aria-label="{{ __('Account menu') }}" aria-haspopup="true" aria-expanded="false" data-dropdown-toggle>
-                        <span class="user-avatar">{{ strtoupper(substr($admin?->name ?? 'A', 0, 2)) }}</span>
+                        <span class="user-avatar">@if($admin?->photo_url)<img src="{{ $admin->photo_url }}" alt="">@else{{ strtoupper(substr($admin?->name ?? 'A', 0, 2)) }}@endif</span>
                         <span class="user-menu-name">{{ $admin?->name }}</span>
                     </button>
-                    <div class="dropdown-menu dropdown-right" data-dropdown>
-                        <div class="user-menu-info"><b>{{ $admin?->name }}</b><small>{{ $admin?->email }}</small></div>
-                        <div class="dropdown-divider"></div>
-                        <p class="dropdown-label">{{ __('Language') }}</p>
-                        @foreach(\Src\Setting\Models\LanguageSetting::LOCALES as $code => $language)
-                            <form method="POST" action="{{ route('admin.locale.update') }}">
+                    <div class="dropdown-menu dropdown-right account-menu" data-dropdown>
+                        <div class="account-menu-head">
+                            <span class="account-menu-avatar" aria-hidden="true">@if($admin?->photo_url)<img src="{{ $admin->photo_url }}" alt="">@else{{ strtoupper(mb_substr($admin?->name ?? 'A', 0, 2)) }}@endif</span>
+                            <div class="account-menu-who">
+                                <b>{{ $admin?->name }}</b>
+                                <small>{{ $admin?->email }}</small>
+                                @if($adminRole = $admin?->roles->first())
+                                    <span class="badge slate">{{ __($adminRole->name) }}</span>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div class="account-menu-body">
+                            <a href="{{ route('admin.profile.show') }}" class="account-menu-item"><i class="fa fa-user-o"></i>{{ __('My Profile') }}</a>
+
+                            <p class="dropdown-label">{{ __('Language') }}</p>
+                            <div class="account-menu-langs" role="group" aria-label="{{ __('Language') }}">
+                                @foreach(\Src\Setting\Models\LanguageSetting::LOCALES as $code => $language)
+                                    <form method="POST" action="{{ route('admin.locale.update') }}">
+                                        @csrf
+                                        @method('PUT')
+                                        <input type="hidden" name="locale" value="{{ $code }}">
+                                        <button type="submit" class="account-menu-lang{{ app()->getLocale() === $code ? ' is-active' : '' }}" @if(app()->getLocale() === $code) aria-current="true" @endif>
+                                            @if(app()->getLocale() === $code)<i class="fa fa-check"></i>@endif
+                                            <span>{{ $language['name'] }}</span> <small>{{ $language['short'] }}</small>
+                                        </button>
+                                    </form>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="account-menu-foot">
+                            <form method="POST" action="{{ route('logout') }}">
                                 @csrf
-                                @method('PUT')
-                                <input type="hidden" name="locale" value="{{ $code }}">
-                                <button type="submit" class="dropdown-item" @if(app()->getLocale() === $code) aria-current="true" style="font-weight:700" @endif>{{ $language['name'] }} <small>{{ $language['short'] }}</small>@if(app()->getLocale() === $code) <i class="fa fa-check"></i>@endif</button>
+                                <button type="submit" class="account-menu-item account-menu-logout"><i class="fa fa-sign-out"></i>{{ __('Log out') }}</button>
                             </form>
-                        @endforeach
-                        <div class="dropdown-divider"></div>
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit" class="dropdown-item">{{ __('Log out') }}</button>
-                        </form>
+                        </div>
                     </div>
                 </div>
             </div>

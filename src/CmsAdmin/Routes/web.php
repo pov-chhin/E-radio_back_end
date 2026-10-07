@@ -8,12 +8,16 @@ use Src\CmsAdmin\Http\Controllers\DashboardController;
 use Src\CmsAdmin\Http\Controllers\MediaContentController;
 use Src\CmsAdmin\Http\Controllers\MusicController;
 use Src\CmsAdmin\Http\Controllers\NotificationController;
+use Src\CmsAdmin\Http\Controllers\ProfileController;
 use Src\CmsAdmin\Http\Controllers\ProgramController;
 use Src\CmsAdmin\Http\Controllers\RadioChannelController;
 use Src\CmsAdmin\Http\Controllers\TagController;
 
 Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
 Route::prefix('admin')->name('admin.')->group(function (): void {
