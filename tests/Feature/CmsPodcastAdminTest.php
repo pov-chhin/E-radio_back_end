@@ -177,6 +177,32 @@ class CmsPodcastAdminTest extends TestCase
         $this->get("/admin/podcasts/{$podcast->id}/edit")->assertSee('Save changes');
     }
 
+    public function test_the_cover_card_has_a_preview_picture_for_the_current_cover_and_the_one_just_chosen(): void
+    {
+        $this->signIn();
+        $plain = $this->podcast('No Cover Yet');
+        $covered = $this->podcast('With Cover');
+        $covered->update(['cover_image' => 'programs/covers/with-cover.webp', 'cover_image_disk' => null]);
+
+        // A new podcast, or one with no cover: the picture is there but hidden, ready for what gets chosen.
+        foreach (['/admin/podcasts/create', "/admin/podcasts/{$plain->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+            $this->assertMatchesRegularExpression('/<img src="" alt="Cover image preview" data-cover-preview style="[^"]*"\s+hidden\s*>/', $form, $url);
+            $this->assertStringNotContainsString('name="remove_cover_image"', $form, $url);
+        }
+
+        // One with a cover: the picture shows it, with the checkbox to remove it.
+        $form = $this->get("/admin/podcasts/{$covered->id}/edit")->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<img src="[^"]*programs\/covers\/with-cover\.webp" alt="Cover image preview" data-cover-preview style="[^"]*"\s*>/', $form, 'a cover that exists is not hidden');
+        $this->assertStringContainsString('name="remove_cover_image"', $form);
+
+        // The preview is above the file / address fields, inside the Cover image card, and the page's script drives it.
+        $card = substr($form, $start = strpos($form, '<h4>Cover image</h4>'), strpos($form, '</aside>', $start) - $start);
+        $this->assertLessThan(strpos($card, 'name="cover_image"'), strpos($card, 'data-cover-preview'));
+        $this->assertStringContainsString("document.querySelector('[data-cover-preview]')", $form);
+        $this->assertStringContainsString("file.addEventListener('change', refresh);", $form);
+    }
+
     public function test_the_description_uses_the_rich_text_editor_like_media_content(): void
     {
         $this->signIn();

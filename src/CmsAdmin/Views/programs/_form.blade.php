@@ -56,8 +56,10 @@
     <aside class="editor-sidebar">
         <div class="sidebar-box">
             <h4>{{ __('Cover image') }}</h4>
-            @if(isset($program) && $program->cover_image)
-                <img src="{{ $program->cover_image_url }}" alt="" style="max-width:100%;max-height:200px;width:auto;height:auto;border-radius:8px;margin-bottom:10px">
+            @php $hasCover = isset($program) && $program->cover_image; @endphp
+            {{-- The current cover; the script below swaps in the picture just chosen (a file, or an address pasted in). --}}
+            <img src="{{ $hasCover ? $program->cover_image_url : '' }}" alt="{{ __('Cover image preview') }}" data-cover-preview style="display:block;max-width:100%;max-height:220px;width:auto;height:auto;border-radius:9px;margin-bottom:10px" @unless($hasCover) hidden @endunless>
+            @if($hasCover)
                 <span class="check-row" style="margin:0 0 10px"><input type="checkbox" name="remove_cover_image" value="1"> {{ __('Remove current cover image') }}</span>
             @endif
             <div class="tag-view-toggle" style="margin-bottom:8px">
@@ -96,6 +98,40 @@
 </div>
 
 <script>
+    // Shows the cover as it will be: the file just chosen, or the address just pasted (once it loads as a picture),
+    // following the Upload / Paste URL tab; with neither it shows the current cover again, or nothing.
+    (() => {
+        const preview = document.querySelector('[data-cover-preview]');
+        const file = document.getElementById('cover_image');
+        const address = document.querySelector('input[name="cover_image_url"]');
+        if (!preview || !file || !address) return;
+        const original = preview.getAttribute('src') || '';
+        let objectUrl = null;
+        let timer = null;
+
+        const show = src => { preview.src = src; preview.hidden = !src; };
+        const refresh = () => {
+            if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+
+            if (!address.disabled && /^https?:\/\/\S+$/i.test(address.value.trim())) {
+                show(address.value.trim());
+            } else if (!file.disabled && file.files && file.files[0]) {
+                objectUrl = URL.createObjectURL(file.files[0]);
+                show(objectUrl);
+            } else {
+                show(original);
+            }
+        };
+
+        file.addEventListener('change', refresh);
+        address.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(refresh, 400); });
+        // An address that is not a picture shows nothing rather than a broken image.
+        preview.addEventListener('error', () => { if (preview.getAttribute('src') !== original) show(original); });
+        // The tabs flip which of the two fields counts; wait until they have, then look again.
+        document.querySelectorAll('[data-image-mode-tab][data-image-field="cover_image"]').forEach(tab => tab.addEventListener('click', () => setTimeout(refresh, 0)));
+        refresh();
+    })();
+
     // The badge in the top bar says what the Published switch says, as soon as it is flipped.
     (() => {
         const toggle = document.querySelector('[data-published-switch]');
