@@ -1,11 +1,11 @@
 @csrf
 
 <div class="form-grid" style="margin-bottom:24px">
-    <label>Name
+    <label>{{ __('Name') }}
         <input id="name" name="name" type="text" value="{{ old('name', $role->name ?? '') }}" required>
         @error('name') <em>{{ $message }}</em> @enderror
     </label>
-    <label>Slug
+    <label>{{ __('Slug') }}
         <input id="slug" name="slug" type="text" value="{{ old('slug', $role->slug ?? '') }}" required>
         @error('slug') <em>{{ $message }}</em> @enderror
     </label>
@@ -17,23 +17,23 @@
 @endphp
 
 <div style="margin-bottom:24px">
-    <label style="display:block;font-size:9px;font-weight:700;margin-bottom:10px">Permissions</label>
+    <label style="display:block;font-size:9px;font-weight:700;margin-bottom:10px">{{ __('Permissions') }}</label>
 
     @if($matrixRows->isNotEmpty())
         <div class="data-table-wrap">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Resource</th>
+                        <th>{{ __('Resource') }}</th>
                         @foreach($actions as $actionLabel)
-                            <th style="text-align:center">{{ $actionLabel }}</th>
+                            <th style="text-align:center">{{ __($actionLabel) }}</th>
                         @endforeach
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($matrixRows as $row)
                         <tr>
-                            <td><b>{{ $row['label'] }}</b></td>
+                            <td><b>{{ __($row['label']) }}</b></td>
                             @foreach($actions as $actionLabel)
                                 <td style="text-align:center">
                                     @if($permission = $row['cells'][$actionLabel] ?? null)
@@ -49,20 +49,20 @@
     @endif
 
     @if($otherPermissions->isNotEmpty())
-        <label style="display:block;font-size:9px;font-weight:700;margin:20px 0 10px">Other</label>
+        <label style="display:block;font-size:9px;font-weight:700;margin:20px 0 10px">{{ __('Other') }}</label>
         <div class="checkbox-grid">
             @foreach($otherPermissions as $permission)
                 <label>
                     <input type="checkbox" name="permissions[]" value="{{ $permission->id }}" @checked($checkedIds->contains($permission->id))>
-                    {{ $permission->name }}
+                    {{ __($permission->name) }}
                 </label>
             @endforeach
         </div>
     @endif
 
     @if($matrixRows->isEmpty() && $otherPermissions->isEmpty())
-        <p class="muted">No permissions yet — <a href="{{ route('admin.permissions.create') }}">create one</a>.</p>
+        <p class="muted">{!! __('No permissions yet — <a href=":url">create one</a>.', ['url' => route('admin.permissions.create')]) !!}</p>
     @endif
 </div>
 
-<button type="submit" class="primary-button">Save</button>
+<button type="submit" class="primary-button">{{ __('Save') }}</button>

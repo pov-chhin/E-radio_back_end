@@ -3,7 +3,6 @@
 namespace Tests\Concerns;
 
 use Illuminate\Support\Facades\Storage;
-use Src\Setting\Models\MinioSetting;
 use Src\Setting\Models\RustfsSetting;
 use Src\Setting\Models\StorageSetting;
 
@@ -16,7 +15,6 @@ trait UsesRemoteStorage
         return [
             'S3-compatible' => ['s3', 'media_s3'],
             'RustFS' => ['rustfs', 'media_rustfs'],
-            'MinIO' => ['minio', 'media_minio'],
         ];
     }
 
@@ -29,7 +27,6 @@ trait UsesRemoteStorage
         match ($driver) {
             's3' => StorageSetting::firstOrFail()->update(['s3_key' => 'k', 's3_secret' => 's', 's3_bucket' => 'b', 's3_region' => 'auto']),
             'rustfs' => RustfsSetting::firstOrFail()->update(['s3_key' => 'k', 's3_secret' => 's']),
-            'minio' => MinioSetting::firstOrFail()->update(['s3_key' => 'k', 's3_secret' => 's', 's3_endpoint' => 'http://minio.example.com:9000']),
         };
         StorageSetting::firstOrFail()->update(['driver' => $driver]);
 

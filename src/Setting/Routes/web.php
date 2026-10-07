@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Src\Setting\Http\Controllers\LocaleController;
 use Src\Setting\Http\Controllers\SettingController;
 
 Route::prefix('admin')->name('admin.')->middleware('permission:manage-settings')->controller(SettingController::class)->group(function (): void {
@@ -9,5 +10,8 @@ Route::prefix('admin')->name('admin.')->middleware('permission:manage-settings')
     Route::put('/settings/storage', 'updateStorage')->name('settings.storage.update');
     Route::post('/settings/storage/public-read', 'makePublic')->name('settings.storage.public-read');
     Route::put('/settings/rustfs', 'updateRustfs')->name('settings.rustfs.update');
-    Route::put('/settings/minio', 'updateMinio')->name('settings.minio.update');
+    Route::put('/settings/language', 'updateLanguage')->name('settings.language.update');
 });
+
+// The account menu's language switch: every signed-in admin may pick their own language.
+Route::put('/admin/locale', [LocaleController::class, 'update'])->name('admin.locale.update');

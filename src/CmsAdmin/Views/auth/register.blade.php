@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Create Account · {{ config('app.name') }}</title>
+    <title>{{ __('Create Account') }} · {{ config('app.name') }}</title>
+    @include('cms-admin::partials.locale-head')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-white">
@@ -26,14 +27,14 @@
 
         <div class="relative z-10">
             <h2 class="text-4xl font-bold leading-tight tracking-tight max-w-md">
-                Join a community of listeners across Cambodia.
+                {{ __('Join a community of listeners across Cambodia.') }}
             </h2>
             <p class="mt-4 text-indigo-200 max-w-sm text-sm">
-                Create a free account to save favorites, follow stations, and get picks tailored to you.
+                {{ __('Create a free account to save favorites, follow stations, and get picks tailored to you.') }}
             </p>
         </div>
 
-        <p class="relative z-10 text-xs text-indigo-300">&copy; {{ date('Y') }} AMS E-Radio. All rights reserved.</p>
+        <p class="relative z-10 text-xs text-indigo-300">&copy; {{ __(':year AMS E-Radio. All rights reserved.', ['year' => date('Y')]) }}</p>
     </div>
 
     {{-- Form panel --}}
@@ -49,8 +50,8 @@
                 AMS E-Radio
             </div>
 
-            <h1 class="text-2xl font-bold text-slate-900">Create your account</h1>
-            <p class="mt-1 text-sm text-slate-500">Join {{ config('app.name') }} — it's free.</p>
+            <h1 class="text-2xl font-bold text-slate-900">{{ __('Create your account') }}</h1>
+            <p class="mt-1 text-sm text-slate-500">{{ __("Join :app — it's free.", ['app' => config('app.name')]) }}</p>
 
             @if ($errors->any())
                 <div class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -66,52 +67,52 @@
                 @csrf
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1.5" for="first_name">First name</label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5" for="first_name">{{ __('First name') }}</label>
                         <input id="first_name" name="first_name" type="text" value="{{ old('first_name') }}" required autofocus
-                               placeholder="First name"
+                               placeholder="{{ __('First name') }}"
                                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1.5" for="last_name">Last name</label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5" for="last_name">{{ __('Last name') }}</label>
                         <input id="last_name" name="last_name" type="text" value="{{ old('last_name') }}"
-                               placeholder="Last name"
+                               placeholder="{{ __('Last name') }}"
                                class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="username">Username</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="username">{{ __('Username') }}</label>
                     <input id="username" name="username" type="text" value="{{ old('username') }}" required
-                           placeholder="yourusername"
+                           placeholder="{{ __('yourusername') }}"
                            class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="email">Email</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="email">{{ __('Email') }}</label>
                     <input id="email" name="email" type="email" value="{{ old('email') }}" required
                            placeholder="you@example.com"
                            class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
-                    <p class="text-xs text-slate-400 mt-1">Used only for account recovery.</p>
+                    <p class="text-xs text-slate-400 mt-1">{{ __('Used only for account recovery.') }}</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="password">Password</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="password">{{ __('Password') }}</label>
                     <input id="password" name="password" type="password" required
                            placeholder="••••••••"
                            class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="password_confirmation">Confirm password</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5" for="password_confirmation">{{ __('Confirm password') }}</label>
                     <input id="password_confirmation" name="password_confirmation" type="password" required
                            placeholder="••••••••"
                            class="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
                 </div>
                 <button type="submit"
                         class="w-full rounded-lg bg-indigo-600 text-white text-sm font-semibold py-2.5 shadow-sm hover:bg-indigo-500 transition-colors">
-                    Create account
+                    {{ __('Create account') }}
                 </button>
             </form>
 
             <p class="text-center text-sm text-slate-500 mt-8">
-                Have an account?
-                <a href="{{ route('login') }}" class="font-semibold text-indigo-600 hover:text-indigo-500">Log in</a>
+                {{ __('Have an account?') }}
+                <a href="{{ route('login') }}" class="font-semibold text-indigo-600 hover:text-indigo-500">{{ __('Log in') }}</a>
             </p>
         </div>
     </div>

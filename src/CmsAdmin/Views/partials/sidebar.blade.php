@@ -1,11 +1,11 @@
 <aside class="sidebar cms-sidebar" id="sidebar">
-    <a class="brand" href="{{ route('admin.dashboard') }}" aria-label="Admin home">
+    <a class="brand" href="{{ route('admin.dashboard') }}" aria-label="{{ __('Admin home') }}">
         <span class="brand-mark"><i></i><i></i><i></i><i></i></span>
         <span>cms admin</span>
     </a>
     <div class="station-switcher">
         <span class="station-avatar">{{ strtoupper(substr(config('app.name'), 0, 2)) }}</span>
-        <span><b>{{ config('app.name') }}</b><small>Admin panel</small></span>
+        <span><b>{{ config('app.name') }}</b><small>{{ __('Admin panel') }}</small></span>
     </div>
     @php
         $adminNav = [
@@ -25,27 +25,27 @@
             ['route' => 'admin.settings.edit', 'pattern' => 'admin.settings.*', 'label' => 'Settings', 'icon' => 'cog', 'permission' => 'manage-settings'],
         ];
     @endphp
-    <nav class="main-nav" aria-label="Main navigation">
-        <p>Workspace</p>
+    <nav class="main-nav" aria-label="{{ __('Main navigation') }}">
+        <p>{{ __('Workspace') }}</p>
         @php $currentSection = null; @endphp
         @foreach($adminNav as $item)
             @continue($item['permission'] && ! $admin?->hasPermission($item['permission']))
             @if(($item['section'] ?? null) && $item['section'] !== $currentSection)
-                <p class="nav-section">{{ $item['section'] }}</p>
+                <p class="nav-section">{{ __($item['section']) }}</p>
                 @php $currentSection = $item['section']; @endphp
             @endif
             @if(isset($item['children']))
                 <details class="nav-group" @if(request()->routeIs($item['pattern'])) open @endif>
                     <summary @class(['active' => request()->routeIs($item['pattern'])])>
                         <span class="nav-icon fa fa-{{ $item['icon'] }}"></span>
-                        <span>{{ $item['label'] }}</span>
+                        <span>{{ __($item['label']) }}</span>
                         <span class="fa fa-chevron-down nav-group-chevron"></span>
                     </summary>
                     <div class="nav-submenu">
                         @foreach($item['children'] as $child)
-                            @if(isset($child['section']))<p class="nav-subsection">{{ $child['section'] }}</p>@endif
+                            @if(isset($child['section']))<p class="nav-subsection">{{ __($child['section']) }}</p>@endif
                             <a href="{{ route($child['route']) }}" @class(['active' => request()->routeIs($child['pattern'])])>
-                                <span class="nav-icon fa fa-{{ $child['icon'] }}"></span><span>{{ $child['label'] }}</span>
+                                <span class="nav-icon fa fa-{{ $child['icon'] }}"></span><span>{{ __($child['label']) }}</span>
                                 @if(isset($child['badge']))<em>{{ $child['badge'] }}</em>@endif
                             </a>
                         @endforeach
@@ -53,7 +53,7 @@
                 </details>
             @else
                 <a href="{{ route($item['route']) }}" @class(['active' => isset($item['active']) ? $item['active']() : request()->routeIs($item['pattern'])])>
-                    <span class="nav-icon fa fa-{{ $item['icon'] }}"></span><span>{{ $item['label'] }}</span>
+                    <span class="nav-icon fa fa-{{ $item['icon'] }}"></span><span>{{ __($item['label']) }}</span>
                 </a>
             @endif
         @endforeach

@@ -40,7 +40,7 @@ class SessionController extends Controller
             return redirect()->intended('/');
         }
 
-        return back()->withErrors(['identity' => 'These credentials do not match our records.'])->onlyInput('identity');
+        return back()->withErrors(['identity' => __('These credentials do not match our records.')])->onlyInput('identity');
     }
 
     public function destroy(Request $request): RedirectResponse

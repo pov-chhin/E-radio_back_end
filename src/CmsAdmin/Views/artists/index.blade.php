@@ -5,21 +5,21 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Catalog</p>
-            <h1>Artists</h1>
-            <p>Artist profiles — bio, photo, socials, and verification status.</p>
+            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <h1>{{ __('Artists') }}</h1>
+            <p>{{ __('Artist profiles — bio, photo, socials, and verification status.') }}</p>
         </div>
-        <a href="{{ route('admin.artists.create') }}" class="primary-button"><i class="fa fa-plus"></i> Add Artist</a>
+        <a href="{{ route('admin.artists.create') }}" class="primary-button"><i class="fa fa-plus"></i> {{ __('Add Artist') }}</a>
     </div>
 
     <div class="data-table-wrap">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Verified</th>
-                    <th>Status</th>
-                    <th class="right">Actions</th>
+                    <th>{{ __('Name') }}</th>
+                    <th>{{ __('Verified') }}</th>
+                    <th>{{ __('Status') }}</th>
+                    <th class="right">{{ __('Actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -40,32 +40,32 @@
                         </td>
                         <td>
                             @if($artist->verified)
-                                <span class="badge green"><i class="fa fa-check"></i> Verified</span>
+                                <span class="badge green"><i class="fa fa-check"></i> {{ __('Verified') }}</span>
                             @else
-                                <span class="badge slate">Unverified</span>
+                                <span class="badge slate">{{ __('Unverified') }}</span>
                             @endif
                         </td>
                         <td>
                             @if($artist->status === 'active')
-                                <span class="badge green">active</span>
+                                <span class="badge green">{{ __('active') }}</span>
                             @else
-                                <span class="badge slate">inactive</span>
+                                <span class="badge slate">{{ __('inactive') }}</span>
                             @endif
                         </td>
                         <td>
                             <div class="table-actions">
-                                <a href="{{ route('admin.artists.edit', $artist) }}" class="secondary-button compact">Edit</a>
-                                <form method="POST" action="{{ route('admin.artists.destroy', $artist) }}" onsubmit="return confirm('Delete this artist?')">
+                                <a href="{{ route('admin.artists.edit', $artist) }}" class="secondary-button compact">{{ __('Edit') }}</a>
+                                <form method="POST" action="{{ route('admin.artists.destroy', $artist) }}" onsubmit="return confirm(@js(__('Delete this artist?')))">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="danger-button compact">Delete</button>
+                                    <button type="submit" class="danger-button compact">{{ __('Delete') }}</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr class="empty-row">
-                        <td colspan="4">No artists yet.</td>
+                        <td colspan="4">{{ __('No artists yet.') }}</td>
                     </tr>
                 @endforelse
             </tbody>

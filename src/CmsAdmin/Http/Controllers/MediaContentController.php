@@ -69,7 +69,7 @@ class MediaContentController extends Controller
 
         return $this->redirectAfterSave(
             $request,
-            $processing ? 'Media content created. Audio conversion is processing in the background.' : 'Media content created.',
+            $processing ? __('Media content created. Audio conversion is processing in the background.') : __('Media content created.'),
         );
     }
 
@@ -101,7 +101,7 @@ class MediaContentController extends Controller
 
         return $this->redirectAfterSave(
             $request,
-            $processing ? 'Media content updated. Audio conversion is processing in the background.' : 'Media content updated.',
+            $processing ? __('Media content updated. Audio conversion is processing in the background.') : __('Media content updated.'),
         );
     }
 
@@ -112,7 +112,7 @@ class MediaContentController extends Controller
         $this->deleteStoredMedia($mediaContent->thumbnail, $mediaContent->thumbnail_disk);
         $mediaContent->delete();
 
-        return $this->redirectAfterSave($request, 'Media content deleted.');
+        return $this->redirectAfterSave($request, __('Media content deleted.'));
     }
 
     /**
@@ -231,7 +231,7 @@ class MediaContentController extends Controller
                 'nullable', 'date',
                 function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
                     if ($request->input('status') === 'scheduled' && $value && $this->parseAdminDateTime($value)->isPast()) {
-                        $fail('Scheduled content needs a publish date in the future.');
+                        $fail(__('Scheduled content needs a publish date in the future.'));
                     }
                 },
             ],

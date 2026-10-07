@@ -5,6 +5,8 @@ import Hls from 'hls.js';
 import 'quill/dist/quill.snow.css';
 import TopbarMenus from './components/TopbarMenus.vue';
 
+// The page prints the strings the scripts show (see partials/locale-head.blade.php); a missing key falls back to English.
+const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replace(`:${name}`, value), window.i18n?.[key] ?? key);
 const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -173,7 +175,7 @@ qs('[data-schedule-status]')?.addEventListener('change', event => {
     const badge = qs('[data-status-badge]');
     const meta = STATUS_META[event.target.value];
     if (badge && meta) {
-        badge.textContent = meta.label;
+        badge.textContent = t(meta.label);
         badge.className = `badge ${meta.tone}`;
     }
 });
@@ -195,7 +197,7 @@ qsa('[data-rich-text]').forEach(container => {
 
     const quill = new Quill(container, {
         theme: 'snow',
-        placeholder: 'Write the description…',
+        placeholder: t('Write the description…'),
         modules: {
             toolbar: [
                 [{ header: [2, 3, false] }],
@@ -242,7 +244,7 @@ if (tagColumns) {
 
             const label = document.createElement('p');
             label.className = 'tag-column-label';
-            label.textContent = `Level ${depth}`;
+            label.textContent = t('Level :depth', { depth });
             column.appendChild(label);
 
             level.forEach(node => {
@@ -261,7 +263,7 @@ if (tagColumns) {
                 text.textContent = node.name;
                 if (node._parentName) {
                     const hint = document.createElement('small');
-                    hint.textContent = `under ${node._parentName}`;
+                    hint.textContent = t('under :name', { name: node._parentName });
                     text.appendChild(document.createElement('br'));
                     text.appendChild(hint);
                 }
@@ -313,7 +315,7 @@ document.addEventListener('click', () => qsa('[data-dropdown].open').forEach(ope
 document.addEventListener('keydown', event => { if (event.key === 'Escape') qsa('[data-dropdown].open').forEach(open => open.classList.remove('open')); });
 
 const previewAudio = qs('[data-preview-audio]');
-const resetPreviewButtons = () => qsa('[data-preview-toggle].is-playing').forEach(button => { button.classList.remove('is-playing'); button.innerHTML = '<i class="fa fa-play"></i> Play'; });
+const resetPreviewButtons = () => qsa('[data-preview-toggle].is-playing').forEach(button => { button.classList.remove('is-playing'); button.innerHTML = `<i class="fa fa-play"></i> ${t('Play')}`; });
 qsa('[data-preview-toggle]').forEach(button => button.addEventListener('click', () => {
     const wasPlaying = button.classList.contains('is-playing');
     resetPreviewButtons();
@@ -322,7 +324,7 @@ qsa('[data-preview-toggle]').forEach(button => button.addEventListener('click', 
     setStreamSource(previewAudio, button.dataset.streamUrl, resetPreviewButtons);
     previewAudio.play().catch(() => resetPreviewButtons());
     button.classList.add('is-playing');
-    button.innerHTML = '<i class="fa fa-stop"></i> Stop';
+    button.innerHTML = `<i class="fa fa-stop"></i> ${t('Stop')}`;
 }));
 previewAudio?.addEventListener('pause', resetPreviewButtons);
 previewAudio?.addEventListener('ended', resetPreviewButtons);
@@ -371,7 +373,7 @@ qsa('[data-theme]').forEach(button => button.addEventListener('click', () => {
     button.classList.add('active'); qs('.public-player')?.classList.toggle('light', button.dataset.theme === 'light');
 }));
 qsa('[data-accent]').forEach(button => button.addEventListener('click', () => qs('.public-player')?.style.setProperty('--accent', button.dataset.accent)));
-qs('[data-copy]')?.addEventListener('click', async event => { const code = qs('.code-box code')?.textContent; if (code) await navigator.clipboard.writeText(code); event.currentTarget.textContent = 'Copied!'; });
+qs('[data-copy]')?.addEventListener('click', async event => { const code = qs('.code-box code')?.textContent; if (code) await navigator.clipboard.writeText(code); event.currentTarget.textContent = t('Copied!'); });
 qsa('[data-settings-tab]').forEach(button => button.addEventListener('click', () => {
     qsa('[data-settings-tab]').forEach(tab => tab.classList.toggle('active', tab === button));
     qsa('[data-settings-panel]').forEach(panel => panel.hidden = panel.dataset.settingsPanel !== button.dataset.settingsTab);
@@ -420,9 +422,9 @@ qsa('[data-media-upload-form]').forEach(form => form.addEventListener('submit', 
         reset();
         card?.classList.add('is-error');
         track?.classList.remove('is-saving');
-        if (title) title.textContent = 'Upload failed';
+        if (title) title.textContent = t('Upload failed');
         if (message) message.textContent = text;
-        if (cancel) cancel.textContent = 'Close';
+        if (cancel) cancel.textContent = t('Close');
     };
 
     submitButtons.forEach(button => { button.disabled = true; });
@@ -432,7 +434,7 @@ qsa('[data-media-upload-form]').forEach(form => form.addEventListener('submit', 
 
     request.upload.addEventListener('progress', progress => {
         if (!progress.lengthComputable) {
-            if (size) size.textContent = 'Uploading…';
+            if (size) size.textContent = t('Uploading…');
             return;
         }
         const value = Math.min(100, Math.round((progress.loaded / progress.total) * 100));
@@ -442,21 +444,21 @@ qsa('[data-media-upload-form]').forEach(form => form.addEventListener('submit', 
         if (bar) bar.style.width = `${value}%`;
         if (percent) percent.textContent = `${value}%`;
         if (track) track.setAttribute('aria-valuenow', String(value));
-        if (size) size.textContent = `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}${remaining > 0 ? ` · about ${remaining}s left` : ''}`;
+        if (size) size.textContent = `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}${remaining > 0 ? ` · ${t('about :seconds s left', { seconds: remaining })}` : ''}`;
     });
 
     request.upload.addEventListener('load', () => {
         track?.classList.add('is-saving');
-        if (title) title.textContent = 'Upload complete';
-        if (message) message.textContent = 'Saving the media record. Audio conversion will continue in the background.';
+        if (title) title.textContent = t('Upload complete');
+        if (message) message.textContent = t('Saving the media record. Audio conversion will continue in the background.');
         if (percent) percent.textContent = '100%';
-        if (size) size.textContent = 'Almost done…';
+        if (size) size.textContent = t('Almost done…');
         if (cancel) cancel.disabled = true;
     });
 
     request.addEventListener('load', () => {
         if (request.status < 200 || request.status >= 400) {
-            showError(`The server returned HTTP ${request.status}. Please try again.`);
+            showError(t('The server returned HTTP :status. Please try again.', { status: request.status }));
             return;
         }
 
@@ -473,7 +475,7 @@ qsa('[data-media-upload-form]').forEach(form => form.addEventListener('submit', 
         document.write(request.responseText);
         document.close();
     });
-    request.addEventListener('error', () => showError('The connection was interrupted. Check the server and try again.'));
+    request.addEventListener('error', () => showError(t('The connection was interrupted. Check the server and try again.')));
     request.addEventListener('abort', () => {
         reset();
         overlay.hidden = true;

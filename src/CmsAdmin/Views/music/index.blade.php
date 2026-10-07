@@ -5,25 +5,25 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Catalog</p>
+            <p class="eyebrow">{{ __('Catalog') }}</p>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px">
-                <h1>Article</h1>
+                <h1>{{ __('Article') }}</h1>
                 {{-- One tab per category; each submits the GET form with its slug. --}}
-                <form method="GET" action="{{ route('admin.music.index') }}" aria-label="Filter by category">
+                <form method="GET" action="{{ route('admin.music.index') }}" aria-label="{{ __('Filter by category') }}">
                     <div class="tag-view-toggle">
-                        <button type="submit" name="category" value="" style="padding:7px 14px;font-size:10px" @class(['active' => ! $activeCategory])>All</button>
+                        <button type="submit" name="category" value="" style="padding:7px 14px;font-size:10px" @class(['active' => ! $activeCategory])>{{ __('All') }}</button>
                         @foreach($categories as $category)
                             <button type="submit" name="category" value="{{ $category->slug }}" style="padding:7px 14px;font-size:10px" @class(['active' => $activeCategory?->is($category)])>{{ $category->name }}</button>
                         @endforeach
                     </div>
                 </form>
             </div>
-            <p>Songs, plus News, Health and Economy/Finance content, by category.</p>
+            <p>{{ __('Songs, plus News, Health and Economy/Finance content, by category.') }}</p>
         </div>
         {{-- One straight link that follows the tab: "New Health" on the Health tab; All starts a Song. --}}
         @php $newCategory = $activeCategory ?? $categories->firstWhere('slug', 'song'); @endphp
         @if($newCategory)
-            <a href="{{ route('admin.media-contents.create', ['category' => $newCategory->slug, 'from' => 'music']) }}" class="primary-button">New {{ $newCategory->name }} <i class="fa fa-plus" aria-hidden="true"></i></a>
+            <a href="{{ route('admin.media-contents.create', ['category' => $newCategory->slug, 'from' => 'music']) }}" class="primary-button">{{ __('New :name', ['name' => $newCategory->name]) }} <i class="fa fa-plus" aria-hidden="true"></i></a>
         @endif
     </div>
 
@@ -31,15 +31,15 @@
         <table class="data-table" id="article-table">
             <thead>
                 <tr>
-                    <th>Title</th>
-                    <th>Category</th>
-                    <th>File size</th>
-                    <th>Audio</th>
-                    <th>Views</th>
-                    <th>Favorites</th>
-                    <th>Status</th>
-                    <th>Published</th>
-                    <th class="right">Actions</th>
+                    <th>{{ __('Title') }}</th>
+                    <th>{{ __('Category') }}</th>
+                    <th>{{ __('File size') }}</th>
+                    <th>{{ __('Audio') }}</th>
+                    <th>{{ __('Views') }}</th>
+                    <th>{{ __('Favorites') }}</th>
+                    <th>{{ __('Status') }}</th>
+                    <th>{{ __('Published') }}</th>
+                    <th class="right">{{ __('Actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -64,29 +64,29 @@
                         <td class="muted" data-order="{{ (int) $mediaContent->stream_size }}">{{ $mediaContent->stream_size_label }}</td>
                         <td>
                             @if($mediaContent->processing_status === 'processing')
-                                <span class="badge amber">Processing</span>
+                                <span class="badge amber">{{ __('Processing') }}</span>
                             @elseif($mediaContent->processing_status === 'failed')
-                                <span class="badge slate" title="{{ $mediaContent->processing_error }}">Failed</span>
+                                <span class="badge slate" title="{{ $mediaContent->processing_error }}">{{ __('Failed') }}</span>
                             @else
-                                <span class="badge green">Ready</span>
+                                <span class="badge green">{{ __('Ready') }}</span>
                             @endif
                         </td>
                         <td data-order="{{ (int) $mediaContent->play_count }}">{{ number_format($mediaContent->play_count) }}</td>
                         <td data-order="{{ (int) $mediaContent->favorite_count }}">{{ number_format($mediaContent->favorite_count) }}</td>
                         <td>
                             @if($mediaContent->status === 'public')
-                                <span class="badge green">Public</span>
+                                <span class="badge green">{{ __('Public') }}</span>
                             @elseif($mediaContent->status === 'scheduled')
-                                <span class="badge amber" title="{{ $mediaContent->published_at_local->format('M j, Y g:ia') }}">Scheduled</span>
+                                <span class="badge amber" title="{{ $mediaContent->published_at_local->translatedFormat('M j, Y g:ia') }}">{{ __('Scheduled') }}</span>
                             @else
-                                <span class="badge slate">Private</span>
+                                <span class="badge slate">{{ __('Private') }}</span>
                             @endif
                         </td>
                         <td class="muted" data-order="{{ $mediaContent->published_at?->timestamp ?? 0 }}">
                             @if($mediaContent->published_at)
                                 <time datetime="{{ $mediaContent->published_at->toIso8601String() }}" title="{{ $mediaContent->published_at_local->toDayDateTimeString() }}">
-                                    {{ $mediaContent->published_at_local->format('M j, Y') }}<br>
-                                    <small>{{ $mediaContent->published_at_local->format('g:i A') }}</small>
+                                    {{ $mediaContent->published_at_local->translatedFormat('M j, Y') }}<br>
+                                    <small>{{ $mediaContent->published_at_local->translatedFormat('g:i A') }}</small>
                                 </time>
                             @else
                                 —
@@ -95,21 +95,21 @@
                         <td>
                             <div class="table-actions">
                                 @if($mediaContent->processing_status === 'ready' && $mediaContent->stream_url)
-                                    <button type="button" class="secondary-button compact" data-preview-toggle data-stream-url="{{ $mediaContent->stream_url }}"><i class="fa fa-play"></i> Play</button>
+                                    <button type="button" class="secondary-button compact" data-preview-toggle data-stream-url="{{ $mediaContent->stream_url }}"><i class="fa fa-play"></i> {{ __('Play') }}</button>
                                 @endif
-                                <a href="{{ route('admin.media-contents.edit', [$mediaContent, 'from' => 'music']) }}" class="secondary-button compact">Edit</a>
-                                <form method="POST" action="{{ route('admin.media-contents.destroy', $mediaContent) }}" onsubmit="return confirm('Delete this article?')">
+                                <a href="{{ route('admin.media-contents.edit', [$mediaContent, 'from' => 'music']) }}" class="secondary-button compact">{{ __('Edit') }}</a>
+                                <form method="POST" action="{{ route('admin.media-contents.destroy', $mediaContent) }}" onsubmit="return confirm(@js(__('Delete this article?')))">
                                     @csrf
                                     @method('DELETE')
                                     <input type="hidden" name="from" value="music">
-                                    <button type="submit" class="danger-button compact">Delete</button>
+                                    <button type="submit" class="danger-button compact">{{ __('Delete') }}</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr class="empty-row">
-                        <td colspan="9">{{ $activeCategory ? 'Nothing in '.$activeCategory->name.' yet.' : 'Nothing here yet.' }}</td>
+                        <td colspan="9">{{ $activeCategory ? __('Nothing in :name yet.', ['name' => $activeCategory->name]) : __('Nothing here yet.') }}</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -149,12 +149,12 @@
                 columnDefs: [{ targets: -1, orderable: false, searchable: false }],   // the Actions column
                 language: {
                     search: '',
-                    searchPlaceholder: 'Search articles…',
-                    lengthMenu: '_MENU_ per page',
-                    zeroRecords: 'No matching articles.',
-                    info: 'Showing _START_–_END_ of _TOTAL_',
+                    searchPlaceholder: @js(__('Search articles…')),
+                    lengthMenu: @js(__('_MENU_ per page')),
+                    zeroRecords: @js(__('No matching articles.')),
+                    info: @js(__('Showing _START_–_END_ of _TOTAL_')),
                     infoEmpty: '',
-                    infoFiltered: '(filtered from _MAX_)',
+                    infoFiltered: @js(__('(filtered from _MAX_)')),
                 },
             });
         }

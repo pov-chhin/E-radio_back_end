@@ -5,16 +5,16 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Network</p>
-            <h1>Radio Channels</h1>
-            <p>Stations scraped from radio-browser.info, plus any you add manually. Review and publish manually.</p>
+            <p class="eyebrow">{{ __('Network') }}</p>
+            <h1>{{ __('Radio Channels') }}</h1>
+            <p>{{ __('Stations scraped from radio-browser.info, plus any you add manually. Review and publish manually.') }}</p>
         </div>
         <div style="display:flex;gap:10px">
             <form method="POST" action="{{ route('admin.radio-channels.sync') }}">
                 @csrf
-                <button type="submit" class="secondary-button">Sync from Radio Browser</button>
+                <button type="submit" class="secondary-button">{{ __('Sync from Radio Browser') }}</button>
             </form>
-            <a href="{{ route('admin.radio-channels.create') }}" class="primary-button"><i class="fa fa-plus"></i> Add Channel</a>
+            <a href="{{ route('admin.radio-channels.create') }}" class="primary-button"><i class="fa fa-plus"></i> {{ __('Add Channel') }}</a>
         </div>
     </div>
 
@@ -22,10 +22,10 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Stream URL</th>
-                    <th>Status</th>
-                    <th class="right">Actions</th>
+                    <th>{{ __('Name') }}</th>
+                    <th>{{ __('Stream URL') }}</th>
+                    <th>{{ __('Status') }}</th>
+                    <th class="right">{{ __('Actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -44,41 +44,41 @@
                         <td class="muted">{{ $channel->stream_url ?? '—' }}</td>
                         <td>
                             @if($channel->status === 'published')
-                                <span class="badge green">published</span>
+                                <span class="badge green">{{ __('published') }}</span>
                             @elseif($channel->status === 'hidden')
-                                <span class="badge slate">hidden</span>
+                                <span class="badge slate">{{ __('hidden') }}</span>
                             @else
-                                <span class="badge amber">Draft (no stream URL)</span>
+                                <span class="badge amber">{{ __('Draft (no stream URL)') }}</span>
                             @endif
                         </td>
                         <td>
                             <div class="table-actions">
                                 @if($channel->stream_url)
-                                    <button type="button" class="secondary-button compact" data-preview-toggle data-stream-url="{{ $channel->stream_url }}"><i class="fa fa-play"></i> Play</button>
+                                    <button type="button" class="secondary-button compact" data-preview-toggle data-stream-url="{{ $channel->stream_url }}"><i class="fa fa-play"></i> {{ __('Play') }}</button>
                                     <form method="POST" action="{{ route('admin.radio-channels.checkSignal', $channel) }}">
                                         @csrf
-                                        <button type="submit" class="secondary-button compact">Check Signal</button>
+                                        <button type="submit" class="secondary-button compact">{{ __('Check Signal') }}</button>
                                     </form>
                                 @endif
                                 <form method="POST" action="{{ route('admin.radio-channels.togglePublish', $channel) }}">
                                     @csrf
                                     @method('PATCH')
                                     <button type="submit" class="secondary-button compact">
-                                        {{ $channel->is_published ? 'Hide' : 'Publish' }}
+                                        {{ $channel->is_published ? __('Hide') : __('Publish') }}
                                     </button>
                                 </form>
-                                <a href="{{ route('admin.radio-channels.edit', $channel) }}" class="secondary-button compact">Edit</a>
-                                <form method="POST" action="{{ route('admin.radio-channels.destroy', $channel) }}" onsubmit="return confirm('Delete this channel?')">
+                                <a href="{{ route('admin.radio-channels.edit', $channel) }}" class="secondary-button compact">{{ __('Edit') }}</a>
+                                <form method="POST" action="{{ route('admin.radio-channels.destroy', $channel) }}" onsubmit="return confirm(@js(__('Delete this channel?')))">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="danger-button compact">Delete</button>
+                                    <button type="submit" class="danger-button compact">{{ __('Delete') }}</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr class="empty-row">
-                        <td colspan="4">No channels yet. Sync from Radio Browser or add one manually.</td>
+                        <td colspan="4">{{ __('No channels yet. Sync from Radio Browser or add one manually.') }}</td>
                     </tr>
                 @endforelse
             </tbody>

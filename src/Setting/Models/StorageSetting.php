@@ -11,8 +11,8 @@ class StorageSetting extends Model
 {
     use HasS3Disk;
 
-    /** The storage types offered as radio buttons: the local disk, S3-compatible storage, or the RustFS / MinIO tab's connection. */
-    public const DRIVERS = ['local', 's3', 'rustfs', 'minio'];
+    /** The storage types offered as radio buttons: the local disk, S3-compatible storage, or the RustFS tab's connection. */
+    public const DRIVERS = ['local', 's3', 'rustfs'];
 
     protected $fillable = [
         'driver', 'image_directory', 'audio_directory',
@@ -45,18 +45,12 @@ class StorageSetting extends Model
         return $this->driver === 'rustfs';
     }
 
-    public function usesMinio(): bool
-    {
-        return $this->driver === 'minio';
-    }
-
     /** The remote disk the chosen storage type writes to, or null for the local disk. */
     public function remoteDisk(): ?string
     {
         return match ($this->driver) {
             's3' => MediaStorage::S3,
             'rustfs' => MediaStorage::RUSTFS,
-            'minio' => MediaStorage::MINIO,
             default => null,
         };
     }
@@ -64,15 +58,14 @@ class StorageSetting extends Model
     /**
      * Pushes this row's values into config, so MediaContentController and ProcessMediaContentAudio store new
      * uploads where the admin chose without themselves knowing settings live in the database. Existing files
-     * already stored aren't moved — each record remembers the disk its files are on. The RustFS and MinIO
-     * connections are applied here too, so one call refreshes everything storage needs (the queue worker relies on that).
+     * already stored aren't moved — each record remembers the disk its files are on. The RustFS
+     * connection is applied here too, so one call refreshes everything storage needs (the queue worker relies on that).
      */
     public function applyToConfig(): void
     {
         $disks = [
             MediaStorage::S3 => $this->applyS3DiskToConfig(),
             MediaStorage::RUSTFS => $this->applyConnectionToConfig(RustfsSetting::class),
-            MediaStorage::MINIO => $this->applyConnectionToConfig(MinioSetting::class),
         ];
         $chosen = $this->remoteDisk();
 
@@ -85,7 +78,7 @@ class StorageSetting extends Model
     }
 
     /**
-     * @param  class-string<RustfsSetting|MinioSetting>  $model
+     * @param  class-string<RustfsSetting>  $model
      * @return array<string, mixed>|null the disk definition, or null while that connection is not configured
      */
     private function applyConnectionToConfig(string $model): ?array

@@ -43,7 +43,7 @@ export async function mountCountryMap(container) {
         },
         onRegionTooltipShow(_event, tooltip, code) {
             const count = counts[code] ?? 0;
-            tooltip.text(`<b>${nameOf(code)}</b><br>${count.toLocaleString()} ${count === 1 ? 'user' : 'users'}`, true);
+            tooltip.text(`<b>${nameOf(code)}</b><br>${count.toLocaleString()} ${window.i18n?.[count === 1 ? 'user' : 'users'] ?? (count === 1 ? 'user' : 'users')}`, true);
         },
     });
 }

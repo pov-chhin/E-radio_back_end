@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Catalog</p>
-            <h1>New Podcast</h1>
-            <p>Create the show first — you add its episodes on the next page.</p>
+            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <h1>{{ __('New Podcast') }}</h1>
+            <p>{{ __('Create the show first — you add its episodes on the next page.') }}</p>
         </div>
     </div>
 

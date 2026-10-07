@@ -1,7 +1,7 @@
 {{--
-    One self-hosted S3-compatible store's tab (RustFS, MinIO): its connection form and save button.
-    $prefix        'rustfs' or 'minio' — names the tab, its panel and its inputs
-    $name          what the admin calls it ('RustFS', 'MinIO')
+    One self-hosted S3-compatible store's tab (RustFS): its connection form and save button.
+    $prefix        'rustfs' — names the tab, its panel and its inputs
+    $name          what the admin calls it ('RustFS')
     $route         the route name its form is saved to
     $disk          the Laravel disk its connection defines
     $setting       the settings row the values come from
@@ -17,14 +17,14 @@
     @method('PUT')
 
     <div class="form-section">
-        <h3>{{ $name }} Settings</h3>
-        <p>The connection to your {{ $name }} server. Once it is saved, choose <b>{{ $name }}</b> under Storage to upload new media content to it. Files already saved stay where they are.</p>
+        <h3>{{ __(':name Settings', ['name' => $name]) }}</h3>
+        <p>{!! __('The connection to your :name server. Once it is saved, choose <b>:name</b> under Storage to upload new media content to it. Files already saved stay where they are.', ['name' => e($name)]) !!}</p>
 
         @error("{$prefix}_connection")
             <div class="inline-warning danger" style="margin:0 0 16px">{{ $message }}</div>
         @enderror
         @if($setting->s3CredentialsUnreadable())
-            <div class="inline-warning" style="margin:0 0 16px">The saved {{ $name }} credentials can no longer be read (the application key has changed). Enter the access key and secret again.</div>
+            <div class="inline-warning" style="margin:0 0 16px">{{ __('The saved :name credentials can no longer be read (the application key has changed). Enter the access key and secret again.', ['name' => $name]) }}</div>
         @endif
 
         @include('setting::partials.connection-fields', [
@@ -39,7 +39,7 @@
         <p class="muted storage-hint">{{ $hint }}</p>
     </div>
 
-    <div class="form-actions"><span>@if($ready && $fromEnv) <span class="badge green">Using the keys from .env</span> @elseif($ready) <span class="badge green">Connection saved</span> @else <span class="badge amber">Not set up yet</span> @endif</span><button type="submit" class="primary-button">Save</button></div>
+    <div class="form-actions"><span>@if($ready && $fromEnv) <span class="badge green">{{ __('Using the keys from .env') }}</span> @elseif($ready) <span class="badge green">{{ __('Connection saved') }}</span> @else <span class="badge amber">{{ __('Not set up yet') }}</span> @endif</span><button type="submit" class="primary-button">{{ __('Save') }}</button></div>
 </form>
 
 @if($ready)

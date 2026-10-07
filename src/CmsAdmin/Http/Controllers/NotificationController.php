@@ -30,13 +30,13 @@ class NotificationController extends Controller
     {
         $request->user('admin')->unreadNotifications->markAsRead();
 
-        return back()->with('status', 'All notifications marked as read.');
+        return back()->with('status', __('All notifications marked as read.'));
     }
 
     public function destroy(Request $request, string $notification): RedirectResponse
     {
         $request->user('admin')->notifications()->findOrFail($notification)->delete();
 
-        return back()->with('status', 'Notification deleted.');
+        return back()->with('status', __('Notification deleted.'));
     }
 }

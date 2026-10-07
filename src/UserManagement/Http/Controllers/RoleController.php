@@ -47,7 +47,7 @@ class RoleController extends Controller
         $role = Role::create($data);
         $role->permissions()->sync($request->input('permissions', []));
 
-        return redirect()->route('admin.roles.index')->with('status', 'Role created.');
+        return redirect()->route('admin.roles.index')->with('status', __('Role created.'));
     }
 
     public function edit(Role $role): View
@@ -65,14 +65,14 @@ class RoleController extends Controller
         $role->update($data);
         $role->permissions()->sync($request->input('permissions', []));
 
-        return redirect()->route('admin.roles.index')->with('status', 'Role updated.');
+        return redirect()->route('admin.roles.index')->with('status', __('Role updated.'));
     }
 
     public function destroy(Role $role): RedirectResponse
     {
         $role->delete();
 
-        return redirect()->route('admin.roles.index')->with('status', 'Role deleted.');
+        return redirect()->route('admin.roles.index')->with('status', __('Role deleted.'));
     }
 
     /**

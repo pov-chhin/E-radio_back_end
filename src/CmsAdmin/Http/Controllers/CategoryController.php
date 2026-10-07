@@ -29,7 +29,7 @@ class CategoryController extends Controller
 
         Category::create($data);
 
-        return redirect()->route('admin.categories.index')->with('status', 'Category created.');
+        return redirect()->route('admin.categories.index')->with('status', __('Category created.'));
     }
 
     public function edit(Category $category): View
@@ -43,14 +43,14 @@ class CategoryController extends Controller
 
         $category->update($data);
 
-        return redirect()->route('admin.categories.index')->with('status', 'Category updated.');
+        return redirect()->route('admin.categories.index')->with('status', __('Category updated.'));
     }
 
     public function destroy(Category $category): RedirectResponse
     {
         $category->delete();
 
-        return redirect()->route('admin.categories.index')->with('status', 'Category deleted, along with its podcasts and media content.');
+        return redirect()->route('admin.categories.index')->with('status', __('Category deleted, along with its podcasts and media content.'));
     }
 
     private function validateCategory(Request $request, ?Category $category = null): array

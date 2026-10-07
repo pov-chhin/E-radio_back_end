@@ -151,7 +151,7 @@ class RadioService implements RadioDashboard
 
             return [
                 'id' => data_get($item, 'id'), 'time' => $start->format('H:i'), 'end' => $end->format('H:i'),
-                'date' => $start->format('D, M j'),
+                'date' => $start->translatedFormat('D, M j'),
                 'title' => data_get($item, 'title', data_get($item, 'name', 'Scheduled program')),
                 'host' => data_get($item, 'name', 'AzuraCast'),
                 'type' => data_get($item, 'is_now', false) ? 'Live now' : ucfirst((string) data_get($item, 'type', 'playlist')),

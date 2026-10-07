@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Catalog</p>
-            <h1>New Artist</h1>
-            <p>Add an artist profile.</p>
+            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <h1>{{ __('New Artist') }}</h1>
+            <p>{{ __('Add an artist profile.') }}</p>
         </div>
     </div>
 

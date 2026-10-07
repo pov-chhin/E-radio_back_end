@@ -7,7 +7,6 @@ use Illuminate\Contracts\Filesystem\Cloud;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 /**
@@ -22,8 +21,6 @@ final class MediaStorage
     public const S3 = 'media_s3';
 
     public const RUSTFS = 'media_rustfs';
-
-    public const MINIO = 'media_minio';
 
     /** Names the bucket policy statement that makes the media folders readable, so it can be replaced rather than duplicated. */
     private const PUBLIC_READ_SID = 'EradioPublicRead';
@@ -79,10 +76,6 @@ final class MediaStorage
 
         $disk = self::disk($diskName);
 
-        if ($diskName === self::MINIO && self::hasMinioConsoleProxy()) {
-            return URL::temporarySignedRoute('media.minio', now()->addHours(6), ['path' => $path]);
-        }
-
         if (config("filesystems.disks.{$diskName}.temporary_urls", true)) {
             try {
                 return $disk->temporaryUrl($path, now()->addHours(6));
@@ -94,15 +87,8 @@ final class MediaStorage
         return $disk->url($path);
     }
 
-    public static function hasMinioConsoleProxy(): bool
-    {
-        return filled(config('services.minio.console_url'))
-            && filled(config('services.minio.root_user'))
-            && filled(config('services.minio.root_password'));
-    }
-
     /**
-     * Proves a remote disk (S3, RustFS or MinIO) can actually be written to — a small object is written and removed
+     * Proves a remote disk (S3 or RustFS) can actually be written to — a small object is written and removed
      * again. Goes to the underlying Flysystem driver because Laravel's disk swallows the reason (it only returns false).
      *
      * @throws \Throwable with the storage provider's own message when the credentials, bucket or endpoint are wrong
@@ -134,22 +120,26 @@ final class MediaStorage
 
         try {
             if (! $disk->put($path, 'ok')) {
-                return 'A test file could not be written to check public access.';
+                return __('A test file could not be written to check public access.');
             }
 
             $url = $disk->url($path);
             $response = Http::timeout(10)->connectTimeout(5)->get($url);
 
             if (! $response->successful()) {
-                return "Files are not publicly readable: fetching one without signing in gives HTTP {$response->status()} ({$url}). Images and audio will show as broken links.";
+                return __('Files are not publicly readable: fetching one without signing in gives HTTP :status (:url). Images and audio will show as broken links.', ['status' => $response->status(), 'url' => $url]);
             }
 
             // A web page answering 200 (a storage console, a proxy's catch-all) is not the file.
             return $response->body() === 'ok'
                 ? null
-                : "That address answers, but not with the stored file ({$url} returned {$response->header('Content-Type')}). Check the endpoint and Public URL point at the files themselves — not at a web console page.";
+                : __('That address answers, but not with the stored file (:url returned :type). Check the endpoint and Public URL point at the files themselves — not at a web console page.', ['url' => $url, 'type' => $response->header('Content-Type')]);
         } catch (\Throwable $exception) {
-            return 'Could not check public access'.($url ? " by fetching {$url}" : '').': '.Str::limit($exception->getMessage(), 160);
+            $reason = Str::limit($exception->getMessage(), 160);
+
+            return $url
+                ? __('Could not check public access by fetching :url: :reason', ['url' => $url, 'reason' => $reason])
+                : __('Could not check public access: :reason', ['reason' => $reason]);
         } finally {
             try {
                 $disk->delete($path);

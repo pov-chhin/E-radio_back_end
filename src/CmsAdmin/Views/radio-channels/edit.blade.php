@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Network</p>
-            <h1>Edit Channel</h1>
-            <p>Update {{ $radioChannel->name }}.</p>
+            <p class="eyebrow">{{ __('Network') }}</p>
+            <h1>{{ __('Edit Channel') }}</h1>
+            <p>{{ __('Update :name.', ['name' => $radioChannel->name]) }}</p>
         </div>
     </div>
 

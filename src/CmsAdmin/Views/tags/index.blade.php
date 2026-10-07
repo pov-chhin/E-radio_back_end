@@ -5,20 +5,20 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Catalog</p>
-            <h1>Tags</h1>
-            <p>The nested "By Tag" tree used to filter and describe content — genres, topics, moods.</p>
+            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <h1>{{ __('Tags') }}</h1>
+            <p>{{ __('The nested "By Tag" tree used to filter and describe content — genres, topics, moods.') }}</p>
         </div>
-        <a href="{{ route('admin.tags.create') }}" class="primary-button">New tag</a>
+        <a href="{{ route('admin.tags.create') }}" class="primary-button">{{ __('New tag') }}</a>
     </div>
 
     <div class="data-table-wrap">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th class="right">Actions</th>
+                    <th>{{ __('Name') }}</th>
+                    <th>{{ __('Category') }}</th>
+                    <th class="right">{{ __('Actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -30,18 +30,18 @@
                         <td class="muted">{{ $categoryNames[$tag->category_id] ?? '—' }}</td>
                         <td>
                             <div class="table-actions">
-                                <a href="{{ route('admin.tags.edit', $tag->id) }}" class="secondary-button compact">Edit</a>
-                                <form method="POST" action="{{ route('admin.tags.destroy', $tag->id) }}" onsubmit="return confirm('Delete this tag? Any child tags will be deleted too.')">
+                                <a href="{{ route('admin.tags.edit', $tag->id) }}" class="secondary-button compact">{{ __('Edit') }}</a>
+                                <form method="POST" action="{{ route('admin.tags.destroy', $tag->id) }}" onsubmit="return confirm(@js(__('Delete this tag? Any child tags will be deleted too.')))">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="danger-button compact">Delete</button>
+                                    <button type="submit" class="danger-button compact">{{ __('Delete') }}</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr class="empty-row">
-                        <td colspan="3">No tags yet.</td>
+                        <td colspan="3">{{ __('No tags yet.') }}</td>
                     </tr>
                 @endforelse
             </tbody>

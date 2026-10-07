@@ -406,17 +406,17 @@ class MediaContentUploadsTest extends TestCase
 
     public function test_private_remote_media_uses_temporary_signed_urls_for_browser_playback(): void
     {
-        $this->useRemoteStorage('minio', 'media_minio');
-        config(['filesystems.disks.media_minio.temporary_urls' => true]);
-        Storage::disk('media_minio')->buildTemporaryUrlsUsing(
+        $this->useRemoteStorage('rustfs', 'media_rustfs');
+        config(['filesystems.disks.media_rustfs.temporary_urls' => true]);
+        Storage::disk('media_rustfs')->buildTemporaryUrlsUsing(
             fn (string $path) => 'https://storage.example.test/'.$path.'?signed=1',
         );
 
         $mediaContent = new MediaContent([
             'thumbnail' => 'media-contents/thumbnails/cover.webp',
-            'thumbnail_disk' => 'media_minio',
+            'thumbnail_disk' => 'media_rustfs',
             'stream' => 'media-contents/streams/song.opus',
-            'stream_disk' => 'media_minio',
+            'stream_disk' => 'media_rustfs',
         ]);
 
         $this->assertSame(

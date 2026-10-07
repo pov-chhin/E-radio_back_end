@@ -27,7 +27,7 @@ class PasswordResetController extends Controller
 
         // Same message either way — don't reveal whether an account exists
         // for a given email address.
-        return back()->with('status', "If an account exists for that email, we've sent recovery instructions.");
+        return back()->with('status', __("If an account exists for that email, we've sent recovery instructions."));
     }
 
     public function edit(string $token, Request $request): View
@@ -58,6 +58,6 @@ class PasswordResetController extends Controller
             return back()->withErrors(['email' => __($status)]);
         }
 
-        return redirect()->route('login')->with('status', 'Your password has been reset — you can log in now.');
+        return redirect()->route('login')->with('status', __('Your password has been reset — you can log in now.'));
     }
 }

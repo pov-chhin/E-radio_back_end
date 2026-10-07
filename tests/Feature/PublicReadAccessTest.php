@@ -9,7 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
-use Src\Setting\Models\MinioSetting;
+use Src\Setting\Models\RustfsSetting;
 use Tests\Concerns\CreatesAdminUser;
 use Tests\Concerns\UsesRemoteStorage;
 use Tests\TestCase;
@@ -23,14 +23,14 @@ class PublicReadAccessTest extends TestCase
 {
     use CreatesAdminUser, RefreshDatabase, UsesRemoteStorage;
 
-    private const MINIO_FORM = [
-        'minio_key' => 'MINIOKEY123',
-        'minio_secret' => 'minio-secret-value',
-        'minio_bucket' => 'e-radio-media',
-        'minio_region' => 'us-east-1',
-        'minio_endpoint' => 'http://minio.example.com:9000',
-        'minio_url' => '',
-        'minio_use_path_style_endpoint' => '1',
+    private const RUSTFS_FORM = [
+        'rustfs_key' => 'RUSTFSKEY123',
+        'rustfs_secret' => 'rustfs-secret-value',
+        'rustfs_bucket' => 'rustfs',
+        'rustfs_region' => 'us-east-1',
+        'rustfs_endpoint' => 'http://rustfs.example.com:9000',
+        'rustfs_url' => '',
+        'rustfs_use_path_style_endpoint' => '1',
     ];
 
     protected function setUp(): void
@@ -42,81 +42,83 @@ class PublicReadAccessTest extends TestCase
 
     public function test_files_a_stranger_can_fetch_are_publicly_readable(): void
     {
-        $this->useRemoteStorage('minio', MediaStorage::MINIO);
+        $this->useRemoteStorage('rustfs', MediaStorage::RUSTFS);
         Http::fake(['cdn.example.com/*' => Http::response('ok', 200)]);
 
-        $this->assertNull(MediaStorage::publicReadError(MediaStorage::MINIO));
+        $this->assertNull(MediaStorage::publicReadError(MediaStorage::RUSTFS));
         Http::assertSent(fn ($request) => str_starts_with($request->url(), 'https://cdn.example.com/media-contents/thumbnails/.eradio-public-read-test-'));
-        $this->assertSame([], Storage::disk(MediaStorage::MINIO)->allFiles());
+        $this->assertSame([], Storage::disk(MediaStorage::RUSTFS)->allFiles());
     }
 
     public function test_a_bucket_that_refuses_anonymous_downloads_is_reported_with_the_http_status(): void
     {
-        $this->useRemoteStorage('minio', MediaStorage::MINIO);
+        $this->useRemoteStorage('rustfs', MediaStorage::RUSTFS);
         Http::fake(['cdn.example.com/*' => Http::response('', 403)]);
 
-        $problem = MediaStorage::publicReadError(MediaStorage::MINIO);
+        $problem = MediaStorage::publicReadError(MediaStorage::RUSTFS);
 
         $this->assertStringContainsString('HTTP 403', $problem);
         $this->assertStringContainsString('broken links', $problem);
-        $this->assertSame([], Storage::disk(MediaStorage::MINIO)->allFiles());
+        $this->assertSame([], Storage::disk(MediaStorage::RUSTFS)->allFiles());
     }
 
     public function test_a_web_page_answering_in_place_of_the_file_is_reported(): void
     {
-        $this->useRemoteStorage('minio', MediaStorage::MINIO);
+        $this->useRemoteStorage('rustfs', MediaStorage::RUSTFS);
         // What a storage console or a proxy's catch-all answers for any path: 200, but a page instead of the file.
         Http::fake(['cdn.example.com/*' => Http::response('<!doctype html><html></html>', 200, ['Content-Type' => 'text/html'])]);
 
-        $problem = MediaStorage::publicReadError(MediaStorage::MINIO);
+        $problem = MediaStorage::publicReadError(MediaStorage::RUSTFS);
 
         $this->assertStringContainsString('not with the stored file', $problem);
         $this->assertStringContainsString('text/html', $problem);
         $this->assertStringContainsString('web console', $problem);
-        $this->assertSame([], Storage::disk(MediaStorage::MINIO)->allFiles());
+        $this->assertSame([], Storage::disk(MediaStorage::RUSTFS)->allFiles());
     }
 
     public function test_an_unreachable_public_address_is_reported(): void
     {
-        $this->useRemoteStorage('minio', MediaStorage::MINIO);
+        $this->useRemoteStorage('rustfs', MediaStorage::RUSTFS);
         Http::fake(['cdn.example.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('timed out')]);
 
-        $this->assertStringContainsString('timed out', MediaStorage::publicReadError(MediaStorage::MINIO));
+        $this->assertStringContainsString('timed out', MediaStorage::publicReadError(MediaStorage::RUSTFS));
     }
 
     /**
-     * Defines the disk for the address and keys in MINIO_FORM — exactly, because saving rebuilds the disk whenever
+     * Defines the disk for the address and keys in RUSTFS_FORM — exactly, because saving rebuilds the disk whenever
      * they differ — and swaps in an in-memory double, so "connecting" never leaves the test.
      */
-    private function fakeMinioForTheForm(): void
+    private function fakeRustfsForTheForm(): void
     {
-        MinioSetting::firstOrFail()->fill([
-            's3_key' => self::MINIO_FORM['minio_key'],
-            's3_secret' => self::MINIO_FORM['minio_secret'],
-            's3_endpoint' => self::MINIO_FORM['minio_endpoint'],
+        RustfsSetting::firstOrFail()->fill([
+            's3_key' => self::RUSTFS_FORM['rustfs_key'],
+            's3_secret' => self::RUSTFS_FORM['rustfs_secret'],
+            's3_endpoint' => self::RUSTFS_FORM['rustfs_endpoint'],
+            's3_bucket' => self::RUSTFS_FORM['rustfs_bucket'],
+            's3_region' => self::RUSTFS_FORM['rustfs_region'],
         ])->applyToConfig();
-        Storage::fake(MediaStorage::MINIO, ['url' => 'https://cdn.example.com']);
+        Storage::fake(MediaStorage::RUSTFS, ['url' => 'https://cdn.example.com']);
     }
 
     public function test_saving_a_connection_to_a_private_bucket_warns_that_files_cannot_be_read(): void
     {
-        $this->fakeMinioForTheForm();
+        $this->fakeRustfsForTheForm();
         Http::fake(['cdn.example.com/*' => Http::response('', 403)]);
 
-        $this->put('/admin/settings/minio', self::MINIO_FORM)
+        $this->put('/admin/settings/rustfs', self::RUSTFS_FORM)
             ->assertRedirect()
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('public_read_warning.disk', MediaStorage::MINIO);
+            ->assertSessionHas('public_read_warning.disk', MediaStorage::RUSTFS);
 
         $this->get('/admin/settings')->assertSee('HTTP 403')->assertSee('Make files public');
     }
 
     public function test_saving_a_connection_to_a_readable_bucket_shows_no_warning(): void
     {
-        $this->fakeMinioForTheForm();
+        $this->fakeRustfsForTheForm();
         Http::fake(['cdn.example.com/*' => Http::response('ok', 200)]);
 
-        $this->put('/admin/settings/minio', self::MINIO_FORM)
+        $this->put('/admin/settings/rustfs', self::RUSTFS_FORM)
             ->assertRedirect()
             ->assertSessionMissing('public_read_warning');
     }
@@ -124,14 +126,14 @@ class PublicReadAccessTest extends TestCase
     /** A storage whose bucket client is a double, so the policy the app sends can be inspected. */
     private function fakeBucket(object $client): void
     {
-        $this->useRemoteStorage('minio', MediaStorage::MINIO);
+        $this->useRemoteStorage('rustfs', MediaStorage::RUSTFS);
 
         $disk = Mockery::mock();
         $disk->shouldReceive('getClient')->andReturn($client);
         $disk->shouldReceive('put')->andReturn(true);
         $disk->shouldReceive('url')->andReturnUsing(fn (string $path) => 'https://cdn.example.com/'.$path);
         $disk->shouldReceive('delete');
-        Storage::set(MediaStorage::MINIO, $disk);
+        Storage::set(MediaStorage::RUSTFS, $disk);
     }
 
     private function awsError(string $operation, string $code, int $status = 404): AwsException
@@ -150,20 +152,20 @@ class PublicReadAccessTest extends TestCase
         $this->fakeBucket($client);
         Http::fake(['cdn.example.com/*' => Http::response('ok', 200)]);
 
-        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::MINIO])
+        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::RUSTFS])
             ->assertRedirect()
-            ->assertSessionHas('settings_tab', 'minio')
+            ->assertSessionHas('settings_tab', 'rustfs')
             ->assertSessionHas('status')
             ->assertSessionMissing('public_read_warning');
 
-        $this->assertSame('e-radio-media', $sent['Bucket']);
+        $this->assertSame('rustfs', $sent['Bucket']);
         $statement = json_decode($sent['Policy'], true)['Statement'];
         $this->assertCount(1, $statement);
         $this->assertSame('Allow', $statement[0]['Effect']);
         $this->assertSame(['s3:GetObject'], $statement[0]['Action']);
         $this->assertSame(['AWS' => ['*']], $statement[0]['Principal']);
         $this->assertSame(
-            ['arn:aws:s3:::e-radio-media/media-contents/thumbnails/*', 'arn:aws:s3:::e-radio-media/media-contents/streams/*'],
+            ['arn:aws:s3:::rustfs/media-contents/thumbnails/*', 'arn:aws:s3:::rustfs/media-contents/streams/*'],
             $statement[0]['Resource'],
         );
     }
@@ -173,8 +175,8 @@ class PublicReadAccessTest extends TestCase
         $existing = [
             'Version' => '2012-10-17',
             'Statement' => [
-                ['Sid' => 'Other', 'Effect' => 'Allow', 'Principal' => ['AWS' => ['arn:aws:iam::1:user/x']], 'Action' => ['s3:ListBucket'], 'Resource' => ['arn:aws:s3:::e-radio-media']],
-                ['Sid' => 'EradioPublicRead', 'Effect' => 'Allow', 'Principal' => ['AWS' => ['*']], 'Action' => ['s3:GetObject'], 'Resource' => ['arn:aws:s3:::e-radio-media/old/*']],
+                ['Sid' => 'Other', 'Effect' => 'Allow', 'Principal' => ['AWS' => ['arn:aws:iam::1:user/x']], 'Action' => ['s3:ListBucket'], 'Resource' => ['arn:aws:s3:::rustfs']],
+                ['Sid' => 'EradioPublicRead', 'Effect' => 'Allow', 'Principal' => ['AWS' => ['*']], 'Action' => ['s3:GetObject'], 'Resource' => ['arn:aws:s3:::rustfs/old/*']],
             ],
         ];
         $client = Mockery::mock();
@@ -186,7 +188,7 @@ class PublicReadAccessTest extends TestCase
         $this->fakeBucket($client);
         Http::fake(['cdn.example.com/*' => Http::response('ok', 200)]);
 
-        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::MINIO])->assertRedirect();
+        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::RUSTFS])->assertRedirect();
 
         $statements = json_decode($sent['Policy'], true)['Statement'];
         $this->assertSame(['Other', 'EradioPublicRead'], array_column($statements, 'Sid'));
@@ -201,7 +203,7 @@ class PublicReadAccessTest extends TestCase
         $client->shouldNotReceive('putBucketPolicy');
         $this->fakeBucket($client);
 
-        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::MINIO])
+        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::RUSTFS])
             ->assertRedirect()
             ->assertSessionHas('error');
 
@@ -216,9 +218,9 @@ class PublicReadAccessTest extends TestCase
         $this->fakeBucket($client);
         Http::fake(['cdn.example.com/*' => Http::response('', 403)]);
 
-        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::MINIO])
+        $this->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::RUSTFS])
             ->assertRedirect()
-            ->assertSessionHas('public_read_warning.disk', MediaStorage::MINIO);
+            ->assertSessionHas('public_read_warning.disk', MediaStorage::RUSTFS);
     }
 
     public function test_make_files_public_only_accepts_a_remote_storage_disk(): void
@@ -230,7 +232,7 @@ class PublicReadAccessTest extends TestCase
     public function test_make_files_public_needs_the_manage_settings_permission(): void
     {
         $this->actingAs($this->createAdmin([]), 'admin')
-            ->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::MINIO])
+            ->post('/admin/settings/storage/public-read', ['disk' => MediaStorage::RUSTFS])
             ->assertForbidden();
     }
 }

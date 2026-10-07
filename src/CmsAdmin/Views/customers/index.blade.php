@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Access control</p>
-            <h1>Customers</h1>
-            <p>Accounts registered through the app.</p>
+            <p class="eyebrow">{{ __('Access control') }}</p>
+            <h1>{{ __('Customers') }}</h1>
+            <p>{{ __('Accounts registered through the app.') }}</p>
         </div>
     </div>
 
@@ -15,11 +15,11 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Username</th>
-                    <th>Email</th>
-                    <th>Joined</th>
-                    <th class="right">Bookmarks</th>
+                    <th>{{ __('Name') }}</th>
+                    <th>{{ __('Username') }}</th>
+                    <th>{{ __('Email') }}</th>
+                    <th>{{ __('Joined') }}</th>
+                    <th class="right">{{ __('Bookmarks') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -34,12 +34,12 @@
                         </td>
                         <td class="muted">{{ $customer->username ?? '—' }}</td>
                         <td class="muted">{{ $customer->email }}</td>
-                        <td class="muted">{{ $customer->created_at->format('M j, Y') }}</td>
+                        <td class="muted">{{ $customer->created_at->translatedFormat('M j, Y') }}</td>
                         <td class="right">{{ $customer->bookmarks_count }}</td>
                     </tr>
                 @empty
                     <tr class="empty-row">
-                        <td colspan="5">No customers yet.</td>
+                        <td colspan="5">{{ __('No customers yet.') }}</td>
                     </tr>
                 @endforelse
             </tbody>

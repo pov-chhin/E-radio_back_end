@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Access control</p>
-            <h1>New Permission</h1>
-            <p>Define a capability that roles can be granted.</p>
+            <p class="eyebrow">{{ __('Access control') }}</p>
+            <h1>{{ __('New Permission') }}</h1>
+            <p>{{ __('Define a capability that roles can be granted.') }}</p>
         </div>
     </div>
 
@@ -15,16 +15,16 @@
         @csrf
 
         <div class="form-grid" style="margin-bottom:24px">
-            <label>Name
+            <label>{{ __('Name') }}
                 <input id="name" name="name" type="text" value="{{ old('name') }}" required>
                 @error('name') <em>{{ $message }}</em> @enderror
             </label>
-            <label>Slug
+            <label>{{ __('Slug') }}
                 <input id="slug" name="slug" type="text" value="{{ old('slug') }}" required>
                 @error('slug') <em>{{ $message }}</em> @enderror
             </label>
         </div>
 
-        <button type="submit" class="primary-button">Save</button>
+        <button type="submit" class="primary-button">{{ __('Save') }}</button>
     </form>
 @endsection

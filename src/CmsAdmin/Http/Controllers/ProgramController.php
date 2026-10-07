@@ -58,7 +58,7 @@ class ProgramController extends Controller
 
         $program = Program::create($data);
 
-        return redirect()->route('admin.programs.edit', $program)->with('status', 'Podcast created. Add its first episode below.');
+        return redirect()->route('admin.programs.edit', $program)->with('status', __('Podcast created. Add its first episode below.'));
     }
 
     public function edit(Program $program): View
@@ -77,7 +77,7 @@ class ProgramController extends Controller
 
         $program->update($data);
 
-        return redirect()->route('admin.programs.index')->with('status', 'Podcast updated.');
+        return redirect()->route('admin.programs.index')->with('status', __('Podcast updated.'));
     }
 
     public function destroy(Program $program): RedirectResponse
@@ -85,7 +85,7 @@ class ProgramController extends Controller
         $this->deleteStoredMedia($program->cover_image, $program->cover_image_disk);
         $program->delete();
 
-        return redirect()->route('admin.programs.index')->with('status', 'Podcast deleted.');
+        return redirect()->route('admin.programs.index')->with('status', __('Podcast deleted.'));
     }
 
     private function podcastCategoryId(): ?int
@@ -124,7 +124,7 @@ class ProgramController extends Controller
             'cover_image' => ['nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:8192'],
             'cover_image_url' => ['nullable', 'string', 'max:2048', 'url'],
             'remove_cover_image' => ['nullable', 'boolean'],
-        ], [], ['tag_id' => 'podcast type']);
+        ], [], ['tag_id' => __('podcast type')]);
 
         // A program with a type is a Podcast; one still without a type keeps the category it has.
         if ($data['tag_id'] !== null) {

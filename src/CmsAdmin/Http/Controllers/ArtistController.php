@@ -43,7 +43,7 @@ class ArtistController extends Controller
     {
         Artist::create($this->validateArtist($request));
 
-        return redirect()->route('admin.artists.index')->with('status', 'Artist added.');
+        return redirect()->route('admin.artists.index')->with('status', __('Artist added.'));
     }
 
     public function edit(Artist $artist): View
@@ -55,7 +55,7 @@ class ArtistController extends Controller
     {
         $artist->update($this->validateArtist($request, $artist));
 
-        return redirect()->route('admin.artists.index')->with('status', 'Artist updated.');
+        return redirect()->route('admin.artists.index')->with('status', __('Artist updated.'));
     }
 
     public function destroy(Artist $artist): RedirectResponse
@@ -64,7 +64,7 @@ class ArtistController extends Controller
         $this->deleteStoredMedia($artist->cover, $artist->cover_disk);
         $artist->delete();
 
-        return redirect()->route('admin.artists.index')->with('status', 'Artist deleted.');
+        return redirect()->route('admin.artists.index')->with('status', __('Artist deleted.'));
     }
 
     private function formOptions(): array

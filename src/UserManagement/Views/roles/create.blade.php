@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Access control</p>
-            <h1>New Role</h1>
-            <p>Define a role and pick the permissions it grants.</p>
+            <p class="eyebrow">{{ __('Access control') }}</p>
+            <h1>{{ __('New Role') }}</h1>
+            <p>{{ __('Define a role and pick the permissions it grants.') }}</p>
         </div>
     </div>
 

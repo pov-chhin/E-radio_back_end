@@ -44,7 +44,7 @@ class RadioChannelController extends Controller
     {
         RadioSceaperStation::create($this->validateChannel($request));
 
-        return redirect()->route('admin.radio-channels.index')->with('status', 'Channel added.');
+        return redirect()->route('admin.radio-channels.index')->with('status', __('Channel added.'));
     }
 
     public function edit(RadioSceaperStation $radioChannel): View
@@ -56,7 +56,7 @@ class RadioChannelController extends Controller
     {
         $radioChannel->update($this->validateChannel($request, $radioChannel));
 
-        return redirect()->route('admin.radio-channels.index')->with('status', 'Channel updated.');
+        return redirect()->route('admin.radio-channels.index')->with('status', __('Channel updated.'));
     }
 
     /**
@@ -70,26 +70,30 @@ class RadioChannelController extends Controller
         $result = $sync->sync(config('services.radio_browser.country', 'KH'));
 
         if ($result === null) {
-            return back()->with('error', 'radio-browser.info request failed.');
+            return back()->with('error', __('radio-browser.info request failed.'));
         }
 
         $request->user('admin')->notify(new RadioChannelsSynced($result['added'], $result['updated'], $result['stations']));
 
-        return back()->with('status', "Synced — added {$result['added']}, updated {$result['updated']} (from {$result['stations']} station(s)).");
+        return back()->with('status', __('Synced — added :added, updated :updated (from :stations station(s)).', [
+            'added' => $result['added'],
+            'updated' => $result['updated'],
+            'stations' => $result['stations'],
+        ]));
     }
 
     public function togglePublish(RadioSceaperStation $radioChannel): RedirectResponse
     {
         $radioChannel->update(['is_published' => ! $radioChannel->is_published]);
 
-        return back()->with('status', 'Channel visibility updated.');
+        return back()->with('status', __('Channel visibility updated.'));
     }
 
     /** Opens the stream URL server-side (browsers can't reliably cross-origin probe arbitrary streams) and reports whether it's reachable. */
     public function checkSignal(RadioSceaperStation $radioChannel): RedirectResponse
     {
         if (blank($radioChannel->stream_url)) {
-            return back()->with('error', "{$radioChannel->name} has no stream URL to check.");
+            return back()->with('error', __(':name has no stream URL to check.', ['name' => $radioChannel->name]));
         }
 
         $startedAt = microtime(true);
@@ -99,12 +103,16 @@ class RadioChannelController extends Controller
             $elapsedMs = (int) ((microtime(true) - $startedAt) * 1000);
 
             if ($response->successful()) {
-                return back()->with('status', "Signal check: {$radioChannel->name} is reachable (HTTP {$response->status()}, {$elapsedMs}ms).");
+                return back()->with('status', __('Signal check: :name is reachable (HTTP :status, :elapsed).', [
+                    'name' => $radioChannel->name,
+                    'status' => $response->status(),
+                    'elapsed' => "{$elapsedMs}ms",
+                ]));
             }
 
-            return back()->with('error', "Signal check: {$radioChannel->name} responded with HTTP {$response->status()}.");
+            return back()->with('error', __('Signal check: :name responded with HTTP :status.', ['name' => $radioChannel->name, 'status' => $response->status()]));
         } catch (\Throwable $e) {
-            return back()->with('error', "Signal check: {$radioChannel->name} is unreachable.");
+            return back()->with('error', __('Signal check: :name is unreachable.', ['name' => $radioChannel->name]));
         }
     }
 
@@ -113,7 +121,7 @@ class RadioChannelController extends Controller
         $this->deleteStoredMedia($radioChannel->cover, $radioChannel->cover_disk);
         $radioChannel->delete();
 
-        return back()->with('status', 'Channel deleted.');
+        return back()->with('status', __('Channel deleted.'));
     }
 
     private function validateChannel(Request $request, ?RadioSceaperStation $radioChannel = null): array

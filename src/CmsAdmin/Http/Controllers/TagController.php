@@ -34,7 +34,7 @@ class TagController extends Controller
         $tag = Tag::create($data);
         $tag->cascadeCategory();
 
-        return redirect()->route('admin.tags.index')->with('status', 'Tag created.');
+        return redirect()->route('admin.tags.index')->with('status', __('Tag created.'));
     }
 
     public function edit(Tag $tag): View
@@ -54,14 +54,14 @@ class TagController extends Controller
         $tag->update($data);
         $tag->cascadeCategory();
 
-        return redirect()->route('admin.tags.index')->with('status', 'Tag updated.');
+        return redirect()->route('admin.tags.index')->with('status', __('Tag updated.'));
     }
 
     public function destroy(Tag $tag): RedirectResponse
     {
         $tag->delete();
 
-        return redirect()->route('admin.tags.index')->with('status', 'Tag deleted, along with any child tags.');
+        return redirect()->route('admin.tags.index')->with('status', __('Tag deleted, along with any child tags.'));
     }
 
     private function validateTag(Request $request, ?Tag $tag = null): array
@@ -91,7 +91,7 @@ class TagController extends Controller
 
         if ($tag && $parentId !== null) {
             $tag->load('children');
-            abort_if(in_array($parentId, [$tag->id, ...$tag->descendantIds()], true), 422, 'A tag cannot be its own parent.');
+            abort_if(in_array($parentId, [$tag->id, ...$tag->descendantIds()], true), 422, __('A tag cannot be its own parent.'));
         }
 
         return $data;

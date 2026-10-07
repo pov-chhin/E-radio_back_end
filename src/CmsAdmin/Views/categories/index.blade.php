@@ -5,22 +5,22 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Catalog</p>
-            <h1>Categories</h1>
-            <p>The top-level sections listeners browse by — Podcast, News, Song, and so on.</p>
+            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <h1>{{ __('Categories') }}</h1>
+            <p>{{ __('The top-level sections listeners browse by — Podcast, News, Song, and so on.') }}</p>
         </div>
-        <a href="{{ route('admin.categories.create') }}" class="primary-button">New category</a>
+        <a href="{{ route('admin.categories.create') }}" class="primary-button">{{ __('New category') }}</a>
     </div>
 
     <div class="data-table-wrap">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Slug</th>
-                    <th>Podcasts</th>
-                    <th>Media content</th>
-                    <th class="right">Actions</th>
+                    <th>{{ __('Name') }}</th>
+                    <th>{{ __('Slug') }}</th>
+                    <th>{{ __('Podcasts') }}</th>
+                    <th>{{ __('Media content') }}</th>
+                    <th class="right">{{ __('Actions') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -32,18 +32,18 @@
                         <td>{{ $category->media_contents_count }}</td>
                         <td>
                             <div class="table-actions">
-                                <a href="{{ route('admin.categories.edit', $category) }}" class="secondary-button compact">Edit</a>
-                                <form method="POST" action="{{ route('admin.categories.destroy', $category) }}" onsubmit="return confirm('Delete this category? Its podcasts and media content will be deleted too.')">
+                                <a href="{{ route('admin.categories.edit', $category) }}" class="secondary-button compact">{{ __('Edit') }}</a>
+                                <form method="POST" action="{{ route('admin.categories.destroy', $category) }}" onsubmit="return confirm(@js(__('Delete this category? Its podcasts and media content will be deleted too.')))">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="danger-button compact">Delete</button>
+                                    <button type="submit" class="danger-button compact">{{ __('Delete') }}</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr class="empty-row">
-                        <td colspan="5">No categories yet.</td>
+                        <td colspan="5">{{ __('No categories yet.') }}</td>
                     </tr>
                 @endforelse
             </tbody>

@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Network</p>
-            <h1>Add Channel</h1>
-            <p>Manually add a station instead of waiting on the next radio-browser.info sync.</p>
+            <p class="eyebrow">{{ __('Network') }}</p>
+            <h1>{{ __('Add Channel') }}</h1>
+            <p>{{ __('Manually add a station instead of waiting on the next radio-browser.info sync.') }}</p>
         </div>
     </div>
 

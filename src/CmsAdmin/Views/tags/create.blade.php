@@ -5,9 +5,9 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Catalog</p>
-            <h1>New Tag</h1>
-            <p>Add a tag anywhere in the tree — leave parent blank for a top-level tag.</p>
+            <p class="eyebrow">{{ __('Catalog') }}</p>
+            <h1>{{ __('New Tag') }}</h1>
+            <p>{{ __('Add a tag anywhere in the tree — leave parent blank for a top-level tag.') }}</p>
         </div>
     </div>
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\RecordUserActivity;
+use App\Http\Middleware\SetAdminLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,10 +22,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
         $middleware->alias(['permission' => EnsurePermission::class]);
         $middleware->api(append: [RecordUserActivity::class]);
+        // Appended to the web group so it runs after the session starts and the admin guard can be read.
+        $middleware->web(append: [SetAdminLocale::class]);
         // A signed-in admin who opens /login (or any guest-only page) lands on the dashboard.
         $middleware->redirectUsersTo(fn () => Auth::guard('admin')->check() ? route('admin.dashboard') : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // A failed validation flashes the submitted input back into the session; keep storage secrets out of it.
-        $exceptions->dontFlash(['s3_secret', 'rustfs_secret', 'minio_secret']);
+        $exceptions->dontFlash(['s3_secret', 'rustfs_secret']);
     })->create();

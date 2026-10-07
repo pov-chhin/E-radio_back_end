@@ -10,13 +10,13 @@
     <input type="hidden" name="disk" value="{{ $disk }}">
 
     <div class="form-section">
-        <h3>Public access</h3>
-        <p>Images and audio are loaded straight from the bucket, so anyone must be able to read them without signing in. If they show as broken links (HTTP 403), click <b>Make files public</b>: it lets the bucket's image and audio folders be read — and nothing else in the bucket — then checks that it worked. The access key needs permission to change bucket policies; saving the connection also runs this check.</p>
+        <h3>{{ __('Public access') }}</h3>
+        <p>{!! __('Images and audio are loaded straight from the bucket, so anyone must be able to read them without signing in. If they show as broken links (HTTP 403), click <b>Make files public</b>: it lets the bucket\'s image and audio folders be read — and nothing else in the bucket — then checks that it worked. The access key needs permission to change bucket policies; saving the connection also runs this check.') !!}</p>
 
         @if(session('public_read_warning.disk') === $disk)
             <div class="inline-warning" style="margin:0 0 16px">{{ session('public_read_warning.message') }}</div>
         @endif
     </div>
 
-    <div class="form-actions"><span></span><button type="submit" class="secondary-button">Make files public</button></div>
+    <div class="form-actions"><span></span><button type="submit" class="secondary-button">{{ __('Make files public') }}</button></div>
 </form>

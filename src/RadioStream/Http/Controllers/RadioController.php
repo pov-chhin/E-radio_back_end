@@ -55,15 +55,15 @@ class RadioController extends Controller
         $request->session()->put('radio.is_live', $isLive);
         $request->user('admin')->notify(new LiveSourceToggled($isLive));
 
-        return back()->with('status', $isLive ? 'Live input connected.' : 'Live input stopped. AutoDJ is now on air.');
+        return back()->with('status', $isLive ? __('Live input connected.') : __('Live input stopped. AutoDJ is now on air.'));
     }
 
     public function queueTrack(Request $request, string $track): RedirectResponse
     {
-        $title = data_get(collect($this->radio->dashboard()['tracks'])->firstWhere('id', (int) $track), 'title', 'Track');
+        $title = data_get(collect($this->radio->dashboard()['tracks'])->firstWhere('id', (int) $track), 'title', __('Track'));
         $request->session()->put('radio.queued_track', $title);
 
-        return back()->with('status', "{$title} was added to the queue.");
+        return back()->with('status', __(':title was added to the queue.', ['title' => $title]));
     }
 
     public function updateSettings(Request $request): RedirectResponse
@@ -77,7 +77,7 @@ class RadioController extends Controller
         $settings['fallback_enabled'] = $request->boolean('fallback_enabled');
         $request->session()->put('radio.settings', $settings);
 
-        return back()->with('status', 'Station settings saved.');
+        return back()->with('status', __('Station settings saved.'));
     }
 
     public function updateAzuraCastSettings(Request $request): RedirectResponse
@@ -99,14 +99,14 @@ class RadioController extends Controller
         $setting->fill($data)->save();
         $setting->applyToConfig();
 
-        return back()->with('status', 'AzuraCast connection saved.');
+        return back()->with('status', __('AzuraCast connection saved.'));
     }
 
     public function restartStation(): RedirectResponse
     {
         return $this->runAzuraCastCommand(
             fn () => $this->azuraCast->restart(),
-            'AzuraCast broadcasting services are restarting.'
+            __('AzuraCast broadcasting services are restarting.')
         );
     }
 
@@ -119,7 +119,7 @@ class RadioController extends Controller
 
         return $this->runAzuraCastCommand(
             fn () => $this->azuraCast->control($service, $action),
-            ucfirst($serviceLabel)." {$action} command sent."
+            __(':service :action command sent.', ['service' => __(ucfirst($serviceLabel)), 'action' => __($action)])
         );
     }
 
@@ -129,7 +129,7 @@ class RadioController extends Controller
 
         return $this->runAzuraCastCommand(
             fn () => $this->azuraCast->submitRequest($requestId),
-            'Song request submitted to AzuraCast.'
+            __('Song request submitted to AzuraCast.')
         );
     }
 
@@ -147,7 +147,7 @@ class RadioController extends Controller
         } catch (\Throwable $error) {
             report($error);
 
-            return back()->with('error', 'AzuraCast command failed. Check the server URL, station identifier, API key, and connection.');
+            return back()->with('error', __('AzuraCast command failed. Check the server URL, station identifier, API key, and connection.'));
         }
     }
 }
