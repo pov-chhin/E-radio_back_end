@@ -245,6 +245,24 @@ class MediaContentUploadsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_youtube_and_facebook_links_are_labelled_by_provider(): void
+    {
+        $labels = [
+            'https://www.youtube.com/watch?v=dQw4w9WgXcQ' => 'YouTube',
+            'https://youtu.be/dQw4w9WgXcQ' => 'YouTube',
+            'https://music.youtube.com/watch?v=dQw4w9WgXcQ' => 'YouTube',
+            'https://www.facebook.com/somepage/videos/1234567890/' => 'Facebook',
+            'https://fb.watch/AbCdEf/' => 'Facebook',
+            'https://notyoutube.com/watch?v=dQw4w9WgXcQ' => 'External',
+            'https://cdn.example.com/pilot.mp3' => 'External',
+        ];
+
+        foreach ($labels as $url => $label) {
+            // Not saved: the label only depends on the address.
+            $this->assertSame($label, (new MediaContent(['stream' => $url]))->stream_size_label, $url);
+        }
+    }
+
     private function mediaContentWithStream(?string $stream, array $overrides = []): MediaContent
     {
         return MediaContent::create(array_merge([

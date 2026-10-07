@@ -99,6 +99,26 @@ class MediaContent extends Model
             && ! MediaStorage::disk($this->stream_disk)->exists($this->stream));
     }
 
+    /**
+     * 'YouTube' or 'Facebook' when the stream is a link to a video there. Those are web pages, not audio files:
+     * the mobile app plays them in the provider's own embedded player instead of its audio player.
+     */
+    protected function streamProvider(): Attribute
+    {
+        return Attribute::make(get: function (): ?string {
+            $host = strtolower((string) parse_url((string) $this->stream, PHP_URL_HOST));
+            $isHost = fn (string ...$domains): bool => collect($domains)
+                ->contains(fn (string $domain) => $host === $domain || str_ends_with($host, '.'.$domain));
+
+            return match (true) {
+                $host === '' => null,
+                $isHost('youtube.com', 'youtube-nocookie.com', 'youtu.be') => 'YouTube',
+                $isHost('facebook.com', 'fb.com', 'fb.watch') => 'Facebook',
+                default => null,
+            };
+        });
+    }
+
     protected function streamSizeLabel(): Attribute
     {
         return Attribute::make(get: function (): string {
@@ -107,6 +127,7 @@ class MediaContent extends Model
             if ($bytes === null) {
                 return match (true) {
                     blank($this->stream) => '—',
+                    $this->stream_provider !== null => $this->stream_provider,
                     MediaStorage::isRemote($this->stream_disk) => 'Cloud storage',
                     default => 'External',
                 };
