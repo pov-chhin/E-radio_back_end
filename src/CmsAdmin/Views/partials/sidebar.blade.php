@@ -24,7 +24,8 @@
             ['route' => 'admin.users.index', 'pattern' => 'admin.users.*', 'label' => 'Admin Users', 'icon' => 'users', 'permission' => 'view-users', 'section' => 'Access control'],
             ['route' => 'admin.customers.index', 'pattern' => 'admin.customers.*', 'label' => 'Customers', 'icon' => 'user', 'permission' => 'view-customers'],
             ['route' => 'admin.roles.index', 'pattern' => 'admin.roles.*', 'label' => 'Roles', 'icon' => 'shield', 'permission' => 'view-roles'],
-            ['route' => 'admin.permissions.index', 'pattern' => 'admin.permissions.*', 'label' => 'Permissions', 'icon' => 'key', 'permission' => 'view-permissions'],
+            // Permissions are not in the menu: they come from the routes (permissions:sync). The page still opens at
+            // /admin/permissions for whoever holds view-permissions.
             ['route' => 'admin.settings.edit', 'pattern' => 'admin.settings.*', 'label' => 'Settings', 'icon' => 'cog', 'permission' => 'manage-settings'],
         ];
     @endphp

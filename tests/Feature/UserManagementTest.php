@@ -30,6 +30,17 @@ class UserManagementTest extends TestCase
         $this->actingAs($this->admin, 'admin');
     }
 
+    public function test_the_permissions_page_is_hidden_from_the_sidebar_but_still_opens(): void
+    {
+        $sidebar = $this->get('/admin')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('href="'.route('admin.permissions.index').'"', $sidebar);
+        // The neighbours are still there.
+        $this->assertStringContainsString('href="'.route('admin.roles.index').'"', $sidebar);
+
+        $this->get('/admin/permissions')->assertOk();
+    }
+
     public function test_it_creates_a_permission(): void
     {
         $this->post('/admin/permissions', [
