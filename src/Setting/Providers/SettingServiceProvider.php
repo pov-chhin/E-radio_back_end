@@ -6,7 +6,6 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
-use Src\Setting\Models\AzuraCastSetting;
 use Src\Setting\Models\RadioScraperSetting;
 use Src\Setting\Models\StorageSetting;
 
@@ -26,9 +25,6 @@ class SettingServiceProvider extends ServiceProvider
             }
             if (Schema::hasTable('storage_settings')) {
                 StorageSetting::first()?->applyToConfig();
-            }
-            if (Schema::hasTable('azuracast_settings')) {
-                AzuraCastSetting::first()?->applyToConfig();
             }
         } catch (QueryException) {
             // These are optional config overrides. With no reachable database

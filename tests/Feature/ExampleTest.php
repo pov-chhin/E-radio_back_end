@@ -14,6 +14,18 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertRedirect('/admin/studio');
+        $response->assertRedirect('/admin');
+    }
+
+    public function test_the_old_studio_address_still_leads_to_the_admin(): void
+    {
+        $this->get('/admin/studio')->assertRedirect('/admin');
+    }
+
+    public function test_the_studio_pages_are_gone(): void
+    {
+        foreach (['live', 'stations', 'player', 'playlist', 'schedule', 'listeners', 'settings'] as $page) {
+            $this->get("/admin/studio/{$page}")->assertNotFound();
+        }
     }
 }

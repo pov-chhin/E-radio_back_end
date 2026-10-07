@@ -26,7 +26,7 @@ class SyncPermissionsCommandTest extends TestCase
     {
         $this->artisan('permissions:sync')->assertSuccessful();
 
-        $slugs = ['view-dashboard', 'manage-settings'];
+        $slugs = ['manage-settings'];
         foreach (['radio-channels', 'categories', 'tags', 'artists', 'programs', 'media-content', 'roles', 'users'] as $resource) {
             foreach (['view', 'create', 'edit', 'delete'] as $action) {
                 $slugs[] = "{$action}-{$resource}";

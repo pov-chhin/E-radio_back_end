@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Src\Catalog\Models\Category;
+use Src\Catalog\Models\MediaContent;
+use Src\Notification\Notifications\RadioChannelsSynced;
 use Src\User\User;
 use Tests\Concerns\CreatesAdminUser;
 use Tests\TestCase;
@@ -26,16 +28,6 @@ class NotificationTest extends TestCase
 
         $this->assertSame(1, $admin->notifications()->count());
         $this->assertSame('Radio channels synced', $admin->notifications()->first()->data['title']);
-    }
-
-    public function test_toggling_live_notifies_the_acting_admin(): void
-    {
-        $admin = $this->createAdmin(['view-dashboard']);
-        $this->actingAs($admin, 'admin');
-
-        $this->post('/admin/studio/live/toggle')->assertRedirect();
-
-        $this->assertSame(1, $admin->notifications()->count());
     }
 
     public function test_publishing_media_content_notifies_the_acting_admin(): void
@@ -84,7 +76,7 @@ class NotificationTest extends TestCase
         ]);
         $this->assertSame(1, $admin->notifications()->count());
 
-        $mediaContent = \Src\Catalog\Models\MediaContent::where('slug', 'qa-track')->firstOrFail();
+        $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
         $this->put("/admin/media-contents/{$mediaContent->id}", [
             'category_id' => $category->id, 'title' => 'QA Track Updated', 'slug' => 'qa-track',
             'media_type' => 'audio', 'status' => 'public',
@@ -118,9 +110,9 @@ class NotificationTest extends TestCase
 
     public function test_notifications_index_lists_and_marks_as_read(): void
     {
-        $admin = $this->createAdmin(['view-dashboard']);
+        $admin = $this->createAdmin([]);
         $this->actingAs($admin, 'admin');
-        $this->post('/admin/studio/live/toggle');
+        $admin->notify(new RadioChannelsSynced(1, 0, 1));
         $notification = $admin->notifications()->firstOrFail();
 
         $this->get('/admin/notifications')->assertOk()->assertSee($notification->data['title']);
@@ -131,10 +123,10 @@ class NotificationTest extends TestCase
 
     public function test_mark_all_read_clears_every_unread_notification(): void
     {
-        $admin = $this->createAdmin(['view-dashboard']);
+        $admin = $this->createAdmin([]);
         $this->actingAs($admin, 'admin');
-        $this->post('/admin/studio/live/toggle');
-        $this->post('/admin/studio/live/toggle');
+        $admin->notify(new RadioChannelsSynced(1, 0, 1));
+        $admin->notify(new RadioChannelsSynced(1, 0, 1));
 
         $this->assertSame(2, $admin->unreadNotifications()->count());
 
@@ -145,9 +137,9 @@ class NotificationTest extends TestCase
 
     public function test_an_admin_cannot_mark_another_admins_notification_as_read(): void
     {
-        $owner = $this->createAdmin(['view-dashboard']);
-        $intruder = $this->createAdmin(['view-dashboard']);
-        $this->actingAs($owner, 'admin')->post('/admin/studio/live/toggle');
+        $owner = $this->createAdmin([]);
+        $intruder = $this->createAdmin([]);
+        $owner->notify(new RadioChannelsSynced(1, 0, 1));
         $notification = $owner->notifications()->firstOrFail();
 
         $this->actingAs($intruder, 'admin')
@@ -159,9 +151,9 @@ class NotificationTest extends TestCase
 
     public function test_deleting_a_notification_removes_it(): void
     {
-        $admin = $this->createAdmin(['view-dashboard']);
+        $admin = $this->createAdmin([]);
         $this->actingAs($admin, 'admin');
-        $this->post('/admin/studio/live/toggle');
+        $admin->notify(new RadioChannelsSynced(1, 0, 1));
         $notification = $admin->notifications()->firstOrFail();
 
         $this->delete("/admin/notifications/{$notification->id}")->assertRedirect();

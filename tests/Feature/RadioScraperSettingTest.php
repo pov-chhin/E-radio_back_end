@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
 use Src\Setting\Models\RadioScraperSetting;
 use Tests\Concerns\CreatesAdminUser;
 use Tests\TestCase;
@@ -42,29 +41,5 @@ class RadioScraperSettingTest extends TestCase
 
         $this->assertTrue(config('services.radio_browser.enabled'));
         $this->assertSame('US', config('services.radio_browser.country'));
-    }
-
-    public function test_disabling_removes_scraped_stations_from_the_public_dashboard(): void
-    {
-        $this->put('/admin/settings', ['country' => 'kh'])->assertRedirect();
-
-        $response = $this->get('/admin/studio');
-
-        $response->assertOk();
-        $this->assertArrayNotHasKey('scraped_stations', $response->original->getData());
-    }
-
-    public function test_enabling_adds_scraped_stations_to_the_public_dashboard(): void
-    {
-        Http::fake([
-            'de1.api.radio-browser.info/*' => Http::response([]),
-        ]);
-
-        $this->put('/admin/settings', ['enabled' => '1', 'country' => 'kh'])->assertRedirect();
-
-        $response = $this->get('/admin/studio');
-
-        $response->assertOk();
-        $this->assertArrayHasKey('scraped_stations', $response->original->getData());
     }
 }

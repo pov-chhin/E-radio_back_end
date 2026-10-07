@@ -18,7 +18,7 @@ class KhmerPagesRenderTest extends TestCase
     {
         parent::setUp();
         $this->withoutVite();
-        // The studio pages talk to AzuraCast; a failing server must not be what this test measures.
+        // Some admin pages call out to other servers; a failing one must not be what this test measures.
         Http::fake(['*' => Http::response([], 500)]);
         $this->seed();
         LanguageSetting::firstOrFail()->update(['locale' => 'km']);
