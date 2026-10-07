@@ -15,9 +15,10 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         ->middlewareFor(['index'], 'permission:view-permissions')
         ->middlewareFor(['create', 'store'], 'permission:create-permissions')
         ->middlewareFor(['destroy'], 'permission:delete-permissions');
-    Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'destroy'])
+    Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy'])
         ->middlewareFor(['index'], 'permission:view-users')
         ->middlewareFor(['create', 'store'], 'permission:create-users')
+        ->middlewareFor(['edit', 'update'], 'permission:edit-users')
         ->middlewareFor(['destroy'], 'permission:delete-users');
     Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive'])
         ->name('users.toggleActive')

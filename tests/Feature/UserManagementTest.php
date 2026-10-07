@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Src\CmsAdmin\Models\User as Customer;
 use Src\User\User;
 use Src\UserManagement\Models\Permission;
 use Src\UserManagement\Models\Role;
@@ -120,5 +122,158 @@ class UserManagementTest extends TestCase
         $this->patch("/admin/users/{$this->admin->id}/toggle-active")->assertRedirect();
 
         $this->assertTrue($this->admin->fresh()->is_active);
+    }
+
+    private function teammate(array $attributes = []): User
+    {
+        return User::create([
+            'name' => 'Teammate', 'email' => 'teammate@example.com', 'password' => 'old-password',
+            ...$attributes,
+        ]);
+    }
+
+    public function test_the_users_list_has_an_edit_button_for_each_user(): void
+    {
+        $user = $this->teammate();
+
+        $this->get('/admin/users')
+            ->assertOk()
+            ->assertSee('href="'.route('admin.users.edit', $user).'"', false)
+            ->assertSee('href="'.route('admin.users.edit', $this->admin).'"', false);
+    }
+
+    public function test_the_edit_page_shows_the_users_details_and_roles(): void
+    {
+        $editor = Role::create(['name' => 'Editor', 'slug' => 'editor']);
+        $viewer = Role::create(['name' => 'Viewer', 'slug' => 'viewer']);
+        $user = $this->teammate(['locale' => 'km']);
+        $user->roles()->sync([$editor->id]);
+
+        $html = $this->get("/admin/users/{$user->id}/edit")
+            ->assertOk()
+            ->assertSee('Edit User')
+            ->assertSee('value="Teammate"', false)
+            ->assertSee('value="teammate@example.com"', false)
+            ->assertSee('Leave blank to keep the current password.')
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/<option value="km"\s+selected/', $html);
+        $this->assertMatchesRegularExpression('/value="'.$editor->id.'"\s+checked/', $html);
+        $this->assertDoesNotMatchRegularExpression('/value="'.$viewer->id.'"\s+checked/', $html);
+    }
+
+    public function test_it_updates_a_user_and_their_roles(): void
+    {
+        $editor = Role::create(['name' => 'Editor', 'slug' => 'editor']);
+        $viewer = Role::create(['name' => 'Viewer', 'slug' => 'viewer']);
+        $user = $this->teammate();
+        $user->roles()->sync([$editor->id]);
+
+        $this->put("/admin/users/{$user->id}", [
+            'name' => 'Renamed',
+            'email' => 'renamed@example.com',
+            'locale' => 'km',
+            'roles' => [$viewer->id],
+        ])->assertRedirect(route('admin.users.index'))->assertSessionHas('status', 'User updated.');
+
+        $user->refresh();
+        $this->assertSame('Renamed', $user->name);
+        $this->assertSame('renamed@example.com', $user->email);
+        $this->assertSame('km', $user->locale);
+        $this->assertSame([$viewer->id], $user->roles()->pluck('roles.id')->all());
+    }
+
+    public function test_a_blank_password_keeps_the_current_one(): void
+    {
+        $user = $this->teammate();
+
+        $this->put("/admin/users/{$user->id}", ['name' => 'Teammate', 'email' => 'teammate@example.com', 'password' => ''])
+            ->assertRedirect(route('admin.users.index'));
+
+        $this->assertTrue(Hash::check('old-password', $user->fresh()->password));
+    }
+
+    public function test_a_new_password_replaces_the_old_one(): void
+    {
+        $user = $this->teammate();
+
+        $this->put("/admin/users/{$user->id}", ['name' => 'Teammate', 'email' => 'teammate@example.com', 'password' => 'brand-new-password'])
+            ->assertRedirect(route('admin.users.index'));
+
+        $this->assertTrue(Hash::check('brand-new-password', $user->fresh()->password));
+        $this->assertFalse(Hash::check('old-password', $user->fresh()->password));
+    }
+
+    public function test_a_short_new_password_is_rejected(): void
+    {
+        $user = $this->teammate();
+
+        $this->put("/admin/users/{$user->id}", ['name' => 'Teammate', 'email' => 'teammate@example.com', 'password' => 'short'])
+            ->assertSessionHasErrors('password');
+
+        $this->assertTrue(Hash::check('old-password', $user->fresh()->password));
+    }
+
+    public function test_the_email_may_be_kept_but_not_taken_from_someone_else(): void
+    {
+        $user = $this->teammate();
+
+        $this->put("/admin/users/{$user->id}", ['name' => 'Teammate', 'email' => 'teammate@example.com'])
+            ->assertSessionHasNoErrors();
+
+        $this->put("/admin/users/{$user->id}", ['name' => 'Teammate', 'email' => $this->admin->email])
+            ->assertSessionHasErrors('email');
+
+        $this->assertSame('teammate@example.com', $user->fresh()->email);
+    }
+
+    public function test_admin_cannot_change_their_own_roles(): void
+    {
+        $other = Role::create(['name' => 'Other', 'slug' => 'other']);
+        $before = $this->admin->roles()->pluck('roles.id')->sort()->values()->all();
+        $this->assertNotEmpty($before);
+
+        $this->put("/admin/users/{$this->admin->id}", [
+            'name' => 'Admin Renamed',
+            'email' => $this->admin->email,
+            'roles' => [$other->id],
+        ])->assertRedirect(route('admin.users.index'));
+
+        $this->assertSame('Admin Renamed', $this->admin->fresh()->name);
+        $this->assertSame($before, $this->admin->roles()->pluck('roles.id')->sort()->values()->all());
+    }
+
+    public function test_editing_your_own_account_shows_the_roles_locked(): void
+    {
+        $this->get("/admin/users/{$this->admin->id}/edit")
+            ->assertOk()
+            ->assertSee("You can't change your own roles.")
+            ->assertSee('disabled', false);
+    }
+
+    public function test_editing_needs_the_edit_users_permission(): void
+    {
+        $user = $this->teammate();
+
+        // Its own role: createAdmin() shares one role between admins, which setUp already filled with edit-users.
+        $viewer = User::create(['name' => 'Viewer', 'email' => 'viewer@example.com', 'password' => 'password123']);
+        $role = Role::create(['name' => 'Users Viewer', 'slug' => 'users-viewer']);
+        $role->permissions()->sync([Permission::where('slug', 'view-users')->firstOrFail()->id]);
+        $viewer->roles()->sync([$role->id]);
+        $this->actingAs($viewer, 'admin');
+
+        $this->get('/admin/users')->assertOk();
+        $this->get("/admin/users/{$user->id}/edit")->assertForbidden();
+        $this->put("/admin/users/{$user->id}", ['name' => 'Hacked', 'email' => 'teammate@example.com'])->assertForbidden();
+
+        $this->assertSame('Teammate', $user->fresh()->name);
+    }
+
+    public function test_a_customer_account_cannot_be_edited_here(): void
+    {
+        $customer = Customer::create(['first_name' => 'Jane', 'last_name' => 'Doe', 'email' => 'jane@example.com', 'password' => 'password123']);
+
+        $this->get("/admin/users/{$customer->id}/edit")->assertNotFound();
+        $this->put("/admin/users/{$customer->id}", ['name' => 'Jane', 'email' => 'jane@example.com'])->assertNotFound();
     }
 }

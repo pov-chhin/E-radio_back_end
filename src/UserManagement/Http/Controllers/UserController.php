@@ -59,6 +59,40 @@ class UserController extends Controller
         return redirect()->route('admin.users.index')->with('status', __('User registered.'));
     }
 
+    public function edit(User $user): View
+    {
+        $roles = Role::orderBy('name')->get();
+
+        return view('user-management::users.edit', compact('user', 'roles'));
+    }
+
+    public function update(Request $request, User $user): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            // Left empty, the current password stays.
+            'password' => ['nullable', 'string', 'min:8'],
+            'locale' => ['nullable', Rule::in(array_keys(LanguageSetting::LOCALES))],
+            'roles' => ['nullable', 'array'],
+            'roles.*' => ['integer', 'exists:roles,id'],
+        ]);
+
+        $user->update([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'locale' => $data['locale'] ?? null,
+            ...(filled($data['password'] ?? null) ? ['password' => Hash::make($data['password'])] : []),
+        ]);
+
+        // As with deleting and deactivating, an admin can't lock themselves out: their own roles stay as they are.
+        if ($user->id !== $request->user('admin')->id) {
+            $user->roles()->sync($data['roles'] ?? []);
+        }
+
+        return redirect()->route('admin.users.index')->with('status', __('User updated.'));
+    }
+
     public function destroy(Request $request, User $user): RedirectResponse
     {
         if ($user->id === $request->user('admin')->id) {

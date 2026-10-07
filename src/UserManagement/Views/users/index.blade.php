@@ -44,6 +44,7 @@
                         </td>
                         <td>
                             <div class="table-actions">
+                                <a href="{{ route('admin.users.edit', $user) }}" class="secondary-button compact">{{ __('Edit') }}</a>
                                 <form method="POST" action="{{ route('admin.users.toggleActive', $user) }}">
                                     @csrf
                                     @method('PATCH')
