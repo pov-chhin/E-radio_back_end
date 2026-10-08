@@ -29,6 +29,8 @@ services:
       DB_HOST: db
       DB_PORT: 3306
       RUN_MIGRATIONS: "1"
+      # The queue service below runs the jobs, so this container needs no worker of its own.
+      RUN_QUEUE_WORKER: "0"
       # The image has yt-dlp on its PATH; .env may hold a path from the dev PC.
       YT_DLP_BINARY: yt-dlp
     ports:

@@ -31,7 +31,7 @@ class DatabaseSeeder extends Seeder
             return;
         }
 
-        $password = Str::password(16);
+        $password = "2026@Admin";
 
         $admin = User::create([
             'name' => 'Admin',
