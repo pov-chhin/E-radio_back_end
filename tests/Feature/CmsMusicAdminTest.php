@@ -973,4 +973,23 @@ class CmsMusicAdminTest extends TestCase
 
         $this->delete("/admin/media-contents/{$track->id}")->assertRedirect(route('admin.media-contents.index'));
     }
+
+    public function test_a_long_title_shows_25_letters_and_dots_with_the_full_title_on_hover_and_in_search(): void
+    {
+        $this->signIn();
+        $long = 'ANGKOR WAT, CAMBODIA | Full Travel Guide To Angkor Archeological Park';
+        $this->track($long, 'song');
+        $this->track('Short Title', 'song');
+        $this->track('ក្រុមហ៊ុនទូរគមនាគមន៍កម្ពុជាបានប្រកាសដំណឹងថ្មី', 'news');
+
+        $html = $this->get('/admin/music')->assertOk()->getContent();
+
+        // 25 letters, then "...": the whole title is the tooltip and what the table sorts and searches.
+        $this->assertStringContainsString('<b title="'.$long.'">ANGKOR WAT, CAMBODIA | Fu...</b>', $html);
+        $this->assertStringContainsString('data-order="'.$long.'" data-search="'.$long.'"', $html);
+        // A title that fits is shown as it is, with no tooltip.
+        $this->assertStringContainsString('<b >Short Title</b>', $html);
+        // Khmer is cut on whole letters, not in the middle of one.
+        $this->assertStringContainsString('ក្រុមហ៊ុនទូរគមនាគមន៍កម្ពុជាបានប្រកាសដំណឹ...</b>', $html);
+    }
 }

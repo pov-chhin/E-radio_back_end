@@ -41,8 +41,21 @@
             </thead>
             <tbody>
                 @foreach($mediaContents as $mediaContent)
+                    @php
+                        // Long titles show their first 25 letters and "...", the full title on hover. Cut on whole letters
+                        // (a Khmer letter is several characters), never leaving a dangling coeng (U+17D2) before the dots.
+                        preg_match_all('/\X/u', (string) $mediaContent->title, $letters);
+                        $letters = $letters[0] ?? [];
+                        $shortTitle = $mediaContent->title;
+                        if (count($letters) > 25) {
+                            $shortTitle = rtrim(implode('', array_slice($letters, 0, 25)));
+                            $shortTitle = rtrim(preg_replace('/\x{17D2}$/u', '', $shortTitle)).'...';
+                        }
+                        $people = collect([$mediaContent->artist?->stage_name ?: $mediaContent->artist?->name, $mediaContent->author?->name])->filter()->implode(' · ');
+                    @endphp
                     <tr>
-                        <td>
+                        {{-- The table sorts and searches the full title (and names), not the shortened text on show. --}}
+                        <td data-order="{{ $mediaContent->title }}" data-search="{{ trim($mediaContent->title.' '.$people) }}">
                             <div class="media-title-cell">
                                 @if($mediaContent->thumbnail_url)
                                     <img src="{{ $mediaContent->thumbnail_url }}" alt="" class="media-table-thumb">
@@ -50,9 +63,9 @@
                                     <span class="media-table-thumb media-table-thumb-placeholder"><i class="fa fa-image"></i></span>
                                 @endif
                                 <span class="media-title-copy">
-                                    <b>{{ $mediaContent->title }}</b>
+                                    <b @if($shortTitle !== $mediaContent->title)title="{{ $mediaContent->title }}"@endif>{{ $shortTitle }}</b>
                                     @if($mediaContent->artist || $mediaContent->author)
-                                        <small class="muted">{{ collect([$mediaContent->artist?->stage_name ?: $mediaContent->artist?->name, $mediaContent->author?->name])->filter()->implode(' · ') }}</small>
+                                        <small class="muted">{{ $people }}</small>
                                     @endif
                                 </span>
                             </div>
