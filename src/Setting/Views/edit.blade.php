@@ -6,6 +6,7 @@
     $storageFields = ['driver', 'image_directory', 'audio_directory', 's3_key', 's3_secret', 's3_bucket', 's3_region', 's3_endpoint', 's3_url', 'storage_connection'];
     $rustfsFields = ['rustfs_key', 'rustfs_secret', 'rustfs_bucket', 'rustfs_region', 'rustfs_endpoint', 'rustfs_url', 'rustfs_connection'];
     $activeTab = match (true) {
+        $errors->has('youtube_cookies_file'), session('settings_tab') === 'youtube' => 'youtube',
         $errors->has('locale'), session('settings_tab') === 'language' => 'language',
         $errors->has('url'), session('settings_tab') === 'radio-studio' => 'radio-studio',
         $errors->hasAny($rustfsFields), session('settings_tab') === 'rustfs' => 'rustfs',
@@ -28,6 +29,7 @@
             <button type="button" class="{{ $activeTab === 'radio-scraper' ? 'active' : '' }}" data-settings-tab="radio-scraper">{{ __('Radio Scraper') }}</button>
             <button type="button" class="{{ $activeTab === 'storage' ? 'active' : '' }}" data-settings-tab="storage">{{ __('Storage') }}</button>
             <button type="button" class="{{ $activeTab === 'rustfs' ? 'active' : '' }}" data-settings-tab="rustfs">RustFS</button>
+            <button type="button" class="{{ $activeTab === 'youtube' ? 'active' : '' }}" data-settings-tab="youtube">YouTube</button>
             <button type="button" class="{{ $activeTab === 'language' ? 'active' : '' }}" data-settings-tab="language">{{ __('Language') }}</button>
             <button type="button" class="{{ $activeTab === 'radio-studio' ? 'active' : '' }}" data-settings-tab="radio-studio">{{ __('Radio Studio') }}</button>
         </nav>
@@ -130,6 +132,34 @@
             @if($storageSetting->remoteDisk())
                 @include('setting::partials.public-access', ['panel' => 'storage', 'disk' => $storageSetting->remoteDisk()])
             @endif
+
+            <form method="POST" action="{{ route('admin.settings.youtube.update') }}" enctype="multipart/form-data" class="panel settings-form" data-settings-panel="youtube" @unless($activeTab === 'youtube') hidden @endunless>
+                @csrf
+                @method('PUT')
+
+                <div class="form-section">
+                    <h3>{{ __('YouTube audio') }}</h3>
+                    <p>{{ __('Upload a Netscape-format cookies.txt export when YouTube asks the server to sign in to confirm it is not a bot. It is encrypted in the database and is never displayed again.') }}</p>
+
+                    @if($youtubeCookiesSaved)
+                        <div class="inline-warning" style="margin:0 0 16px">{{ __('YouTube cookies are configured. Upload a new file to replace them when they expire.') }}</div>
+                    @endif
+
+                    <label>{{ __('YouTube cookies.txt') }}
+                        <input name="youtube_cookies_file" type="file" accept=".txt,text/plain">
+                        @error('youtube_cookies_file') <em>{{ $message }}</em> @enderror
+                    </label>
+
+                    @if($youtubeCookiesSaved)
+                        <label class="toggle-setting" style="margin-top:16px">
+                            <span><b>{{ __('Remove saved YouTube cookies') }}</b><small>{{ __('YouTube downloads may require a new cookies.txt afterwards.') }}</small></span>
+                            <span class="switch"><input type="checkbox" name="remove_youtube_cookies" value="1"><i></i></span>
+                        </label>
+                    @endif
+                </div>
+
+                <div class="form-actions"><span></span><button type="submit" class="primary-button">{{ __('Save') }}</button></div>
+            </form>
 
             <form method="POST" action="{{ route('admin.settings.language.update') }}" class="panel settings-form" data-settings-panel="language" @unless($activeTab === 'language') hidden @endunless>
                 @csrf

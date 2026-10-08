@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -66,6 +67,44 @@ class StorageSettingTest extends TestCase
             ->assertSee('Storage')
             ->assertSee('Image folder')
             ->assertSee('Audio folder');
+    }
+
+    public function test_youtube_cookies_can_be_uploaded_and_are_encrypted_at_rest(): void
+    {
+        $cookies = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsecret-session-value\n";
+
+        $this->put('/admin/settings/youtube', [
+            'youtube_cookies_file' => UploadedFile::fake()->createWithContent('cookies.txt', $cookies),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame($cookies, StorageSetting::firstOrFail()->youtube_cookies);
+        $raw = DB::table('storage_settings')->value('youtube_cookies');
+        $this->assertStringNotContainsString('secret-session-value', $raw);
+
+        $this->get('/admin/settings')
+            ->assertOk()
+            ->assertSee('YouTube cookies are configured')
+            ->assertDontSee('secret-session-value');
+    }
+
+    public function test_invalid_youtube_cookie_file_is_rejected(): void
+    {
+        $this->put('/admin/settings/youtube', [
+            'youtube_cookies_file' => UploadedFile::fake()->createWithContent('cookies.txt', 'cookies.txt'),
+        ])->assertSessionHasErrors('youtube_cookies_file');
+
+        $this->assertNull(StorageSetting::firstOrFail()->youtube_cookies);
+    }
+
+    public function test_saved_youtube_cookies_can_be_removed(): void
+    {
+        StorageSetting::firstOrFail()->update(['youtube_cookies' => "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1\tSID\tx\n"]);
+
+        $this->put('/admin/settings/youtube', ['remove_youtube_cookies' => '1'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull(StorageSetting::firstOrFail()->youtube_cookies);
     }
 
     public function test_edit_page_offers_local_and_s3_as_radio_buttons_with_local_selected_by_default(): void

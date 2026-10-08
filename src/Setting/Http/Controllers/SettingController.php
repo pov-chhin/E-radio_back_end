@@ -42,6 +42,7 @@ class SettingController extends Controller
                 && $this->savedCredential($rustfsSetting, 's3_secret') === null,
             // The RustFS storage type can only be picked once its connection is complete.
             'rustfsReady' => $rustfsSetting->s3Disk() !== null,
+            'youtubeCookiesSaved' => $this->savedCredential($storageSetting, 'youtube_cookies') !== null,
         ]);
     }
 
@@ -109,6 +110,66 @@ class SettingController extends Controller
                 ->with('settings_tab', 'storage'),
             $setting->remoteDisk(),
         );
+    }
+
+    /** Saves a Netscape-format YouTube cookies.txt encrypted in the database for yt-dlp. */
+    public function updateYoutube(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'youtube_cookies_file' => ['nullable', 'file', 'max:2048'],
+            'remove_youtube_cookies' => ['nullable', 'boolean'],
+        ]);
+        $setting = StorageSetting::firstOrFail();
+
+        if ($request->boolean('remove_youtube_cookies')) {
+            $setting->update(['youtube_cookies' => null]);
+
+            return back()->with('status', __('YouTube cookies removed.'))->with('settings_tab', 'youtube');
+        }
+
+        $file = $request->file('youtube_cookies_file');
+
+        if ($file === null) {
+            return back()->withErrors(['youtube_cookies_file' => __('Choose a cookies.txt file to upload.')])->with('settings_tab', 'youtube');
+        }
+
+        $contents = (string) file_get_contents($file->getRealPath());
+        $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
+
+        if (! $this->validYoutubeCookies($contents)) {
+            return back()->withErrors([
+                'youtube_cookies_file' => __('That is not a valid Netscape cookies.txt export containing YouTube cookies.'),
+            ])->with('settings_tab', 'youtube');
+        }
+
+        $setting->update(['youtube_cookies' => $contents]);
+
+        return back()->with('status', __('YouTube cookies saved securely. Failed YouTube audio can now be retried.'))->with('settings_tab', 'youtube');
+    }
+
+    /** A Netscape cookie file has a header and at least one seven-column youtube.com cookie row. */
+    private function validYoutubeCookies(string $contents): bool
+    {
+        if (! str_contains($contents, 'Netscape HTTP Cookie File')) {
+            return false;
+        }
+
+        foreach (preg_split('/\R/', $contents) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || (str_starts_with($line, '#') && ! str_starts_with($line, '#HttpOnly_'))) {
+                continue;
+            }
+
+            $columns = explode("\t", $line);
+            $domain = strtolower(str_replace('#HttpOnly_', '', $columns[0] ?? ''));
+
+            if (count($columns) >= 7 && ($domain === 'youtube.com' || str_ends_with($domain, '.youtube.com'))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

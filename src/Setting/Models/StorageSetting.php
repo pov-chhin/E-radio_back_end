@@ -15,17 +15,18 @@ class StorageSetting extends Model
     public const DRIVERS = ['local', 's3', 'rustfs'];
 
     protected $fillable = [
-        'driver', 'image_directory', 'audio_directory',
+        'driver', 'image_directory', 'audio_directory', 'youtube_cookies',
         's3_key', 's3_secret', 's3_bucket', 's3_region', 's3_endpoint', 's3_url', 's3_use_path_style_endpoint',
     ];
 
-    protected $hidden = ['s3_key', 's3_secret'];
+    protected $hidden = ['s3_key', 's3_secret', 'youtube_cookies'];
 
     protected function casts(): array
     {
         return [
             's3_key' => 'encrypted',
             's3_secret' => 'encrypted',
+            'youtube_cookies' => 'encrypted',
             's3_use_path_style_endpoint' => 'boolean',
         ];
     }

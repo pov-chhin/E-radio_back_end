@@ -2,8 +2,11 @@
 
 namespace Src\Catalog\Services;
 
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Src\Setting\Models\StorageSetting;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
@@ -70,7 +73,9 @@ class YoutubeAudioFetcher
             $command[] = $runtime;
         }
 
-        if ($cookies = config('services.yt_dlp.cookies')) {
+        [$cookies, $temporaryCookies] = $this->cookiesFile();
+
+        if ($cookies !== null) {
             $command[] = '--cookies';
             $command[] = $cookies;
         }
@@ -80,47 +85,84 @@ class YoutubeAudioFetcher
 
         $attempts = max(1, (int) config('services.yt_dlp.attempts', 3));
 
-        for ($attempt = 1; ; $attempt++) {
-            $process = new Process($command);
-            $process->setTimeout(max(1, (int) config('services.yt_dlp.timeout', 300)));
+        try {
+            for ($attempt = 1; ; $attempt++) {
+                $process = new Process($command);
+                $process->setTimeout(max(1, (int) config('services.yt_dlp.timeout', 300)));
 
-            try {
-                $process->run();
-            } catch (ProcessTimedOutException) {
+                try {
+                    $process->run();
+                } catch (ProcessTimedOutException) {
+                    $this->discard($base);
+
+                    throw new RuntimeException('Fetching the audio from YouTube took too long.');
+                } catch (\Symfony\Component\Process\Exception\RuntimeException $exception) {
+                    $this->discard($base);
+
+                    throw new RuntimeException('yt-dlp could not be started: '.$exception->getMessage());
+                }
+
+                $files = array_values(array_filter(
+                    glob($base.'.*') ?: [],
+                    fn (string $file) => ! preg_match('/\.(part|ytdl|temp)$/', $file),
+                ));
+
+                if ($process->isSuccessful() && $files !== []) {
+                    break;
+                }
+
                 $this->discard($base);
 
-                throw new RuntimeException('Fetching the audio from YouTube took too long.');
-            } catch (\Symfony\Component\Process\Exception\RuntimeException $exception) {
-                $this->discard($base);
+                if ($attempt >= $attempts || ! self::isTransient($process->getErrorOutput())) {
+                    throw new RuntimeException($this->failureMessage($process));
+                }
 
-                throw new RuntimeException('yt-dlp could not be started: '.$exception->getMessage());
+                // YouTube sometimes refuses a request for no lasting reason (several in a row make it likelier).
+                sleep(3 * $attempt);
             }
 
-            $files = array_values(array_filter(
-                glob($base.'.*') ?: [],
-                fn (string $file) => ! preg_match('/\.(part|ytdl|temp)$/', $file),
-            ));
-
-            if ($process->isSuccessful() && $files !== []) {
-                break;
+            // Anything else it left beside the audio (thumbnails, partial files) is not wanted.
+            foreach (array_slice($files, 1) as $extra) {
+                @unlink($extra);
             }
 
-            $this->discard($base);
-
-            if ($attempt >= $attempts || ! self::isTransient($process->getErrorOutput())) {
-                throw new RuntimeException($this->failureMessage($process));
+            return $files[0];
+        } finally {
+            if ($temporaryCookies !== null) {
+                @unlink($temporaryCookies);
             }
+        }
+    }
 
-            // YouTube sometimes refuses a request for no lasting reason (several in a row make it likelier).
-            sleep(3 * $attempt);
+    /**
+     * Prefer cookies uploaded in Admin Settings. They are decrypted only long enough to create a private temp file;
+     * the configured filesystem path remains a fallback for installations that already manage their own secret.
+     *
+     * @return array{0: ?string, 1: ?string} [path passed to yt-dlp, temporary path to remove]
+     */
+    private function cookiesFile(): array
+    {
+        try {
+            $contents = StorageSetting::first()?->youtube_cookies;
+        } catch (QueryException|DecryptException) {
+            $contents = null;
         }
 
-        // Anything else it left beside the audio (thumbnails, partial files) is not wanted.
-        foreach (array_slice($files, 1) as $extra) {
-            @unlink($extra);
+        if (filled($contents)) {
+            $path = tempnam(sys_get_temp_dir(), 'yt_cookies_');
+
+            if ($path === false || file_put_contents($path, $contents) === false) {
+                throw new RuntimeException('The saved YouTube cookies could not be prepared for yt-dlp.');
+            }
+
+            @chmod($path, 0600);
+
+            return [$path, $path];
         }
 
-        return $files[0];
+        $configured = config('services.yt_dlp.cookies');
+
+        return [filled($configured) ? (string) $configured : null, null];
     }
 
     /** Whether trying again could help: a refused or dropped request, not a video that is private, gone or blocked. */

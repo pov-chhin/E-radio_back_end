@@ -12,6 +12,7 @@ use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Services\OpusAudioProcessor;
 use Src\Catalog\Services\YoutubeAudioFetcher;
+use Src\Setting\Models\StorageSetting;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesAdminUser;
 use Tests\TestCase;
@@ -207,6 +208,20 @@ class CmsYoutubeAudioTest extends TestCase
         // About 24 kbps plus the container's own overhead — far from the 64 kbps stereo an upload gets.
         $bitsPerSecond = Storage::disk('public')->size($mediaContent->stream) * 8 / (float) $this->probe($file, 'format=duration');
         $this->assertLessThan(48_000, $bitsPerSecond);
+    }
+
+    public function test_the_fetcher_prepares_encrypted_admin_cookies_as_a_private_temporary_file(): void
+    {
+        $cookies = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsecret\n";
+        StorageSetting::firstOrFail()->update(['youtube_cookies' => $cookies]);
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'cookiesFile');
+
+        [$path, $temporary] = $method->invoke($fetcher);
+        $this->temporaryFiles[] = $temporary;
+
+        $this->assertSame($temporary, $path);
+        $this->assertSame($cookies, file_get_contents($path));
     }
 
     public function test_the_old_stream_stays_until_the_new_file_is_ready_and_is_then_deleted(): void
