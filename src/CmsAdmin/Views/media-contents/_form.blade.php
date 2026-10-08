@@ -181,6 +181,7 @@
                 $lockedCategoryId = $lockedCategoryId ?? null;
                 $hiddenFields = $hiddenFields ?? [];
                 $podcastRequired = $podcastRequired ?? false;
+                $lockedProgramId = $lockedProgramId ?? null;
             @endphp
             <label>{{ __('Category') }}
                 {{-- "New Song" fixes the category; a disabled select posts nothing, so a hidden field carries it. --}}
@@ -199,11 +200,13 @@
                     <span style="display:flex;align-items:center;justify-content:space-between;gap:8px">
                         {{ __('Podcast') }}
                         {{-- A new podcast is made on its own page, in a new tab so this form isn't lost; reload here to pick it. --}}
-                        @if(auth('admin')->user()?->hasPermission('create-programs'))
+                        @if(! $lockedProgramId && auth('admin')->user()?->hasPermission('create-programs'))
                             <a href="{{ route('admin.programs.create') }}" target="_blank" rel="noopener" class="primary-button compact" style="height:24px;padding:0 11px;font-size:9px;box-shadow:none" title="{{ __('Create a new podcast (opens in a new tab)') }}">{{ __('New') }}</a>
                         @endif
                     </span>
-                    <select id="program_id" name="program_id">
+                    {{-- An episode edited from its podcast's page keeps that podcast; a disabled select posts nothing, so a hidden field carries it. --}}
+                    @if($lockedProgramId)<input type="hidden" name="program_id" value="{{ $lockedProgramId }}">@endif
+                    <select id="program_id" @if($lockedProgramId) disabled @else name="program_id" @endif>
                         {{-- "New Podcast" has no "No podcast": a placeholder shows until one is picked, and can't be picked again. --}}
                         @if($podcastRequired)
                             <option value="" disabled hidden @selected(! old('program_id', $mediaContent->program_id ?? $podcast?->id ?? ''))>{{ __('Select a podcast…') }}</option>

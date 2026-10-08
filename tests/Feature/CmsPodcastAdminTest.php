@@ -796,6 +796,107 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->assertSame('pilot-episode', $episode->fresh()->slug);
     }
 
+    public function test_editing_an_episode_from_its_podcast_page_locks_the_category_and_podcast_and_hides_the_artist(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast();
+        $episode = $this->episode($podcast, 'Pilot Episode');
+
+        $html = $this->get("/admin/media-contents/{$episode->id}/edit?podcast={$podcast->id}")->assertOk()->getContent();
+
+        // Both selects show their value but are disabled, so hidden fields carry the values to the save.
+        $this->assertMatchesRegularExpression('/<select id="category_id" disabled>/', $html);
+        $this->assertMatchesRegularExpression('/<select id="program_id" disabled>/', $html);
+        $this->assertStringContainsString('<input type="hidden" name="category_id" value="'.$podcast->category_id.'">', $html);
+        $this->assertStringContainsString('<input type="hidden" name="program_id" value="'.$podcast->id.'">', $html);
+        $this->assertMatchesRegularExpression('/<select id="category_id".*?<option value="'.$podcast->category_id.'"[^>]* selected>/s', $html);
+        $this->assertMatchesRegularExpression('/<select id="program_id".*?<option value="'.$podcast->id.'"[^>]* selected>/s', $html);
+        // No Artist field, and no shortcut to make another podcast.
+        $this->assertStringNotContainsString('id="artist_id"', $html);
+        $this->assertStringNotContainsString('name="artist_id"', $html);
+        $this->assertStringNotContainsString(route('admin.programs.create'), $html);
+    }
+
+    public function test_the_add_episode_form_locks_the_category_and_podcast_and_hides_the_artist(): void
+    {
+        $this->signIn();
+        $health = Category::where('slug', 'health')->firstOrFail();
+        $podcast = $this->podcast('Healthy Habits', $health);
+
+        $html = $this->get("/admin/media-contents/create?podcast={$podcast->id}")->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression('/<select id="category_id" disabled>/', $html);
+        $this->assertMatchesRegularExpression('/<select id="program_id" disabled>/', $html);
+        $this->assertStringContainsString('<input type="hidden" name="category_id" value="'.$health->id.'">', $html);
+        $this->assertStringContainsString('<input type="hidden" name="program_id" value="'.$podcast->id.'">', $html);
+        $this->assertMatchesRegularExpression('/<select id="category_id".*?<option value="'.$health->id.'"[^>]* selected>/s', $html);
+        $this->assertMatchesRegularExpression('/<select id="program_id".*?<option value="'.$podcast->id.'"[^>]* selected>/s', $html);
+        $this->assertStringNotContainsString('id="artist_id"', $html);
+        $this->assertStringNotContainsString(route('admin.programs.create'), $html);
+    }
+
+    public function test_the_add_episode_form_with_an_unknown_podcast_is_the_plain_form(): void
+    {
+        $this->signIn();
+
+        $html = $this->get('/admin/media-contents/create?podcast=9999')->assertOk()->getContent();
+
+        $this->assertStringContainsString('<select id="category_id" name="category_id" required>', $html);
+        $this->assertStringContainsString('<select id="program_id" name="program_id">', $html);
+        $this->assertStringContainsString('<select id="artist_id" name="artist_id">', $html);
+    }
+
+    public function test_the_edit_form_without_a_podcast_keeps_its_selects_and_artist(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast();
+        $episode = $this->episode($podcast, 'Pilot Episode');
+
+        $html = $this->get("/admin/media-contents/{$episode->id}/edit")->assertOk()->getContent();
+
+        $this->assertStringContainsString('<select id="category_id" name="category_id" required>', $html);
+        $this->assertStringContainsString('<select id="program_id" name="program_id">', $html);
+        $this->assertStringContainsString('<select id="artist_id" name="artist_id">', $html);
+        $this->assertStringNotContainsString('<input type="hidden" name="program_id"', $html);
+    }
+
+    public function test_an_episode_opened_from_a_podcast_keeps_its_own_podcast_even_if_the_address_names_another(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast('Morning Brief');
+        $other = $this->podcast('Evening Brief');
+        $episode = $this->episode($podcast, 'Pilot Episode');
+
+        $this->get("/admin/media-contents/{$episode->id}/edit?podcast={$other->id}")
+            ->assertOk()
+            ->assertSee('<input type="hidden" name="program_id" value="'.$podcast->id.'">', false);
+    }
+
+    public function test_saving_an_episode_from_its_podcast_page_keeps_its_artist_podcast_and_category(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast();
+        $artist = \Src\Catalog\Models\Artist::create(['name' => 'Dr. Host', 'slug' => 'dr-host']);
+        $episode = $this->episode($podcast, 'Pilot Episode', ['artist_id' => $artist->id]);
+
+        // What the locked form posts: the hidden category and podcast, and no artist at all.
+        $this->put("/admin/media-contents/{$episode->id}", [
+            'podcast' => $podcast->id,
+            'category_id' => $podcast->category_id,
+            'program_id' => $podcast->id,
+            'title' => 'Pilot Episode, renamed',
+            'slug' => '',
+            'media_type' => 'audio',
+            'status' => 'private',
+        ])->assertRedirect(route('admin.programs.edit', $podcast));
+
+        $episode->refresh();
+        $this->assertSame('Pilot Episode, renamed', $episode->title);
+        $this->assertSame($artist->id, $episode->artist_id);
+        $this->assertSame($podcast->id, $episode->program_id);
+        $this->assertSame($podcast->category_id, $episode->category_id);
+    }
+
     public function test_episode_slugs_are_made_unique_and_an_unknown_podcast_falls_back_to_the_list(): void
     {
         $this->signIn();

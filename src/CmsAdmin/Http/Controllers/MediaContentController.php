@@ -71,17 +71,24 @@ class MediaContentController extends Controller
             $options['categories'] = $options['categories']->whereIn('slug', $articleForm['categories'])->values();
         }
 
+        // A new episode added from a podcast's page (?podcast=): it starts on that podcast and its category, which
+        // the form fixes (the selects show them but can't change them), and has no Artist.
+        $podcast = $this->podcastFrom($request);
+
         return view('cms-admin::media-contents.create', [
             ...$options,
-            'podcast' => $podcast = $this->podcastFrom($request),
+            'podcast' => $podcast,
             // "New Song Media Content": the title names the category the form starts on (not for an episode of a podcast).
             'titleCategory' => $podcast ? null : $options['categories']->firstWhere('id', $defaultCategory?->id),
             'fromMusic' => $fromMusic,
             // The category picked in the Music page's "New +" menu.
             'defaultCategoryId' => $defaultCategory?->id,
             // A single category is fixed rather than offered.
-            'lockedCategoryId' => ($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null,
-            'hiddenFields' => $articleForm['hide'] ?? [],
+            'lockedCategoryId' => $podcast
+                ? $podcast->category_id
+                : (($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null),
+            'lockedProgramId' => $podcast?->id,
+            'hiddenFields' => [...($articleForm['hide'] ?? []), ...($podcast ? ['artist'] : [])],
             'podcastRequired' => $articleForm['podcast_required'] ?? false,
         ]);
     }
@@ -145,14 +152,21 @@ class MediaContentController extends Controller
             $options['categories'] = $options['categories']->whereIn('slug', $articleForm['categories'])->values();
         }
 
+        // An episode opened from its podcast's page (?podcast=): its category and podcast are fixed at what it
+        // has now — the select shows them but can't change them — and the form has no Artist.
+        $podcast = $this->podcastFrom($request);
+
         return view('cms-admin::media-contents.edit', [
             'mediaContent' => $mediaContent,
             ...$options,
-            'podcast' => $this->podcastFrom($request),
+            'podcast' => $podcast,
             'fromMusic' => $fromMusic,
             'titleCategory' => $fromMusic ? $mediaContent->category : null,
-            'lockedCategoryId' => ($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null,
-            'hiddenFields' => $articleForm['hide'] ?? [],
+            'lockedCategoryId' => $podcast
+                ? $mediaContent->category_id
+                : (($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null),
+            'lockedProgramId' => $podcast ? ($mediaContent->program_id ?? $podcast->id) : null,
+            'hiddenFields' => [...($articleForm['hide'] ?? []), ...($podcast ? ['artist'] : [])],
             'podcastRequired' => $articleForm['podcast_required'] ?? false,
         ]);
     }
@@ -186,6 +200,11 @@ class MediaContentController extends Controller
             foreach (array_intersect_key(['podcast' => 'program_id', 'artist' => 'artist_id'], array_flip($hidden)) as $column) {
                 unset($data[$column]);
             }
+        }
+
+        // An episode's form from its podcast's page has no Artist field either (see editForm): same rule.
+        if ($this->podcastFrom($request)) {
+            unset($data['artist_id']);
         }
 
         $mediaContent->update($data);
