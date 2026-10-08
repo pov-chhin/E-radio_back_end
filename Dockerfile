@@ -43,12 +43,25 @@ RUN apt-get update \
         libpng-dev \
         libwebp-dev \
         libzip-dev \
+        python3 \
+        python3-pip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" bcmath exif gd intl opcache pcntl pdo_mysql zip \
     && a2enmod rewrite headers expires \
     && sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
     && sed -ri 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf \
     && rm -rf /var/lib/apt/lists/*
+
+# YouTube episodes (Src\Catalog\Jobs\FetchYoutubeAudio): yt-dlp fetches the audio, FFmpeg (above) shrinks it.
+# yt-dlp needs a JavaScript runtime to get past YouTube's challenge — without one YouTube answers 403 — so Node is
+# copied in from its own image (just the binary, no npm). Bookworm's pip refuses system-wide installs unless told
+# otherwise. YouTube changes often: redeploy (rebuild) now and then to pick up a newer yt-dlp.
+COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+RUN pip3 install --no-cache-dir --break-system-packages yt-dlp \
+    && node --version \
+    && yt-dlp --version
+# yt-dlp keeps what it learns about YouTube's player here (www-data has no home folder to write to).
+ENV XDG_CACHE_HOME=/var/www/html/storage/framework/cache
 
 WORKDIR /var/www/html
 
