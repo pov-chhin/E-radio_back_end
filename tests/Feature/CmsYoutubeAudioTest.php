@@ -14,6 +14,8 @@ use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Services\OpusAudioProcessor;
 use Src\Catalog\Services\YoutubeAudioFetcher;
 use Src\Setting\Models\StorageSetting;
+use Src\UserManagement\Models\Permission;
+use Src\UserManagement\Models\Role;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesAdminUser;
 use Tests\TestCase;
@@ -439,6 +441,10 @@ class CmsYoutubeAudioTest extends TestCase
         $failed = $this->episode([
             'category_id' => Category::where('slug', 'song')->firstOrFail()->id, 'source_url' => self::LINK, 'processing_status' => 'failed',
         ]);
+
+        // createAdmin() reuses one shared role, and setUp already gave it edit rights: take them off for this admin.
+        Role::where('slug', 'test-admin')->firstOrFail()->permissions()
+            ->detach(Permission::where('slug', 'edit-media-content')->value('id'));
         $this->actingAs($this->createAdmin(['view-media-content']), 'admin');
 
         $this->post("/admin/media-contents/{$failed->id}/retry-audio")->assertForbidden();
