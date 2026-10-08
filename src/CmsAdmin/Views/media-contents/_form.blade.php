@@ -84,7 +84,11 @@
                     @if(isset($mediaContent) && $mediaContent->processing_status === 'processing')
                         <span class="badge amber">{{ __('Audio processing') }}</span>
                     @elseif(isset($mediaContent) && $mediaContent->processing_status === 'failed')
-                        <span class="badge slate" title="{{ $mediaContent->processing_error }}">{{ __('Audio conversion failed — upload again to retry') }}</span>
+                        <span class="badge slate" title="{{ $mediaContent->processing_error }}">{{ $mediaContent->source_url ? __('YouTube audio could not be fetched — paste the link again to retry') : __('Audio conversion failed — upload again to retry') }}</span>
+                    @endif
+                    {{-- A YouTube link is not played from YouTube: its audio is fetched and kept as our own small file. --}}
+                    @if(isset($mediaContent) && $mediaContent->source_url)
+                        <small class="muted" style="font-weight:400">{{ __('Audio fetched from YouTube') }} · <a href="{{ $mediaContent->source_url }}" target="_blank" rel="noopener">{{ __('Open ↗') }}</a></small>
                     @endif
                     @if(isset($mediaContent) && $mediaContent->stream)
                         @php

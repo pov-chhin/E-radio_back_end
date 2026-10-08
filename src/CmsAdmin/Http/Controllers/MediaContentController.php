@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Src\Catalog\Jobs\FetchYoutubeAudio;
 use Src\Catalog\Jobs\ProcessMediaContentAudio;
 use Src\Catalog\Models\Artist;
 use Src\Catalog\Models\Category;
@@ -16,6 +17,7 @@ use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Models\Program;
 use Src\Catalog\Models\Tag;
 use Src\Catalog\Services\ImageVariantProcessor;
+use Src\Catalog\Services\YoutubeAudioFetcher;
 use Src\CmsAdmin\Http\Controllers\Concerns\GeneratesUniqueSlug;
 use Src\CmsAdmin\Http\Controllers\Concerns\ResolvesUploadedMedia;
 use Src\Notification\Notifications\MediaContentPublished;
@@ -396,6 +398,7 @@ class MediaContentController extends Controller
             $this->deleteStoredMedia($mediaContent->source_path);
             $mediaContent->update([
                 'source_path' => $sourcePath,
+                'source_url' => null,
                 'processing_status' => 'processing',
                 'processing_error' => null,
             ]);
@@ -406,12 +409,31 @@ class MediaContentController extends Controller
         }
 
         if ($request->filled('stream_url')) {
+            $url = trim((string) $request->input('stream_url'));
+
+            // A YouTube link is not audio the app can play: its audio is fetched on the server and shrunk to a
+            // small file in the background, like an upload. The current stream stays until the new one is ready.
+            if (YoutubeAudioFetcher::videoId($url) !== null) {
+                $this->deleteStoredMedia($mediaContent->source_path);
+                $mediaContent->update([
+                    'source_path' => null,
+                    'source_url' => $url,
+                    'processing_status' => 'processing',
+                    'processing_error' => null,
+                ]);
+
+                FetchYoutubeAudio::dispatch($mediaContent->id, $url)->afterCommit();
+
+                return true;
+            }
+
             $this->deleteStoredMedia($mediaContent->stream, $mediaContent->stream_disk);
             $this->deleteStoredMedia($mediaContent->source_path);
             $mediaContent->update([
                 'stream' => $request->input('stream_url'),
                 'stream_disk' => null,
                 'source_path' => null,
+                'source_url' => null,
                 'processing_status' => 'ready',
                 'processing_error' => null,
             ]);

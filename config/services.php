@@ -9,6 +9,22 @@ return [
         'hls_timeout' => env('FFMPEG_HLS_TIMEOUT', 300),
         'opus_bitrate' => env('FFMPEG_OPUS_BITRATE', '64k'),
         'opus_timeout' => env('FFMPEG_OPUS_TIMEOUT', 300),
+        // Episodes whose audio comes from a YouTube link: small mono Opus (clear for speech, light on mobile data).
+        'youtube_bitrate' => env('FFMPEG_YOUTUBE_BITRATE', '24k'),
+        'youtube_channels' => (int) env('FFMPEG_YOUTUBE_CHANNELS', 1),
+    ],
+
+    // Fetches the audio track of a YouTube link (see Src\Catalog\Services\YoutubeAudioFetcher).
+    'yt_dlp' => [
+        'binary' => env('YT_DLP_BINARY', 'yt-dlp'),
+        'timeout' => (int) env('YT_DLP_TIMEOUT', 300),
+        // Tries per video: YouTube now and then refuses a request (403) that works a moment later.
+        'attempts' => (int) env('YT_DLP_ATTEMPTS', 3),
+        'max_filesize' => env('YT_DLP_MAX_FILESIZE', '300M'),
+        // YouTube answers 403 unless yt-dlp can run its JavaScript challenge: have Deno or Node installed.
+        'js_runtimes' => array_values(array_filter(array_map('trim', explode(',', (string) env('YT_DLP_JS_RUNTIMES', 'deno,node'))))),
+        // Optional cookies.txt (Netscape format) for when YouTube asks a server to "sign in to confirm you're not a bot".
+        'cookies' => env('YT_DLP_COOKIES'),
     ],
 
     /*

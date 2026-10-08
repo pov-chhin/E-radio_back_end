@@ -9,8 +9,12 @@ use Symfony\Component\Process\Process;
 
 class OpusAudioProcessor
 {
-    /** Converts $sourcePath (a local file) to Opus and stores it under $directory on $disk (null: the local public disk). */
-    public function process(string $sourcePath, string $directory, ?string $disk = null): string
+    /**
+     * Converts $sourcePath (a local file) to Opus and stores it under $directory on $disk (null: the local public
+     * disk). $bitrate and $channels override the configured bitrate and keep-the-source's channels — a small
+     * mono file for speech, say.
+     */
+    public function process(string $sourcePath, string $directory, ?string $disk = null, ?string $bitrate = null, ?int $channels = null): string
     {
         $id = (string) Str::uuid();
         $temporaryOutput = sys_get_temp_dir().DIRECTORY_SEPARATOR."media_opus_{$id}.opus";
@@ -27,7 +31,8 @@ class OpusAudioProcessor
                 '-map', '0:a:0',
                 '-vn',
                 '-c:a', 'libopus',
-                '-b:a', config('services.ffmpeg.opus_bitrate', '64k'),
+                '-b:a', $bitrate ?? config('services.ffmpeg.opus_bitrate', '64k'),
+                ...($channels ? ['-ac', (string) $channels] : []),
                 '-vbr', 'on',
                 '-application', 'audio',
                 $temporaryOutput,

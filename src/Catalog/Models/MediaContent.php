@@ -14,7 +14,7 @@ class MediaContent extends Model
 {
     protected $fillable = [
         'category_id', 'program_id', 'title', 'slug', 'artist_id', 'author_id', 'description',
-        'media_type', 'stream', 'stream_disk', 'processing_status', 'source_path', 'processing_error',
+        'media_type', 'stream', 'stream_disk', 'processing_status', 'source_path', 'source_url', 'processing_error',
         'thumbnail', 'thumbnail_disk', 'duration_seconds', 'play_count', 'favorite_count',
         'is_published', 'published_at',
     ];
