@@ -85,6 +85,12 @@
                         <span class="badge amber">{{ __('Audio processing') }}</span>
                     @elseif(isset($mediaContent) && $mediaContent->processing_status === 'failed')
                         <span class="badge slate" title="{{ $mediaContent->processing_error }}">{{ $mediaContent->source_url ? __('YouTube audio could not be fetched — paste the link again to retry') : __('Audio conversion failed — upload again to retry') }}</span>
+                        @if($mediaContent->processing_error)
+                            <small class="muted" style="display:block;font-weight:400;overflow-wrap:anywhere">{{ \Illuminate\Support\Str::limit($mediaContent->processing_error, 300) }}</small>
+                        @endif
+                        @if(auth('admin')->user()?->hasPermission('edit-media-content'))
+                            <button type="submit" form="retry-audio-form" formnovalidate class="secondary-button compact" style="align-self:flex-start">{{ __('Retry') }}</button>
+                        @endif
                     @endif
                     {{-- A YouTube link is not played from YouTube: its audio is fetched and kept as our own small file. --}}
                     @if(isset($mediaContent) && $mediaContent->source_url)

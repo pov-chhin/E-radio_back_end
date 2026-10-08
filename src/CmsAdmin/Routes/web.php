@@ -78,6 +78,10 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::get('media-contents/edit/{category}/{media_content}', [MediaContentController::class, 'editIn'])->name('media-contents.edit-in')
         ->where(['category' => '[a-z0-9-]+', 'media_content' => '[0-9]+'])
         ->middleware('permission:edit-media-content');
+    // "Retry" beside a failed audio fetch/conversion: the same job again, without pasting the link or file again.
+    Route::post('media-contents/{media_content}/retry-audio', [MediaContentController::class, 'retryAudio'])->name('media-contents.retry-audio')
+        ->where('media_content', '[0-9]+')
+        ->middleware('permission:edit-media-content');
     Route::resource('media-contents', MediaContentController::class)->except(['show', 'create'])
         ->middlewareFor(['index'], 'permission:view-media-content')
         ->middlewareFor(['store'], 'permission:create-media-content')

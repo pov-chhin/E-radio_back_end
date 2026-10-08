@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Src\Catalog\Jobs\FetchYoutubeAudio;
+use Src\Catalog\Jobs\ProcessMediaContentAudio;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Services\OpusAudioProcessor;
@@ -348,5 +349,103 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertSame('ready', $mp3->fresh()->processing_status);
         $this->assertSame('ready', $done->fresh()->processing_status);
         Queue::assertPushed(FetchYoutubeAudio::class, 2);
+    }
+
+    public function test_a_failed_youtube_fetch_is_retried_without_pasting_the_link_again(): void
+    {
+        $mediaContent = $this->episode([
+            'source_url' => self::LINK, 'processing_status' => 'failed', 'processing_error' => 'Sign in to confirm you are not a bot',
+        ]);
+
+        $this->post("/admin/media-contents/{$mediaContent->id}/retry-audio")
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $mediaContent->refresh();
+        $this->assertSame('processing', $mediaContent->processing_status);
+        $this->assertNull($mediaContent->processing_error);
+        Queue::assertPushed(FetchYoutubeAudio::class, fn ($job) => $job->mediaContentId === $mediaContent->id && $job->url === self::LINK);
+    }
+
+    public function test_retry_only_applies_to_a_failed_episode(): void
+    {
+        $ready = $this->episode(['slug' => 'ready', 'source_url' => self::LINK, 'stream' => 'media-contents/streams/a.opus', 'processing_status' => 'ready']);
+        $busy = $this->episode(['slug' => 'busy', 'source_url' => self::LINK, 'processing_status' => 'processing']);
+
+        foreach ([$ready, $busy] as $episode) {
+            $this->post("/admin/media-contents/{$episode->id}/retry-audio")->assertRedirect();
+        }
+
+        $this->assertSame('ready', $ready->fresh()->processing_status);
+        $this->assertSame('processing', $busy->fresh()->processing_status);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_a_failed_upload_is_retried_from_the_source_file_that_was_kept(): void
+    {
+        Storage::disk('public')->put('media-contents/uploads/kept.wav', 'RIFF');
+        $mediaContent = $this->episode([
+            'source_path' => 'media-contents/uploads/kept.wav', 'processing_status' => 'failed', 'processing_error' => 'FFmpeg failed',
+        ]);
+
+        $this->post("/admin/media-contents/{$mediaContent->id}/retry-audio")->assertRedirect();
+
+        $this->assertSame('processing', $mediaContent->fresh()->processing_status);
+        Queue::assertPushed(ProcessMediaContentAudio::class, fn ($job) => $job->mediaContentId === $mediaContent->id
+            && $job->sourcePath === 'media-contents/uploads/kept.wav');
+    }
+
+    public function test_a_failure_with_nothing_left_to_retry_says_so_and_stays_failed(): void
+    {
+        // An upload whose source file is gone, and a failure with no source at all.
+        $gone = $this->episode(['slug' => 'gone', 'source_path' => 'media-contents/uploads/missing.wav', 'processing_status' => 'failed']);
+        $bare = $this->episode(['slug' => 'bare', 'processing_status' => 'failed']);
+
+        foreach ([$gone, $bare] as $episode) {
+            $this->post("/admin/media-contents/{$episode->id}/retry-audio")->assertRedirect()->assertSessionHas('status');
+            $this->assertSame('failed', $episode->fresh()->processing_status);
+        }
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_a_failed_episode_shows_its_reason_and_a_retry_button(): void
+    {
+        // Songs: the Article page's "All" tab lists them (and podcasts, news, health, economy).
+        $song = Category::where('slug', 'song')->firstOrFail()->id;
+        $failed = $this->episode(['slug' => 'failed', 'category_id' => $song, 'source_url' => self::LINK, 'processing_status' => 'failed', 'processing_error' => 'Sign in to confirm you are not a bot']);
+        $ready = $this->episode(['slug' => 'fine', 'title' => 'Fine One', 'category_id' => $song, 'stream' => 'media-contents/streams/a.opus', 'processing_status' => 'ready']);
+
+        // The edit page: the reason in plain sight, and a button for a separate form (forms cannot be nested).
+        $this->get("/admin/media-contents/{$failed->id}/edit")
+            ->assertOk()
+            ->assertSee('Sign in to confirm you are not a bot')
+            ->assertSee('form="retry-audio-form"', false)
+            ->assertSee('id="retry-audio-form"', false)
+            ->assertSee("/admin/media-contents/{$failed->id}/retry-audio", false);
+
+        // The Article list: a Retry beside the Failed badge, and none for an episode that is fine.
+        $list = $this->get('/admin/music')->assertOk()->getContent();
+        $this->assertStringContainsString("/admin/media-contents/{$failed->id}/retry-audio", $list);
+        $this->assertStringNotContainsString("/admin/media-contents/{$ready->id}/retry-audio", $list);
+
+        $this->get("/admin/media-contents/{$ready->id}/edit")
+            ->assertOk()
+            ->assertDontSee('id="retry-audio-form"', false);
+    }
+
+    public function test_without_permission_to_edit_there_is_no_retry(): void
+    {
+        $failed = $this->episode([
+            'category_id' => Category::where('slug', 'song')->firstOrFail()->id, 'source_url' => self::LINK, 'processing_status' => 'failed',
+        ]);
+        $this->actingAs($this->createAdmin(['view-media-content']), 'admin');
+
+        $this->post("/admin/media-contents/{$failed->id}/retry-audio")->assertForbidden();
+        $this->assertSame('failed', $failed->fresh()->processing_status);
+
+        $list = $this->get('/admin/music')->assertOk()->getContent();
+        $this->assertStringContainsString('Failed', $list, 'the failed episode is on the page');
+        $this->assertStringNotContainsString('retry-audio', $list);
     }
 }

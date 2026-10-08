@@ -7,6 +7,7 @@ use App\Support\MediaStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Src\Catalog\Jobs\FetchYoutubeAudio;
@@ -221,6 +222,33 @@ class MediaContentController extends Controller
             $request,
             $processing ? __('Media content updated. Audio conversion is processing in the background.') : __('Media content updated.'),
         );
+    }
+
+    /**
+     * "Retry" on a failed episode: runs the job that failed again. A YouTube link is fetched again; an upload is
+     * converted again from its source file, which is kept until a conversion succeeds. Nothing else is retryable.
+     */
+    public function retryAudio(MediaContent $mediaContent): RedirectResponse
+    {
+        if ($mediaContent->processing_status !== 'failed') {
+            return back()->with('status', __('Nothing to retry — upload the audio again.'));
+        }
+
+        if ($mediaContent->source_url && YoutubeAudioFetcher::videoId($mediaContent->source_url) !== null) {
+            $mediaContent->update(['processing_status' => 'processing', 'processing_error' => null]);
+            FetchYoutubeAudio::dispatch($mediaContent->id, $mediaContent->source_url)->afterCommit();
+
+            return back()->with('status', __('Trying again — the audio is being fetched.'));
+        }
+
+        if ($mediaContent->source_path && Storage::disk('public')->exists($mediaContent->source_path)) {
+            $mediaContent->update(['processing_status' => 'processing', 'processing_error' => null]);
+            ProcessMediaContentAudio::dispatch($mediaContent->id, $mediaContent->source_path)->afterCommit();
+
+            return back()->with('status', __('Trying again — the audio is being converted.'));
+        }
+
+        return back()->with('status', __('Nothing to retry — upload the audio again.'));
     }
 
     public function destroy(Request $request, MediaContent $mediaContent): RedirectResponse

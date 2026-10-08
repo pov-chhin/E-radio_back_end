@@ -61,6 +61,12 @@
                                 <span class="badge amber">{{ __('Processing') }}</span>
                             @elseif($episode->processing_status === 'failed')
                                 <span class="badge slate" title="{{ $episode->processing_error }}">{{ __('Failed') }}</span>
+                                @if(auth('admin')->user()?->hasPermission('edit-media-content'))
+                                    <form method="POST" action="{{ route('admin.media-contents.retry-audio', $episode) }}" style="display:inline">
+                                        @csrf
+                                        <button type="submit" class="secondary-button compact" style="margin-left:6px">{{ __('Retry') }}</button>
+                                    </form>
+                                @endif
                             @elseif(! $episode->stream_url)
                                 <span class="badge slate">{{ __('No audio') }}</span>
                             @else
