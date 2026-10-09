@@ -23,8 +23,8 @@ return [
         'max_filesize' => env('YT_DLP_MAX_FILESIZE', '300M'),
         // YouTube answers 403 unless yt-dlp can run its JavaScript challenge: have Deno or Node installed.
         'js_runtimes' => array_values(array_filter(array_map('trim', explode(',', (string) env('YT_DLP_JS_RUNTIMES', 'deno,node'))))),
-        // Optional cookies.txt (Netscape format) for when YouTube asks a server to "sign in to confirm you're not a bot".
-        'cookies' => env('YT_DLP_COOKIES'),
+        // Optional cookies.txt (Netscape format) for when YouTube asks the server to sign in. Keep it outside public/.
+        'cookies' => env('YT_DLP_COOKIES') ?: storage_path('app/youtube/cookies.txt'),
     ],
 
     /*

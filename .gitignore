@@ -16,6 +16,8 @@
 /public/build
 /public/hot
 /public/storage
+/public/cookies.txt
+/storage/app/youtube/cookies.txt
 /storage/*.key
 /storage/pail
 /vendor

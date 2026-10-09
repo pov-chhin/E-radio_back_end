@@ -149,6 +149,10 @@ class YoutubeAudioFetcher
         }
 
         if (filled($contents)) {
+            if (! self::validCookies($contents)) {
+                throw new RuntimeException('The saved YouTube cookies are invalid or empty. Upload a fresh Netscape cookies.txt in Admin Settings → YouTube.');
+            }
+
             $path = tempnam(sys_get_temp_dir(), 'yt_cookies_');
 
             if ($path === false || file_put_contents($path, $contents) === false) {
@@ -162,7 +166,42 @@ class YoutubeAudioFetcher
 
         $configured = config('services.yt_dlp.cookies');
 
-        return [filled($configured) ? (string) $configured : null, null];
+        if (! filled($configured) || ! is_file((string) $configured)) {
+            return [null, null];
+        }
+
+        $contents = @file_get_contents((string) $configured);
+
+        if (! is_string($contents) || ! self::validCookies($contents)) {
+            throw new RuntimeException('The configured YouTube cookies file is invalid or empty. Export fresh YouTube cookies in Netscape format, then upload them in Admin Settings → YouTube.');
+        }
+
+        return [(string) $configured, null];
+    }
+
+    /** yt-dlp requires a Netscape cookie jar containing at least one YouTube cookie. */
+    private static function validCookies(string $contents): bool
+    {
+        if (! str_contains($contents, 'Netscape HTTP Cookie File') && ! str_contains($contents, 'HTTP Cookie File')) {
+            return false;
+        }
+
+        foreach (preg_split('/\R/', $contents) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || (str_starts_with($line, '#') && ! str_starts_with($line, '#HttpOnly_'))) {
+                continue;
+            }
+
+            $columns = explode("\t", $line);
+            $domain = strtolower(str_replace('#HttpOnly_', '', $columns[0] ?? ''));
+
+            if (count($columns) >= 7 && ($domain === 'youtube.com' || str_ends_with($domain, '.youtube.com'))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Whether trying again could help: a refused or dropped request, not a video that is private, gone or blocked. */
@@ -197,6 +236,10 @@ class YoutubeAudioFetcher
                 $error = trim(substr($line, 6));
                 break;
             }
+        }
+
+        if ($error !== null && preg_match('/sign in to confirm .+ not a bot/i', $error)) {
+            return 'YouTube requires authentication. Upload a fresh Netscape cookies.txt in Admin Settings → YouTube, then retry the audio fetch. A YouTube API key cannot replace browser cookies.';
         }
 
         if ($error === null && $process->isSuccessful()) {

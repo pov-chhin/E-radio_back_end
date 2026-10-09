@@ -227,6 +227,33 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertSame($cookies, file_get_contents($path));
     }
 
+    public function test_an_empty_configured_cookie_file_is_rejected_before_yt_dlp_runs(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'yt_empty_cookies_');
+        $this->temporaryFiles[] = $path;
+        config(['services.yt_dlp.cookies' => $path]);
+
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'cookiesFile');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('invalid or empty');
+        $method->invoke($fetcher);
+    }
+
+    public function test_a_valid_configured_cookie_file_is_passed_to_yt_dlp(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'yt_valid_cookies_');
+        $this->temporaryFiles[] = $path;
+        file_put_contents($path, "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsecret\n");
+        config(['services.yt_dlp.cookies' => $path]);
+
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'cookiesFile');
+
+        $this->assertSame([$path, null], $method->invoke($fetcher));
+    }
+
     public function test_the_old_stream_stays_until_the_new_file_is_ready_and_is_then_deleted(): void
     {
         Storage::disk('public')->put('media-contents/streams/old.opus', 'old');

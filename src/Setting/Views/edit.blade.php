@@ -139,7 +139,7 @@
 
                 <div class="form-section">
                     <h3>{{ __('YouTube audio') }}</h3>
-                    <p>{{ __('Upload a Netscape-format cookies.txt export when YouTube asks the server to sign in to confirm it is not a bot. It is encrypted in the database and is never displayed again.') }}</p>
+                    <p>{{ __('Upload a fresh Netscape-format cookies.txt export when YouTube asks the server to sign in. A YouTube API key cannot authenticate yt-dlp. The cookie file is encrypted in the database and is never displayed again.') }}</p>
 
                     @if($youtubeCookiesSaved)
                         <div class="inline-warning" style="margin:0 0 16px">{{ __('YouTube cookies are configured. Upload a new file to replace them when they expire.') }}</div>
