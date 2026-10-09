@@ -6,9 +6,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use RuntimeException;
+use Src\Catalog\Jobs\FetchYoutubeAudio;
+use Src\Catalog\Models\Category;
+use Src\Catalog\Models\MediaContent;
 use Src\Setting\Models\StorageSetting;
 use Tests\Concerns\CreatesAdminUser;
 use Tests\TestCase;
@@ -96,6 +100,31 @@ class StorageSettingTest extends TestCase
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame($cookies, StorageSetting::firstOrFail()->youtube_cookies);
+    }
+
+    public function test_uploading_cookies_automatically_retries_failed_youtube_audio(): void
+    {
+        Queue::fake();
+        $link = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+        $mediaContent = MediaContent::create([
+            'category_id' => Category::where('slug', 'podcast')->firstOrFail()->id,
+            'title' => 'Failed YouTube audio',
+            'slug' => 'failed-youtube-audio',
+            'media_type' => 'audio',
+            'source_url' => $link,
+            'processing_status' => 'failed',
+            'processing_error' => 'YouTube requires authentication.',
+        ]);
+        $cookies = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsecret\n";
+
+        $this->put('/admin/settings/youtube', [
+            'youtube_cookies_file' => UploadedFile::fake()->createWithContent('cookies.txt', $cookies),
+        ])->assertRedirect()->assertSessionHas('status', 'YouTube cookies saved securely. Retrying 1 failed audio fetch.');
+
+        $mediaContent->refresh();
+        $this->assertSame('processing', $mediaContent->processing_status);
+        $this->assertNull($mediaContent->processing_error);
+        Queue::assertPushed(FetchYoutubeAudio::class, fn (FetchYoutubeAudio $job) => $job->mediaContentId === $mediaContent->id && $job->url === $link);
     }
 
     public function test_invalid_youtube_cookie_file_is_rejected(): void

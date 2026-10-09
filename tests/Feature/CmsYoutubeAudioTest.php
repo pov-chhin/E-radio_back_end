@@ -283,6 +283,7 @@ class CmsYoutubeAudioTest extends TestCase
         $method = new \ReflectionMethod($fetcher, 'authenticationArguments');
 
         $this->assertSame(['--cookies-from-browser', 'edge'], $method->invoke($fetcher, 'cookies.txt'));
+        $this->assertSame(['--cookies', 'cookies.txt'], $method->invoke($fetcher, 'cookies.txt', true));
     }
 
     public function test_the_old_stream_stays_until_the_new_file_is_ready_and_is_then_deleted(): void

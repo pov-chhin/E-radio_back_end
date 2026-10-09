@@ -75,7 +75,8 @@ class YoutubeAudioFetcher
 
         [$cookies, $temporaryCookies] = $this->cookiesFile();
 
-        array_push($command, ...$this->authenticationArguments($cookies));
+        // An Admin upload is an explicit choice and wins over the optional local-browser fallback.
+        array_push($command, ...$this->authenticationArguments($cookies, $temporaryCookies !== null));
 
         // Always the canonical address built from the id, never the pasted text (tracking parameters, other hosts).
         $command[] = 'https://www.youtube.com/watch?v='.$videoId;
@@ -177,8 +178,12 @@ class YoutubeAudioFetcher
     }
 
     /** @return list<string> */
-    private function authenticationArguments(?string $cookies): array
+    private function authenticationArguments(?string $cookies, bool $uploadedCookies = false): array
     {
+        if ($uploadedCookies && $cookies !== null) {
+            return ['--cookies', $cookies];
+        }
+
         $browser = config('services.yt_dlp.cookies_from_browser');
 
         if (filled($browser)) {

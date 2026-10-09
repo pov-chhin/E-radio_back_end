@@ -11,6 +11,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Src\Catalog\Jobs\FetchYoutubeAudio;
+use Src\Catalog\Models\MediaContent;
+use Src\Catalog\Services\YoutubeAudioFetcher;
 use Src\Setting\Models\LanguageSetting;
 use Src\Setting\Models\RadioScraperSetting;
 use Src\Setting\Models\RadioStudioSetting;
@@ -144,7 +147,29 @@ class SettingController extends Controller
 
         $setting->update(['youtube_cookies' => $contents]);
 
-        return back()->with('status', __('YouTube cookies saved securely. Failed YouTube audio can now be retried.'))->with('settings_tab', 'youtube');
+        $retried = 0;
+
+        MediaContent::query()
+            ->where('processing_status', 'failed')
+            ->whereNotNull('source_url')
+            ->eachById(function (MediaContent $mediaContent) use (&$retried): void {
+                if (YoutubeAudioFetcher::videoId((string) $mediaContent->source_url) === null) {
+                    return;
+                }
+
+                $mediaContent->update([
+                    'processing_status' => 'processing',
+                    'processing_error' => null,
+                ]);
+                FetchYoutubeAudio::dispatch($mediaContent->id, $mediaContent->source_url)->afterCommit();
+                $retried++;
+            });
+
+        $status = $retried > 0
+            ? trans_choice('YouTube cookies saved securely. Retrying :count failed audio fetch.|YouTube cookies saved securely. Retrying :count failed audio fetches.', $retried, ['count' => $retried])
+            : __('YouTube cookies saved securely.');
+
+        return back()->with('status', $status)->with('settings_tab', 'youtube');
     }
 
     /** A Netscape/Mozilla cookie file has a supported header and at least one YouTube cookie row. */
