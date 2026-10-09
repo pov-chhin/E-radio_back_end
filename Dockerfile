@@ -53,12 +53,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # YouTube episodes (Src\Catalog\Jobs\FetchYoutubeAudio): yt-dlp fetches the audio, FFmpeg (above) shrinks it.
-# yt-dlp needs a JavaScript runtime to get past YouTube's challenge — without one YouTube answers 403 — so Node is
-# copied in from its own image (just the binary, no npm). Bookworm's pip refuses system-wide installs unless told
-# otherwise. YouTube changes often: redeploy (rebuild) now and then to pick up a newer yt-dlp.
+# yt-dlp needs a JavaScript runtime to get past YouTube's challenge — without one YouTube answers 403. Deno is the one
+# it prefers and Node (tested working) is the fallback; both are copied in as bare binaries from their own images
+# (no npm). The challenge solver scripts (yt-dlp-ejs) only come with the "default" extra, so install that: a plain
+# `pip install yt-dlp` leaves them out. Bookworm's pip refuses system-wide installs unless told otherwise. YouTube
+# changes often: redeploy (rebuild) now and then to pick up a newer yt-dlp.
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
-RUN pip3 install --no-cache-dir --break-system-packages yt-dlp \
+RUN pip3 install --no-cache-dir --break-system-packages "yt-dlp[default]" \
+    && deno --version | head -1 \
     && node --version \
+    && pip3 show yt-dlp-ejs | head -2 \
     && yt-dlp --version
 # yt-dlp keeps what it learns about YouTube's player here (www-data has no home folder to write to).
 ENV XDG_CACHE_HOME=/var/www/html/storage/framework/cache
