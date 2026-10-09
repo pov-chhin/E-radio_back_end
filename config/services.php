@@ -25,6 +25,8 @@ return [
         'js_runtimes' => array_values(array_filter(array_map('trim', explode(',', (string) env('YT_DLP_JS_RUNTIMES', 'deno,node'))))),
         // Optional cookies.txt (Netscape format) for when YouTube asks the server to sign in. Keep it outside public/.
         'cookies' => env('YT_DLP_COOKIES') ?: storage_path('app/youtube/cookies.txt'),
+        // Local-machine convenience: let yt-dlp read the queue worker account's browser profile directly.
+        'cookies_from_browser' => env('YT_DLP_COOKIES_FROM_BROWSER'),
         // Optional cookie-free Innertube visitor data. This is not a YouTube API key and is less reliable than cookies.
         'visitor_data' => env('YT_DLP_VISITOR_DATA'),
     ],

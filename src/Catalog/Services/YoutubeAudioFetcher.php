@@ -179,6 +179,12 @@ class YoutubeAudioFetcher
     /** @return list<string> */
     private function authenticationArguments(?string $cookies): array
     {
+        $browser = config('services.yt_dlp.cookies_from_browser');
+
+        if (filled($browser)) {
+            return ['--cookies-from-browser', (string) $browser];
+        }
+
         if ($cookies !== null) {
             return ['--cookies', $cookies];
         }

@@ -258,6 +258,7 @@ class CmsYoutubeAudioTest extends TestCase
     {
         config([
             'services.yt_dlp.cookies' => null,
+            'services.yt_dlp.cookies_from_browser' => null,
             'services.yt_dlp.visitor_data' => 'visitor-data-value',
         ]);
 
@@ -269,6 +270,19 @@ class CmsYoutubeAudioTest extends TestCase
             '--extractor-args', 'youtube:player_skip=webpage,configs;visitor_data=visitor-data-value',
         ], $method->invoke($fetcher, null));
         $this->assertSame(['--cookies', 'cookies.txt'], $method->invoke($fetcher, 'cookies.txt'));
+    }
+
+    public function test_an_enabled_browser_profile_takes_precedence_over_cookie_files(): void
+    {
+        config([
+            'services.yt_dlp.cookies_from_browser' => 'edge',
+            'services.yt_dlp.visitor_data' => 'visitor-data-value',
+        ]);
+
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'authenticationArguments');
+
+        $this->assertSame(['--cookies-from-browser', 'edge'], $method->invoke($fetcher, 'cookies.txt'));
     }
 
     public function test_the_old_stream_stays_until_the_new_file_is_ready_and_is_then_deleted(): void
