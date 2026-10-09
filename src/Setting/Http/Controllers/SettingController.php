@@ -147,10 +147,10 @@ class SettingController extends Controller
         return back()->with('status', __('YouTube cookies saved securely. Failed YouTube audio can now be retried.'))->with('settings_tab', 'youtube');
     }
 
-    /** A Netscape cookie file has a header and at least one seven-column youtube.com cookie row. */
+    /** A Netscape/Mozilla cookie file has a supported header and at least one YouTube cookie row. */
     private function validYoutubeCookies(string $contents): bool
     {
-        if (! str_contains($contents, 'Netscape HTTP Cookie File')) {
+        if (! str_contains($contents, 'Netscape HTTP Cookie File') && ! str_contains($contents, 'HTTP Cookie File')) {
             return false;
         }
 

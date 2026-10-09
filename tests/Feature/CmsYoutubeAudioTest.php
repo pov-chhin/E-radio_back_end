@@ -254,6 +254,23 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertSame([$path, null], $method->invoke($fetcher));
     }
 
+    public function test_visitor_data_is_configured_separately_from_browser_cookies(): void
+    {
+        config([
+            'services.yt_dlp.cookies' => null,
+            'services.yt_dlp.visitor_data' => 'visitor-data-value',
+        ]);
+
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'authenticationArguments');
+
+        $this->assertSame([
+            '--extractor-args', 'youtubetab:skip=webpage',
+            '--extractor-args', 'youtube:player_skip=webpage,configs;visitor_data=visitor-data-value',
+        ], $method->invoke($fetcher, null));
+        $this->assertSame(['--cookies', 'cookies.txt'], $method->invoke($fetcher, 'cookies.txt'));
+    }
+
     public function test_the_old_stream_stays_until_the_new_file_is_ready_and_is_then_deleted(): void
     {
         Storage::disk('public')->put('media-contents/streams/old.opus', 'old');

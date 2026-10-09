@@ -75,10 +75,7 @@ class YoutubeAudioFetcher
 
         [$cookies, $temporaryCookies] = $this->cookiesFile();
 
-        if ($cookies !== null) {
-            $command[] = '--cookies';
-            $command[] = $cookies;
-        }
+        array_push($command, ...$this->authenticationArguments($cookies));
 
         // Always the canonical address built from the id, never the pasted text (tracking parameters, other hosts).
         $command[] = 'https://www.youtube.com/watch?v='.$videoId;
@@ -177,6 +174,25 @@ class YoutubeAudioFetcher
         }
 
         return [(string) $configured, null];
+    }
+
+    /** @return list<string> */
+    private function authenticationArguments(?string $cookies): array
+    {
+        if ($cookies !== null) {
+            return ['--cookies', $cookies];
+        }
+
+        $visitorData = config('services.yt_dlp.visitor_data');
+
+        if (! filled($visitorData)) {
+            return [];
+        }
+
+        return [
+            '--extractor-args', 'youtubetab:skip=webpage',
+            '--extractor-args', 'youtube:player_skip=webpage,configs;visitor_data='.(string) $visitorData,
+        ];
     }
 
     /** yt-dlp requires a Netscape cookie jar containing at least one YouTube cookie. */

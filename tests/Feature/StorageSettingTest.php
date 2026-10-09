@@ -87,6 +87,17 @@ class StorageSettingTest extends TestCase
             ->assertDontSee('secret-session-value');
     }
 
+    public function test_the_alternate_mozilla_header_and_http_only_youtube_cookies_are_accepted(): void
+    {
+        $cookies = "# HTTP Cookie File\n#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsecret-session-value\n";
+
+        $this->put('/admin/settings/youtube', [
+            'youtube_cookies_file' => UploadedFile::fake()->createWithContent('cookies.txt', $cookies),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame($cookies, StorageSetting::firstOrFail()->youtube_cookies);
+    }
+
     public function test_invalid_youtube_cookie_file_is_rejected(): void
     {
         $this->put('/admin/settings/youtube', [
