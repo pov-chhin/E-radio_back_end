@@ -8,7 +8,7 @@
             <p class="eyebrow">{{ __('Taxonomy') }}</p>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px">
                 <h1>{{ __('Article') }}</h1>
-                {{-- One tab per group (Song; Program = News / Health / Economy/Finance; Podcasts); each submits the GET form with its key. --}}
+                {{-- One tab per group (Song; Audio = News / Health / Economy/Finance; Podcasts); each submits the GET form with its key. --}}
                 <form method="GET" action="{{ route('admin.music.index') }}" aria-label="{{ __('Filter by category') }}">
                     <div class="tag-view-toggle">
                         <button type="submit" name="category" value="" style="padding:7px 14px;font-size:10px" @class(['active' => ! $activeTab])>{{ __('All') }}</button>
@@ -18,9 +18,9 @@
                     </div>
                 </form>
             </div>
-            <p>{{ __('Songs, Program (News, Health and Economy/Finance) and Podcasts.') }}</p>
+            <p>{{ __('Songs, Audio (News, Health and Economy/Finance) and Podcasts.') }}</p>
         </div>
-        {{-- One straight link that follows the tab: "New Program" on the Program tab (it opens on News; the form's category list picks Health or Economy/Finance); All starts a Song. --}}
+        {{-- One straight link that follows the tab: "New Audio" on the Audio tab (it opens on News; the form's category list picks Health or Economy/Finance); All starts a Song. --}}
         <a href="{{ route('admin.media-contents.create', ['category' => $newTab['new']]) }}" class="primary-button">{{ __('New :name', ['name' => $newTab['new_name']]) }} <i class="fa fa-plus" aria-hidden="true"></i></a>
     </div>
 
@@ -70,7 +70,7 @@
                                 </span>
                             </div>
                         </td>
-                        {{-- "All" names the group (Song, Program, Podcasts, Ambient Music) rather than News / Health / Economy/Finance; a tab shows the category itself. --}}
+                        {{-- "All" names the group (Song, Audio, Podcasts, Ambient Music) rather than News / Health / Economy/Finance; a tab shows the category itself. --}}
                         <td class="muted">{{ $activeTab ? $mediaContent->category->name : ($groupLabels[$mediaContent->category->slug] ?? $mediaContent->category->name) }}</td>
                         <td class="muted" data-order="{{ (int) $mediaContent->stream_size }}">{{ $mediaContent->stream_size_label }}</td>
                         <td>

@@ -149,7 +149,7 @@ class CmsMusicAdminTest extends TestCase
         $this->track('A Podcast Episode', 'podcast');
 
         $html = $this->get('/admin/music')->assertOk()->getContent();
-        // The tabs, in order: All, Song, Program, Podcasts, Ambient Music. News, Health and Economy/Finance are one
+        // The tabs, in order: All, Song, Audio, Podcasts, Ambient Music. News, Health and Economy/Finance are one
         // tab, not three.
         $order = array_map(fn ($key) => strpos($html, 'name="category" value="'.$key.'"'), ['', 'song', 'program', 'podcast', 'ambient']);
         $this->assertNotContains(false, $order);
@@ -160,7 +160,7 @@ class CmsMusicAdminTest extends TestCase
             $this->assertStringNotContainsString('name="category" value="'.$slug.'"', $html);
         }
         $this->assertMatchesRegularExpression('/value="" [^>]*class="active">All</', $html);
-        $this->assertMatchesRegularExpression('/value="program" [^>]*>Program</', $html);
+        $this->assertMatchesRegularExpression('/value="program" [^>]*>Audio</', $html);
         $this->assertMatchesRegularExpression('/value="podcast" [^>]*>Podcasts</', $html);
         $this->assertMatchesRegularExpression('/value="ambient" [^>]*>Ambient Music</', $html);
 
@@ -184,7 +184,7 @@ class CmsMusicAdminTest extends TestCase
             ->assertDontSee('An Old Ambient Track')
             ->assertDontSee('A Podcast Episode')
             ->getContent();
-        $this->assertMatchesRegularExpression('/value="program" [^>]*class="active">Program</', $program);
+        $this->assertMatchesRegularExpression('/value="program" [^>]*class="active">Audio</', $program);
 
         // Podcasts: the podcast episodes only.
         $podcasts = $this->get('/admin/music?category=podcast')
@@ -330,13 +330,13 @@ class CmsMusicAdminTest extends TestCase
 
         $html = $this->get('/admin/music?category=program')
             ->assertOk()
-            ->assertSee('Nothing in Program yet.')
+            ->assertSee('Nothing in Audio yet.')
             ->getContent();
 
         // No hand-made "empty" row: DataTables itself shows the message, so the search box and paging are there.
         $this->assertStringNotContainsString('empty-row', $html);
         $this->assertStringContainsString("jQuery('#article-table').DataTable(", $html);
-        $this->assertStringContainsString("emptyTable: 'Nothing in Program yet.'", $html);
+        $this->assertStringContainsString("emptyTable: 'Nothing in Audio yet.'", $html);
         // ...centred across the table, as the old empty row was.
         $this->assertMatchesRegularExpression('/#article-table td\.dt-empty \{[^}]*text-align: center/', $html);
 
@@ -358,13 +358,13 @@ class CmsMusicAdminTest extends TestCase
         $this->track('A Podcast Episode', 'podcast');
         $cell = fn (string $html, string $title) => preg_match('/'.preg_quote($title, '/').'<\/b>.*?<td class="muted">([^<]*)<\/td>/s', $html, $m) ? trim($m[1]) : null;
 
-        // All: Song, Program (for News, Health and Economy/Finance), Podcasts, Ambient Music.
+        // All: Song, Audio (for News, Health and Economy/Finance), Podcasts, Ambient Music.
         $all = $this->get('/admin/music')->assertOk()->getContent();
         $this->assertSame('Song', $cell($all, 'A Song'));
         $this->assertSame('Ambient Music', $cell($all, 'An Old Ambient Track'));
-        $this->assertSame('Program', $cell($all, 'A News Story'));
-        $this->assertSame('Program', $cell($all, 'A Health Tip'));
-        $this->assertSame('Program', $cell($all, 'A Market Note'));
+        $this->assertSame('Audio', $cell($all, 'A News Story'));
+        $this->assertSame('Audio', $cell($all, 'A Health Tip'));
+        $this->assertSame('Audio', $cell($all, 'A Market Note'));
         $this->assertSame('Podcasts', $cell($all, 'A Podcast Episode'));
         foreach (['News', 'Health', 'Economy/Finance'] as $name) {
             $this->assertStringNotContainsString('<td class="muted">'.$name.'</td>', $all);
@@ -924,7 +924,7 @@ class CmsMusicAdminTest extends TestCase
         foreach (['/admin/music', '/admin/music?category=song'] as $url) {
             $this->get($url)->assertOk()->assertSee('href="'.$link('song').'" class="primary-button">New Song ', false);
         }
-        $this->get('/admin/music?category=program')->assertOk()->assertSee('href="'.$link('news').'" class="primary-button">New Program ', false);
+        $this->get('/admin/music?category=program')->assertOk()->assertSee('href="'.$link('news').'" class="primary-button">New Audio ', false);
         $this->get('/admin/music?category=podcast')->assertOk()->assertSee('href="'.$link('podcast').'" class="primary-button">New Podcast ', false);
 
         // The form it opens starts on that category and returns here.

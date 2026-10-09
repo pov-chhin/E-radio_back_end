@@ -13,14 +13,14 @@ class MusicController extends Controller
 {
     /**
      * The tabs above the list, in this order: the categories each one lists, the one its "New" button
-     * starts, and that button's name in the singular ("New Podcast"). Program groups News, Health and
-     * Economy/Finance. Ambient Music is also a set of moods any content can carry, so its tab lists whatever
+     * starts, and that button's name in the singular ("New Podcast"). Audio (key `program`, kept so links keep
+     * working) groups News, Health and Economy/Finance. Ambient Music is also a set of moods any content can carry, so its tab lists whatever
      * carries a mood (`tagged`) as well as anything filed under the category, and its "New" opens the form
      * with the category fixed on Ambient Music. "All" lists every category here.
      */
     public const TABS = [
         'song' => ['label' => 'Song', 'new_name' => 'Song', 'categories' => ['song'], 'new' => 'song'],
-        'program' => ['label' => 'Program', 'new_name' => 'Program', 'categories' => ['news', 'health', 'economyfinance'], 'new' => 'news'],
+        'program' => ['label' => 'Audio', 'new_name' => 'Audio', 'categories' => ['news', 'health', 'economyfinance'], 'new' => 'news'],
         'podcast' => ['label' => 'Podcasts', 'new_name' => 'Podcast', 'categories' => ['podcast'], 'new' => 'podcast'],
         'ambient' => ['label' => 'Ambient Music', 'new_name' => 'Ambient Music', 'categories' => ['ambient-music'], 'tagged' => 'ambient-music', 'new' => 'ambient-music'],
     ];
@@ -49,7 +49,7 @@ class MusicController extends Controller
         // "New" follows the tab; All starts a Song.
         $newTab = $activeTab ?? $tabs['song'];
 
-        // Category slug => the tab it belongs to: "All" names each row's group (Program for News / Health /
+        // Category slug => the tab it belongs to: "All" names each row's group (Audio for News / Health /
         // Economy/Finance) instead of its category.
         $groupLabels = $tabs->flatMap(fn (array $tab) => collect($tab['categories'])->mapWithKeys(fn (string $slug) => [$slug => $tab['label']]));
 
