@@ -73,6 +73,8 @@ class YoutubeAudioFetcher
             $command[] = $runtime;
         }
 
+        array_push($command, ...$this->proxyArguments());
+
         [$cookies, $temporaryCookies] = $this->cookiesFile();
 
         // An Admin upload is an explicit choice and wins over the optional local-browser fallback.
@@ -244,6 +246,42 @@ class YoutubeAudioFetcher
         }
     }
 
+    /**
+     * YouTube answers "sign in to confirm you're not a bot" to a datacenter address (a VPS) but not to a home
+     * one, so a server can send just this request through a proxy that leaves from such an address
+     * (YT_DLP_PROXY: http://, https://, socks5:// or socks5h://, with user:pass@ if it needs them).
+     *
+     * @return list<string>
+     */
+    private function proxyArguments(): array
+    {
+        $proxy = trim((string) config('services.yt_dlp.proxy'));
+
+        if ($proxy === '') {
+            return [];
+        }
+
+        if (! preg_match('#^(https?|socks4a?|socks5h?)://[^\s/]+#i', $proxy)) {
+            throw new RuntimeException('YT_DLP_PROXY is not a proxy address. Use a form like socks5://host:1080 or http://user:password@host:8080.');
+        }
+
+        return ['--proxy', $proxy];
+    }
+
+    /** The proxy address (and its password) can show up in yt-dlp's errors, which are stored and shown to admins. */
+    private function withoutProxySecrets(string $text): string
+    {
+        $proxy = trim((string) config('services.yt_dlp.proxy'));
+
+        if ($proxy === '') {
+            return $text;
+        }
+
+        $secrets = array_filter([$proxy, parse_url($proxy, PHP_URL_PASS)], fn ($secret) => is_string($secret) && $secret !== '');
+
+        return str_replace($secrets, '[proxy]', $text);
+    }
+
     private function failureMessage(Process $process): string
     {
         // 127 is the shell's "command not found"; Windows words it differently.
@@ -273,7 +311,7 @@ class YoutubeAudioFetcher
             return 'YouTube gave no audio for this link (live streams cannot be fetched).';
         }
 
-        return 'YouTube audio could not be fetched: '.($error ?? ($lines[array_key_last($lines)] ?? 'no reason given'));
+        return 'YouTube audio could not be fetched: '.$this->withoutProxySecrets($error ?? ($lines[array_key_last($lines)] ?? 'no reason given'));
     }
 
     private static function isHost(string $host, string $domain): bool

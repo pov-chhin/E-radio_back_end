@@ -334,6 +334,43 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertSame(['--cookies', 'cookies.txt'], $method->invoke($fetcher, 'cookies.txt', true));
     }
 
+    public function test_a_configured_proxy_is_passed_to_yt_dlp_and_nothing_is_added_without_one(): void
+    {
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'proxyArguments');
+
+        config(['services.yt_dlp.proxy' => null]);
+        $this->assertSame([], $method->invoke($fetcher));
+
+        config(['services.yt_dlp.proxy' => ' socks5h://user:pa55@127.0.0.1:1080 ']);
+        $this->assertSame(['--proxy', 'socks5h://user:pa55@127.0.0.1:1080'], $method->invoke($fetcher));
+    }
+
+    public function test_a_proxy_setting_that_is_not_an_address_is_refused_with_a_clear_message(): void
+    {
+        config(['services.yt_dlp.proxy' => '127.0.0.1:1080']);
+
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'proxyArguments');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('YT_DLP_PROXY is not a proxy address');
+        $method->invoke($fetcher);
+    }
+
+    public function test_the_proxy_address_and_its_password_never_reach_the_error_shown_to_admins(): void
+    {
+        config(['services.yt_dlp.proxy' => 'http://user:pa55@proxy.example.com:8080']);
+
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'withoutProxySecrets');
+
+        $text = $method->invoke($fetcher, 'Unable to connect to proxy http://user:pa55@proxy.example.com:8080 (password pa55 rejected)');
+
+        $this->assertSame('Unable to connect to proxy [proxy] (password [proxy] rejected)', $text);
+        $this->assertStringNotContainsString('pa55', $text);
+    }
+
     public function test_the_old_stream_stays_until_the_new_file_is_ready_and_is_then_deleted(): void
     {
         Storage::disk('public')->put('media-contents/streams/old.opus', 'old');

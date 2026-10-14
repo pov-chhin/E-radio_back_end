@@ -27,6 +27,9 @@ return [
         'cookies' => env('YT_DLP_COOKIES') ?: storage_path('app/youtube/cookies.txt'),
         // Local-machine convenience: let yt-dlp read the queue worker account's browser profile directly.
         'cookies_from_browser' => env('YT_DLP_COOKIES_FROM_BROWSER'),
+        // Optional proxy for yt-dlp only (http://, https://, socks5://[user:password@]host:port). YouTube blocks datacenter
+        // addresses (a VPS) but not home ones: a proxy that leaves from a home or residential address gets past that.
+        'proxy' => env('YT_DLP_PROXY') ?: null,
         // Optional cookie-free Innertube visitor data. This is not a YouTube API key and is less reliable than cookies.
         'visitor_data' => env('YT_DLP_VISITOR_DATA'),
     ],
