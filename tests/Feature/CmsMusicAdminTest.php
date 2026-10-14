@@ -61,6 +61,19 @@ class CmsMusicAdminTest extends TestCase
         $this->assertFalse(strpos($html, 'href="'.route('admin.categories.index').'"'));
     }
 
+    public function test_the_audio_tab_lives_at_category_audio_and_the_old_program_address_redirects_to_it(): void
+    {
+        $this->signIn();
+
+        $this->get('/admin/music?category=program')->assertRedirectToRoute('admin.music.index', ['category' => 'audio']);
+
+        // The tab is selected at its new address, and its button and heading still say Audio.
+        $html = $this->get('/admin/music?category=audio')->assertOk()->getContent();
+        $this->assertStringContainsString('name="category" value="audio"', $html);
+        $this->assertStringNotContainsString('value="program"', $html);
+        $this->assertMatchesRegularExpression('#<button[^>]*value="audio"[^>]*class="[^"]*active[^"]*"[^>]*>\s*Audio\s*</button>#', $html);
+    }
+
     public function test_the_page_and_its_menu_item_are_called_article(): void
     {
         $this->signIn();
@@ -151,7 +164,7 @@ class CmsMusicAdminTest extends TestCase
         $html = $this->get('/admin/music')->assertOk()->getContent();
         // The tabs, in order: All, Song, Audio, Podcasts, Ambient Music. News, Health and Economy/Finance are one
         // tab, not three.
-        $order = array_map(fn ($key) => strpos($html, 'name="category" value="'.$key.'"'), ['', 'song', 'program', 'podcast', 'ambient']);
+        $order = array_map(fn ($key) => strpos($html, 'name="category" value="'.$key.'"'), ['', 'song', 'audio', 'podcast', 'ambient']);
         $this->assertNotContains(false, $order);
         $sorted = $order;
         sort($sorted);
@@ -160,7 +173,7 @@ class CmsMusicAdminTest extends TestCase
             $this->assertStringNotContainsString('name="category" value="'.$slug.'"', $html);
         }
         $this->assertMatchesRegularExpression('/value="" [^>]*class="active">All</', $html);
-        $this->assertMatchesRegularExpression('/value="program" [^>]*>Audio</', $html);
+        $this->assertMatchesRegularExpression('/value="audio" [^>]*>Audio</', $html);
         $this->assertMatchesRegularExpression('/value="podcast" [^>]*>Podcasts</', $html);
         $this->assertMatchesRegularExpression('/value="ambient" [^>]*>Ambient Music</', $html);
 
@@ -175,7 +188,7 @@ class CmsMusicAdminTest extends TestCase
             ->assertDontSee('A Podcast Episode');
 
         // Program: News, Health and Economy/Finance together.
-        $program = $this->get('/admin/music?category=program')
+        $program = $this->get('/admin/music?category=audio')
             ->assertOk()
             ->assertSee('A News Story')
             ->assertSee('A Health Tip')
@@ -184,7 +197,7 @@ class CmsMusicAdminTest extends TestCase
             ->assertDontSee('An Old Ambient Track')
             ->assertDontSee('A Podcast Episode')
             ->getContent();
-        $this->assertMatchesRegularExpression('/value="program" [^>]*class="active">Audio</', $program);
+        $this->assertMatchesRegularExpression('/value="audio" [^>]*class="active">Audio</', $program);
 
         // Podcasts: the podcast episodes only.
         $podcasts = $this->get('/admin/music?category=podcast')
@@ -328,7 +341,7 @@ class CmsMusicAdminTest extends TestCase
         $this->signIn();
         $this->track('A Song', 'song');
 
-        $html = $this->get('/admin/music?category=program')
+        $html = $this->get('/admin/music?category=audio')
             ->assertOk()
             ->assertSee('Nothing in Audio yet.')
             ->getContent();
@@ -371,7 +384,7 @@ class CmsMusicAdminTest extends TestCase
         }
 
         // On the Program tab the category says which of the three it is.
-        $program = $this->get('/admin/music?category=program')->assertOk()->getContent();
+        $program = $this->get('/admin/music?category=audio')->assertOk()->getContent();
         $this->assertSame('News', $cell($program, 'A News Story'));
         $this->assertSame('Health', $cell($program, 'A Health Tip'));
         $this->assertSame('Economy/Finance', $cell($program, 'A Market Note'));
@@ -596,7 +609,7 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringContainsString('href="'.e(url('/admin/media-contents/create/song')).'"', $articlePage);
         $this->assertStringNotContainsString('/create/song?from=music', $articlePage);
         $this->assertStringNotContainsString('/create?category=', $articlePage);
-        foreach (['program' => 'news', 'podcast' => 'podcast', 'ambient' => 'ambient-music'] as $tab => $slug) {
+        foreach (['audio' => 'news', 'podcast' => 'podcast', 'ambient' => 'ambient-music'] as $tab => $slug) {
             $this->assertStringContainsString(
                 'href="'.e(url("/admin/media-contents/create/{$slug}")).'" class="primary-button">New ',
                 $this->get("/admin/music?category={$tab}")->assertOk()->getContent(),
@@ -924,7 +937,7 @@ class CmsMusicAdminTest extends TestCase
         foreach (['/admin/music', '/admin/music?category=song'] as $url) {
             $this->get($url)->assertOk()->assertSee('href="'.$link('song').'" class="primary-button">New Song ', false);
         }
-        $this->get('/admin/music?category=program')->assertOk()->assertSee('href="'.$link('news').'" class="primary-button">New Audio ', false);
+        $this->get('/admin/music?category=audio')->assertOk()->assertSee('href="'.$link('news').'" class="primary-button">New Audio ', false);
         $this->get('/admin/music?category=podcast')->assertOk()->assertSee('href="'.$link('podcast').'" class="primary-button">New Podcast ', false);
 
         // The form it opens starts on that category and returns here.

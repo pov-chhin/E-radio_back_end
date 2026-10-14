@@ -3,6 +3,7 @@
 namespace Src\CmsAdmin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Src\Catalog\Models\Category;
@@ -13,14 +14,14 @@ class MusicController extends Controller
 {
     /**
      * The tabs above the list, in this order: the categories each one lists, the one its "New" button
-     * starts, and that button's name in the singular ("New Podcast"). Audio (key `program`, kept so links keep
-     * working) groups News, Health and Economy/Finance. Ambient Music is also a set of moods any content can carry, so its tab lists whatever
+     * starts, and that button's name in the singular ("New Podcast"). Audio (key `audio`; the old key `program` still
+     * redirects to it) groups News, Health and Economy/Finance. Ambient Music is also a set of moods any content can carry, so its tab lists whatever
      * carries a mood (`tagged`) as well as anything filed under the category, and its "New" opens the form
      * with the category fixed on Ambient Music. "All" lists every category here.
      */
     public const TABS = [
         'song' => ['label' => 'Song', 'new_name' => 'Song', 'categories' => ['song'], 'new' => 'song'],
-        'program' => ['label' => 'Audio', 'new_name' => 'Audio', 'categories' => ['news', 'health', 'economyfinance'], 'new' => 'news'],
+        'audio' => ['label' => 'Audio', 'new_name' => 'Audio', 'categories' => ['news', 'health', 'economyfinance'], 'new' => 'news'],
         'podcast' => ['label' => 'Podcasts', 'new_name' => 'Podcast', 'categories' => ['podcast'], 'new' => 'podcast'],
         'ambient' => ['label' => 'Ambient Music', 'new_name' => 'Ambient Music', 'categories' => ['ambient-music'], 'tagged' => 'ambient-music', 'new' => 'ambient-music'],
     ];
@@ -28,8 +29,13 @@ class MusicController extends Controller
     /** "All": every tab's categories. */
     private const ALL_CATEGORIES = ['song', 'ambient-music', 'news', 'health', 'economyfinance', 'podcast'];
 
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
+        // The Audio tab used to be called "program": an old link or bookmark goes to the new address.
+        if ($request->query('category') === 'program') {
+            return redirect()->route('admin.music.index', ['category' => 'audio']);
+        }
+
         // One tab per group; an unknown or empty `category` means "All".
         $tabs = collect(self::TABS)->map(fn (array $tab, string $key) => [...$tab, 'key' => $key, 'label' => __($tab['label']), 'new_name' => __($tab['new_name'])]);
         $requested = $request->query('category');
