@@ -105,5 +105,53 @@
     </main>
 </div>
 <audio data-preview-audio preload="none"></audio>
+<script>
+    // "Retry" on a failed audio fetch or conversion is sent from the page itself, so nothing reloads: the row's
+    // "Failed" badge turns into "Processing" where it stands. If the request can't be made this way (a session that
+    // ran out, no JSON back), the form is simply submitted the ordinary way.
+    document.addEventListener('submit', async event => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.matches('[data-retry-audio]')) return;
+        event.preventDefault();
+
+        const button = event.submitter || (form.id && document.querySelector('[form="' + form.id + '"]')) || form.querySelector('button');
+        if (button?.disabled) return;
+        if (button) button.disabled = true;
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await response.json();
+
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = '<span><i class="fa fa-check-circle"></i></span>';
+            toast.append(data.message || '');
+            document.querySelector('.page-wrap')?.before(toast);
+            setTimeout(() => toast.remove(), 6000);
+
+            if (!data.started) {
+                if (button) button.disabled = false;
+                return;
+            }
+
+            const holder = button?.closest('td, label') || form.closest('td');
+            const badge = holder?.querySelector('[data-retry-badge]');
+            if (badge) {
+                badge.className = 'badge amber';
+                badge.textContent = form.dataset.processingLabel || '';
+                badge.removeAttribute('title');
+            }
+            holder?.querySelector('[data-retry-reason]')?.remove();
+            if (form.closest('td')) form.remove(); else button?.remove();
+        } catch (error) {
+            form.submit();
+        }
+    });
+</script>
 </body>
 </html>

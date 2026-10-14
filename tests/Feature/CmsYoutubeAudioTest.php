@@ -513,6 +513,42 @@ class CmsYoutubeAudioTest extends TestCase
         Queue::assertPushed(FetchYoutubeAudio::class, fn ($job) => $job->mediaContentId === $mediaContent->id && $job->url === self::LINK);
     }
 
+    public function test_retry_asked_for_by_the_page_answers_json_so_nothing_reloads(): void
+    {
+        $failed = $this->episode(['source_url' => self::LINK, 'processing_status' => 'failed', 'processing_error' => 'Sign in to confirm you are not a bot']);
+
+        $this->postJson("/admin/media-contents/{$failed->id}/retry-audio")
+            ->assertOk()
+            ->assertExactJson(['started' => true, 'message' => 'Trying again — the audio is being fetched.']);
+
+        $this->assertSame('processing', $failed->fresh()->processing_status);
+        Queue::assertPushed(FetchYoutubeAudio::class, 1);
+
+        // Asked again (a double click, a stale page): nothing is queued twice, and the page is told so.
+        $this->postJson("/admin/media-contents/{$failed->id}/retry-audio")
+            ->assertStatus(409)
+            ->assertJsonPath('started', false);
+        Queue::assertPushed(FetchYoutubeAudio::class, 1);
+    }
+
+    public function test_the_retry_forms_and_badges_carry_what_the_pages_script_needs(): void
+    {
+        $song = Category::where('slug', 'song')->firstOrFail()->id;
+        $failed = $this->episode(['slug' => 'failed', 'category_id' => $song, 'source_url' => self::LINK, 'processing_status' => 'failed', 'processing_error' => 'Sign in to confirm you are not a bot']);
+
+        $edit = $this->get("/admin/media-contents/{$failed->id}/edit")->assertOk()->getContent();
+        $this->assertStringContainsString('data-retry-audio', $edit);
+        $this->assertStringContainsString('data-retry-badge', $edit);
+        $this->assertStringContainsString('data-retry-reason', $edit);
+
+        $list = $this->get('/admin/music')->assertOk()->getContent();
+        $this->assertStringContainsString('data-retry-audio', $list);
+        $this->assertStringContainsString('data-retry-badge', $list);
+
+        // One script for every page, in the shared layout: it turns the Failed badge into Processing in place.
+        $this->assertStringContainsString("form.matches('[data-retry-audio]')", $list);
+    }
+
     public function test_retry_only_applies_to_a_failed_episode(): void
     {
         $ready = $this->episode(['slug' => 'ready', 'source_url' => self::LINK, 'stream' => 'media-contents/streams/a.opus', 'processing_status' => 'ready']);
@@ -596,6 +632,7 @@ class CmsYoutubeAudioTest extends TestCase
 
         $list = $this->get('/admin/music')->assertOk()->getContent();
         $this->assertStringContainsString('Failed', $list, 'the failed episode is on the page');
-        $this->assertStringNotContainsString('retry-audio', $list);
+        // (The shared script names the data-retry-audio hook on every page; what must be absent is the route itself.)
+        $this->assertStringNotContainsString('/retry-audio', $list);
     }
 }

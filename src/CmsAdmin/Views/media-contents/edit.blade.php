@@ -11,6 +11,6 @@
 
     {{-- The Retry button in the form above belongs to this one (a form cannot sit inside another form). --}}
     @if($mediaContent->processing_status === 'failed')
-        <form id="retry-audio-form" method="POST" action="{{ route('admin.media-contents.retry-audio', $mediaContent) }}" hidden>@csrf</form>
+        <form id="retry-audio-form" method="POST" action="{{ route('admin.media-contents.retry-audio', $mediaContent) }}" data-retry-audio data-processing-label="{{ __('Audio processing') }}" hidden>@csrf</form>
     @endif
 @endsection

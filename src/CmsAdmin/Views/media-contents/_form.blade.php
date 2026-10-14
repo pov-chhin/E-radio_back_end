@@ -86,9 +86,9 @@
                     @if(isset($mediaContent) && $mediaContent->processing_status === 'processing')
                         <span class="badge amber">{{ __('Audio processing') }}</span>
                     @elseif(isset($mediaContent) && $mediaContent->processing_status === 'failed')
-                        <span class="badge slate" title="{{ $mediaContent->processing_error }}">{{ $mediaContent->source_url ? __('YouTube audio could not be fetched — paste the link again to retry') : __('Audio conversion failed — upload again to retry') }}</span>
+                        <span class="badge slate" data-retry-badge title="{{ $mediaContent->processing_error }}">{{ $mediaContent->source_url ? __('YouTube audio could not be fetched — paste the link again to retry') : __('Audio conversion failed — upload again to retry') }}</span>
                         @if($mediaContent->processing_error)
-                            <small class="muted" style="display:block;font-weight:400;overflow-wrap:anywhere">{{ \Illuminate\Support\Str::limit($mediaContent->processing_error, 300) }}</small>
+                            <small class="muted" data-retry-reason style="display:block;font-weight:400;overflow-wrap:anywhere">{{ \Illuminate\Support\Str::limit($mediaContent->processing_error, 300) }}</small>
                         @endif
                         @if(auth('admin')->user()?->hasPermission('edit-media-content'))
                             <button type="submit" form="retry-audio-form" formnovalidate class="secondary-button compact" style="align-self:flex-start">{{ __('Retry') }}</button>

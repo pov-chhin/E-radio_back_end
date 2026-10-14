@@ -231,27 +231,40 @@ class MediaContentController extends Controller
      * "Retry" on a failed episode: runs the job that failed again. A YouTube link is fetched again; an upload is
      * converted again from its source file, which is kept until a conversion succeeds. Nothing else is retryable.
      */
-    public function retryAudio(MediaContent $mediaContent): RedirectResponse
+    public function retryAudio(Request $request, MediaContent $mediaContent): RedirectResponse|JsonResponse
     {
         if ($mediaContent->processing_status !== 'failed') {
-            return back()->with('status', __('Nothing to retry — upload the audio again.'));
+            return $this->retryResult($request, false, __('Nothing to retry — upload the audio again.'));
         }
 
-        if ($mediaContent->source_url && YoutubeAudioFetcher::videoId($mediaContent->source_url) !== null) {
+        if ($mediaContent->source_url && YoutubeAudioFetcher::videoId((string) $mediaContent->source_url) !== null) {
             $mediaContent->update(['processing_status' => 'processing', 'processing_error' => null]);
             FetchYoutubeAudio::dispatch($mediaContent->id, $mediaContent->source_url)->afterCommit();
 
-            return back()->with('status', __('Trying again — the audio is being fetched.'));
+            return $this->retryResult($request, true, __('Trying again — the audio is being fetched.'));
         }
 
         if ($mediaContent->source_path && Storage::disk('public')->exists($mediaContent->source_path)) {
             $mediaContent->update(['processing_status' => 'processing', 'processing_error' => null]);
             ProcessMediaContentAudio::dispatch($mediaContent->id, $mediaContent->source_path)->afterCommit();
 
-            return back()->with('status', __('Trying again — the audio is being converted.'));
+            return $this->retryResult($request, true, __('Trying again — the audio is being converted.'));
         }
 
-        return back()->with('status', __('Nothing to retry — upload the audio again.'));
+        return $this->retryResult($request, false, __('Nothing to retry — upload the audio again.'));
+    }
+
+    /**
+     * The Retry buttons send their request from the page itself (fetch), so the list or form is not reloaded: they
+     * ask for JSON and update the row in place. Without that (no JavaScript) it is a plain redirect with a message.
+     */
+    private function retryResult(Request $request, bool $started, string $message): RedirectResponse|JsonResponse
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['started' => $started, 'message' => $message], $started ? 200 : 409);
+        }
+
+        return back()->with('status', $message);
     }
 
     /**

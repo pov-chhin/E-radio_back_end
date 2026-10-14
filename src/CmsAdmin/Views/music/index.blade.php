@@ -77,9 +77,9 @@
                             @if($mediaContent->processing_status === 'processing')
                                 <span class="badge amber">{{ __('Processing') }}</span>
                             @elseif($mediaContent->processing_status === 'failed')
-                                <span class="badge slate" title="{{ $mediaContent->processing_error }}">{{ __('Failed') }}</span>
+                                <span class="badge slate" data-retry-badge title="{{ $mediaContent->processing_error }}">{{ __('Failed') }}</span>
                                 @if(auth('admin')->user()?->hasPermission('edit-media-content'))
-                                    <form method="POST" action="{{ route('admin.media-contents.retry-audio', $mediaContent) }}" style="display:inline">
+                                    <form method="POST" action="{{ route('admin.media-contents.retry-audio', $mediaContent) }}" data-retry-audio data-processing-label="{{ __('Processing') }}" style="display:inline">
                                         @csrf
                                         <button type="submit" class="secondary-button compact" style="margin-left:6px">{{ __('Retry') }}</button>
                                     </form>
