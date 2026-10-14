@@ -145,8 +145,9 @@
                         <div class="inline-warning" style="margin:0 0 16px">{{ __('YouTube cookies are configured. Upload a new file to replace them when they expire.') }}</div>
                     @endif
 
-                    <label>{{ __('YouTube cookies.txt') }}
-                        <input name="youtube_cookies_file" type="file" accept=".txt,text/plain">
+                    <label>{{ __('YouTube cookies (.txt or .json)') }}
+                        <small class="muted" style="font-weight:400">{{ __('A browser extension\'s JSON export works as it is: only the YouTube and Google cookies are kept, the rest is dropped.') }}</small>
+                        <input name="youtube_cookies_file" type="file" accept=".txt,.json,text/plain,application/json">
                         @error('youtube_cookies_file') <em>{{ $message }}</em> @enderror
                     </label>
 

@@ -102,6 +102,57 @@ class StorageSettingTest extends TestCase
         $this->assertSame($cookies, StorageSetting::firstOrFail()->youtube_cookies);
     }
 
+    public function test_a_browser_json_export_is_converted_and_only_youtube_and_google_cookies_are_kept(): void
+    {
+        $json = json_encode([
+            ['domain' => '.youtube.com', 'name' => 'SID', 'value' => 'sid-value', 'path' => '/', 'secure' => true, 'httpOnly' => false, 'hostOnly' => false, 'expirationDate' => 2147483647.5],
+            ['domain' => 'www.youtube.com', 'name' => 'YSC', 'value' => 'ysc-value', 'path' => '/', 'secure' => true, 'httpOnly' => true, 'hostOnly' => true, 'session' => true],
+            ['domain' => 'accounts.google.com', 'name' => 'LOGIN_INFO', 'value' => "tab\there", 'path' => '/', 'secure' => true, 'hostOnly' => true, 'expirationDate' => 2147483647],
+            ['domain' => '.facebook.com', 'name' => 'c_user', 'value' => 'other-site-secret', 'path' => '/', 'secure' => true],
+            ['domain' => '.notyoutube.com', 'name' => 'x', 'value' => 'lookalike-secret', 'path' => '/'],
+        ]);
+
+        $this->put('/admin/settings/youtube', [
+            'youtube_cookies_file' => UploadedFile::fake()->createWithContent('cookies.json', $json),
+        ])->assertSessionHasNoErrors()->assertSessionHas('status', 'YouTube cookies saved securely.');
+
+        $stored = StorageSetting::firstOrFail()->youtube_cookies;
+
+        $this->assertStringStartsWith("# Netscape HTTP Cookie File\n", $stored);
+        $this->assertStringContainsString("\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsid-value\n", $stored);
+        $this->assertStringContainsString("\n#HttpOnly_www.youtube.com\tFALSE\t/\tTRUE\t0\tYSC\tysc-value\n", $stored);
+        $this->assertStringContainsString("\naccounts.google.com\tFALSE\t/\tTRUE\t2147483647\tLOGIN_INFO\ttab here\n", $stored);
+        $this->assertStringNotContainsString('other-site-secret', $stored);
+        $this->assertStringNotContainsString('lookalike-secret', $stored);
+        $this->assertStringNotContainsString('facebook', $stored);
+    }
+
+    public function test_a_json_export_wrapped_in_a_cookies_object_is_accepted(): void
+    {
+        $json = json_encode(['cookies' => [
+            ['domain' => '.youtube.com', 'name' => 'SID', 'value' => 'x', 'path' => '/', 'secure' => true, 'expires' => 2147483647],
+        ]]);
+
+        $this->put('/admin/settings/youtube', [
+            'youtube_cookies_file' => UploadedFile::fake()->createWithContent('cookies.json', $json),
+        ])->assertSessionHasNoErrors();
+
+        $this->assertStringContainsString("\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tx\n", StorageSetting::firstOrFail()->youtube_cookies);
+    }
+
+    public function test_a_json_export_without_youtube_cookies_or_that_is_not_a_cookie_list_is_rejected(): void
+    {
+        $onlyOtherSites = json_encode([['domain' => '.facebook.com', 'name' => 'c_user', 'value' => 'x', 'path' => '/']]);
+
+        foreach ([$onlyOtherSites, '{"not":"cookies"}', '[1, 2', '[]'] as $contents) {
+            $this->put('/admin/settings/youtube', [
+                'youtube_cookies_file' => UploadedFile::fake()->createWithContent('cookies.json', $contents),
+            ])->assertSessionHasErrors('youtube_cookies_file');
+        }
+
+        $this->assertNull(StorageSetting::firstOrFail()->youtube_cookies);
+    }
+
     public function test_uploading_cookies_automatically_retries_failed_youtube_audio(): void
     {
         Queue::fake();

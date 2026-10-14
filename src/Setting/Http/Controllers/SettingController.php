@@ -14,6 +14,7 @@ use Illuminate\View\View;
 use Src\Catalog\Jobs\FetchYoutubeAudio;
 use Src\Catalog\Models\MediaContent;
 use Src\Catalog\Services\YoutubeAudioFetcher;
+use Src\Catalog\Services\YoutubeCookieConverter;
 use Src\Setting\Models\LanguageSetting;
 use Src\Setting\Models\RadioScraperSetting;
 use Src\Setting\Models\RadioStudioSetting;
@@ -119,7 +120,8 @@ class SettingController extends Controller
     public function updateYoutube(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'youtube_cookies_file' => ['nullable', 'file', 'max:2048'],
+            // A browser's JSON export can hold every site's cookies, so it is bigger than the cookies.txt it becomes.
+            'youtube_cookies_file' => ['nullable', 'file', 'max:8192'],
             'remove_youtube_cookies' => ['nullable', 'boolean'],
         ]);
         $setting = StorageSetting::firstOrFail();
@@ -139,9 +141,14 @@ class SettingController extends Controller
         $contents = (string) file_get_contents($file->getRealPath());
         $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
 
+        // The JSON a browser extension exports is converted here (YouTube and Google cookies only are kept).
+        if (YoutubeCookieConverter::looksLikeJson($contents)) {
+            $contents = YoutubeCookieConverter::fromJson($contents) ?? '';
+        }
+
         if (! $this->validYoutubeCookies($contents)) {
             return back()->withErrors([
-                'youtube_cookies_file' => __('That is not a valid Netscape cookies.txt export containing YouTube cookies.'),
+                'youtube_cookies_file' => __('That is not a valid cookies export containing YouTube cookies (a Netscape cookies.txt, or the JSON your browser extension exports).'),
             ])->with('settings_tab', 'youtube');
         }
 
