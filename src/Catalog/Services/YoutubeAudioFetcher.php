@@ -73,7 +73,8 @@ class YoutubeAudioFetcher
             $command[] = $runtime;
         }
 
-        array_push($command, ...$this->proxyArguments());
+        $proxyArguments = $this->proxyArguments();
+        array_push($command, ...$proxyArguments);
 
         [$cookies, $temporaryCookies] = $this->cookiesFile();
 
@@ -114,7 +115,11 @@ class YoutubeAudioFetcher
                 $this->discard($base);
 
                 if ($attempt >= $attempts || ! self::isTransient($process->getErrorOutput())) {
-                    throw new RuntimeException($this->failureMessage($process));
+                    throw new RuntimeException($this->failureMessage(
+                        $process,
+                        signedIn: $cookies !== null || filled(config('services.yt_dlp.cookies_from_browser')),
+                        proxied: $proxyArguments !== [],
+                    ));
                 }
 
                 // YouTube sometimes refuses a request for no lasting reason (several in a row make it likelier).
@@ -282,7 +287,7 @@ class YoutubeAudioFetcher
         return str_replace($secrets, '[proxy]', $text);
     }
 
-    private function failureMessage(Process $process): string
+    private function failureMessage(Process $process, bool $signedIn = false, bool $proxied = false): string
     {
         // 127 is the shell's "command not found"; Windows words it differently.
         if ($process->getExitCode() === 127
@@ -304,7 +309,17 @@ class YoutubeAudioFetcher
         }
 
         if ($error !== null && preg_match('/sign in to confirm .+ not a bot/i', $error)) {
-            return 'YouTube requires authentication. Upload a fresh Netscape cookies.txt in Admin Settings → YouTube, then retry the audio fetch. A YouTube API key cannot replace browser cookies.';
+            // The same reply whether or not cookies were sent, so say which it was: "upload cookies" is wrong advice once
+            // they are saved — YouTube then refuses the server's address, which only a home-style address gets past.
+            if ($proxied) {
+                return 'YouTube still asks to sign in even through the proxy (YT_DLP_PROXY): the proxy\'s address is blocked too. Use a residential (home-style) proxy, or upload the audio file yourself.';
+            }
+
+            if ($signedIn) {
+                return 'YouTube still asks this server to sign in even with the saved cookies. It blocks most server (datacenter) addresses, so cookies often do not help: send the downloads through a proxy that leaves from a home address (YT_DLP_PROXY), or upload the audio file yourself. If the cookies are old, upload fresh ones first.';
+            }
+
+            return 'YouTube asks this server to sign in. Upload a fresh Netscape cookies.txt in Admin Settings → YouTube, or send the downloads through a home-address proxy (YT_DLP_PROXY), then retry. A YouTube API key cannot replace browser cookies.';
         }
 
         if ($error === null && $process->isSuccessful()) {

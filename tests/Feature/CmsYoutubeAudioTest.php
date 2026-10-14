@@ -334,6 +334,34 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertSame(['--cookies', 'cookies.txt'], $method->invoke($fetcher, 'cookies.txt', true));
     }
 
+    /** The reason an admin sees when yt-dlp is refused with YouTube's "sign in to confirm you're not a bot". */
+    private function botCheckMessage(bool $signedIn, bool $proxied): string
+    {
+        $process = new Process([PHP_BINARY, '-r', 'fwrite(STDERR, "ERROR: [youtube] abc: Sign in to confirm you’re not a bot. Use --cookies\n"); exit(1);']);
+        $process->run();
+
+        $fetcher = new YoutubeAudioFetcher;
+
+        return (new \ReflectionMethod($fetcher, 'failureMessage'))->invoke($fetcher, $process, $signedIn, $proxied);
+    }
+
+    public function test_the_bot_check_message_says_what_was_tried_instead_of_always_asking_for_cookies(): void
+    {
+        $plain = $this->botCheckMessage(signedIn: false, proxied: false);
+        $this->assertStringContainsString('Upload a fresh Netscape cookies.txt', $plain);
+        $this->assertStringContainsString('YT_DLP_PROXY', $plain);
+
+        // With cookies already saved, "upload cookies" would be wrong advice: it is the server's address.
+        $withCookies = $this->botCheckMessage(signedIn: true, proxied: false);
+        $this->assertStringContainsString('even with the saved cookies', $withCookies);
+        $this->assertStringContainsString('datacenter', $withCookies);
+        $this->assertStringNotContainsString('Upload a fresh Netscape cookies.txt', $withCookies);
+
+        $proxied = $this->botCheckMessage(signedIn: true, proxied: true);
+        $this->assertStringContainsString('even through the proxy', $proxied);
+        $this->assertStringContainsString('residential', $proxied);
+    }
+
     public function test_a_configured_proxy_is_passed_to_yt_dlp_and_nothing_is_added_without_one(): void
     {
         $fetcher = new YoutubeAudioFetcher;
