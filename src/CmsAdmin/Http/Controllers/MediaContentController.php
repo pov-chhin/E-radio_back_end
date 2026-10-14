@@ -4,12 +4,14 @@ namespace Src\CmsAdmin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Support\MediaStorage;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use RuntimeException;
 use Src\Catalog\Jobs\FetchYoutubeAudio;
 use Src\Catalog\Jobs\ProcessMediaContentAudio;
 use Src\Catalog\Models\Artist;
@@ -19,6 +21,7 @@ use Src\Catalog\Models\Program;
 use Src\Catalog\Models\Tag;
 use Src\Catalog\Services\ImageVariantProcessor;
 use Src\Catalog\Services\YoutubeAudioFetcher;
+use Src\Catalog\Services\YoutubeVideoDetails;
 use Src\CmsAdmin\Http\Controllers\Concerns\GeneratesUniqueSlug;
 use Src\CmsAdmin\Http\Controllers\Concerns\ResolvesUploadedMedia;
 use Src\Notification\Notifications\MediaContentPublished;
@@ -251,6 +254,25 @@ class MediaContentController extends Controller
         return back()->with('status', __('Nothing to retry — upload the audio again.'));
     }
 
+    /**
+     * "Fill from YouTube" on the form: the title, length and cover of a pasted YouTube link, read from the YouTube
+     * Data API. It only fills the form in — saving the link still fetches the audio in the background. The form is
+     * used by whoever may create or edit media content, so either permission opens this.
+     */
+    public function youtubeDetails(Request $request, YoutubeVideoDetails $details): JsonResponse
+    {
+        $user = $request->user('admin');
+        abort_unless($user && ($user->hasPermission('create-media-content') || $user->hasPermission('edit-media-content')), 403);
+
+        $data = $request->validate(['url' => ['required', 'string', 'max:2048', 'url']]);
+
+        try {
+            return response()->json($details->fetch($data['url']));
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
     public function destroy(Request $request, MediaContent $mediaContent): RedirectResponse
     {
         $this->deleteStoredMedia($mediaContent->stream, $mediaContent->stream_disk);
@@ -420,7 +442,7 @@ class MediaContentController extends Controller
             $sourcePath = $request->file('stream')->store(self::SOURCE_DIRECTORY, 'public');
 
             if (! $sourcePath) {
-                throw new \RuntimeException('Unable to store the uploaded media file.');
+                throw new RuntimeException('Unable to store the uploaded media file.');
             }
 
             $this->deleteStoredMedia($mediaContent->source_path);

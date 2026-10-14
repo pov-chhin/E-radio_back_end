@@ -213,6 +213,54 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertLessThan(48_000, $bitsPerSecond);
     }
 
+    /** A fetcher that hands over `$contents` as the downloaded video and remembers where it put it. */
+    private function recordingFetcher(string $contents): YoutubeAudioFetcher
+    {
+        return new class($contents) extends YoutubeAudioFetcher
+        {
+            public ?string $downloaded = null;
+
+            public function __construct(private readonly string $contents) {}
+
+            public function download(string $url): string
+            {
+                $this->downloaded = tempnam(sys_get_temp_dir(), 'yt_download_');
+                file_put_contents($this->downloaded, $this->contents);
+
+                return $this->downloaded;
+            }
+        };
+    }
+
+    public function test_the_downloaded_video_is_deleted_once_it_is_converted_to_opus(): void
+    {
+        $mediaContent = $this->episode(['source_url' => self::LINK, 'processing_status' => 'processing']);
+        $fetcher = $this->recordingFetcher((string) file_get_contents($this->audioFixture()));
+
+        $this->runJob($mediaContent, $fetcher);
+
+        $this->assertSame('ready', $mediaContent->fresh()->processing_status);
+        $this->assertNotNull($fetcher->downloaded);
+        $this->assertFileDoesNotExist($fetcher->downloaded);
+    }
+
+    public function test_the_downloaded_video_is_deleted_even_when_the_conversion_fails(): void
+    {
+        $mediaContent = $this->episode(['source_url' => self::LINK, 'processing_status' => 'processing']);
+        $fetcher = $this->recordingFetcher('this is not audio');
+
+        try {
+            $this->runJob($mediaContent, $fetcher);
+            $this->fail('The conversion of a file that is not audio should have failed.');
+        } catch (RuntimeException) {
+            // Expected: the failure is recorded on the episode and rethrown for the queue.
+        }
+
+        $this->assertSame('failed', $mediaContent->fresh()->processing_status);
+        $this->assertNotNull($fetcher->downloaded);
+        $this->assertFileDoesNotExist($fetcher->downloaded);
+    }
+
     public function test_the_fetcher_prepares_encrypted_admin_cookies_as_a_private_temporary_file(): void
     {
         $cookies = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsecret\n";

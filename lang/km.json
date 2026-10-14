@@ -791,5 +791,21 @@
     "Leave blank to keep the current password.": "ទុកទទេដើម្បីរក្សាពាក្យសម្ងាត់បច្ចុប្បន្ន។",
     "You can't change your own roles.": "អ្នកមិនអាចប្តូរតួនាទីរបស់ខ្លួនឯងបានទេ។",
     "Show password": "បង្ហាញពាក្យសម្ងាត់",
-    "Hide password": "លាក់ពាក្យសម្ងាត់"
+    "Hide password": "លាក់ពាក្យសម្ងាត់",
+    "Fill from YouTube": "បំពេញពី YouTube",
+    "Title, length and cover are read from the link.": "ចំណងជើង រយៈពេល និងរូបភាពគម្រប ត្រូវបានអានពីតំណ។",
+    "Reading the video…": "កំពុងអានវីដេអូ…",
+    "Filled in from YouTube.": "បានបំពេញពី YouTube។",
+    "Empty fields filled in from YouTube.": "បានបំពេញចន្លោះទទេពី YouTube។",
+    "This is a live broadcast — its audio cannot be fetched.": "នេះជាការផ្សាយផ្ទាល់ — មិនអាចទាញយកសំឡេងរបស់វាបានទេ។",
+    "Could not read that video.": "មិនអាចអានវីដេអូនោះបានទេ។",
+    "That is not a YouTube video link.": "នេះមិនមែនជាតំណវីដេអូ YouTube ទេ។",
+    "Set YOUTUBE_API_KEY on the server (a YouTube Data API v3 key) to fill these in from the link.": "កំណត់ YOUTUBE_API_KEY នៅលើម៉ាស៊ីនមេ (សោ YouTube Data API v3) ដើម្បីបំពេញទាំងនេះពីតំណ។",
+    "Could not reach YouTube. Try again in a moment.": "មិនអាចភ្ជាប់ទៅ YouTube បានទេ។ សូមសាកល្បងម្តងទៀតបន្តិចទៀត។",
+    "YouTube has no public video at that link (it may be private or deleted).": "YouTube មិនមានវីដេអូសាធារណៈនៅតំណនោះទេ (វាអាចជាឯកជន ឬត្រូវបានលុប)។",
+    "The YouTube API quota for today is used up. Try again tomorrow, or type the details in by hand.": "កូតា YouTube API សម្រាប់ថ្ងៃនេះបានប្រើអស់ហើយ។ សូមសាកល្បងម្តងទៀតថ្ងៃស្អែក ឬវាយព័ត៌មានដោយដៃ។",
+    "The YouTube API key is not valid. Check YOUTUBE_API_KEY on the server.": "សោ YouTube API មិនត្រឹមត្រូវទេ។ សូមពិនិត្យ YOUTUBE_API_KEY នៅលើម៉ាស៊ីនមេ។",
+    "YouTube Data API v3 is not turned on for that key's Google Cloud project.": "YouTube Data API v3 មិនទាន់បានបើកសម្រាប់គម្រោង Google Cloud របស់សោនោះទេ។",
+    "The YouTube API key is restricted and does not allow this server. Allow its IP address, or remove the restriction.": "សោ YouTube API ត្រូវបានដាក់កំហិត ហើយមិនអនុញ្ញាតម៉ាស៊ីនមេនេះទេ។ សូមអនុញ្ញាតអាសយដ្ឋាន IP របស់វា ឬលុបការដាក់កំហិត។",
+    "YouTube answered with an error (HTTP :status).": "YouTube ឆ្លើយតបដោយមានកំហុស (HTTP :status)។"
 }

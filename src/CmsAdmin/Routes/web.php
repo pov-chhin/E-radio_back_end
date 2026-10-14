@@ -82,6 +82,10 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::post('media-contents/{media_content}/retry-audio', [MediaContentController::class, 'retryAudio'])->name('media-contents.retry-audio')
         ->where('media_content', '[0-9]+')
         ->middleware('permission:edit-media-content');
+    // "Fill from YouTube" on the media form: a pasted link's title, length and cover (YouTube Data API v3). Open to
+    // whoever may create or edit media content (the controller checks), and throttled to spare the API quota.
+    Route::post('media-contents/youtube-details', [MediaContentController::class, 'youtubeDetails'])->name('media-contents.youtube-details')
+        ->middleware('throttle:30,1');
     Route::resource('media-contents', MediaContentController::class)->except(['show', 'create'])
         ->middlewareFor(['index'], 'permission:view-media-content')
         ->middlewareFor(['store'], 'permission:create-media-content')

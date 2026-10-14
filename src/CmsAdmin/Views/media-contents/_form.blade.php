@@ -59,6 +59,8 @@
     .editor-block.description-grow { flex: 1 1 auto; display: flex; flex-direction: column; }
     .description-grow .rich-editor { flex: 1 1 auto; display: flex; flex-direction: column; height: auto; min-height: 0; }
     .description-grow .rich-editor .ql-editor { flex: 1 1 auto; height: auto; }
+    .youtube-fill { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .youtube-fill[hidden] { display: none; }
 </style>
 
 <div class="editor-layout">
@@ -131,6 +133,18 @@
                     <input name="stream_url" type="text" placeholder="https://…" value="{{ old('stream_url') }}" data-image-mode-panel="url" data-image-field="stream" @unless(old('stream_url')) hidden disabled @endunless>
                     @error('stream') <em>{{ $message }}</em> @enderror
                     @error('stream_url') <em>{{ $message }}</em> @enderror
+                    {{-- A pasted YouTube link: its title, length and cover can be read from the YouTube Data API. The audio itself is still fetched by the server when the form is saved. --}}
+                    <div class="youtube-fill" data-youtube-fill hidden
+                         data-url="{{ route('admin.media-contents.youtube-details') }}"
+                         data-auto="{{ \Src\Catalog\Services\YoutubeVideoDetails::configured() ? '1' : '0' }}"
+                         data-loading="{{ __('Reading the video…') }}"
+                         data-done="{{ __('Filled in from YouTube.') }}"
+                         data-done-auto="{{ __('Empty fields filled in from YouTube.') }}"
+                         data-live="{{ __('This is a live broadcast — its audio cannot be fetched.') }}"
+                         data-failed="{{ __('Could not read that video.') }}">
+                        <button type="button" class="secondary-button compact" data-youtube-fill-button>{{ __('Fill from YouTube') }}</button>
+                        <small class="muted" data-youtube-fill-status aria-live="polite" style="font-weight:400;overflow-wrap:anywhere">{{ __('Title, length and cover are read from the link.') }}</small>
+                    </div>
                 </label>
             </div>
         </div>
@@ -386,5 +400,89 @@
             if (crumb) crumb.textContent = named ?? title.dataset.titlePlainCrumb;
             document.title = document.title.replace(/^.*?( · )/, () => (named ?? title.dataset.titlePlainCrumb) + ' · ');
         });
+    })();
+
+    // A pasted YouTube link: "Fill from YouTube" reads its title, length and cover from the YouTube Data API (through
+    // the server, which holds the key). Committing the link does it once by itself, into the fields still empty; the
+    // button does it on request and replaces what the video has an answer for. The audio is fetched when the form is saved.
+    (() => {
+        const box = document.querySelector('[data-youtube-fill]');
+        const link = document.querySelector('input[name="stream_url"]');
+        if (!box || !link) return;
+        const button = box.querySelector('[data-youtube-fill-button]');
+        const status = box.querySelector('[data-youtube-fill-status]');
+        const title = document.getElementById('title');
+        const duration = document.getElementById('duration_seconds');
+        const cover = document.querySelector('input[name="thumbnail_url"]');
+        const coverFile = document.querySelector('input[name="thumbnail"]');
+        const preview = document.querySelector('[data-thumbnail-preview]');
+        const isYoutube = value => /^https?:\/\/([\w-]+\.)*(youtube\.com|youtube-nocookie\.com|youtu\.be)\//i.test(value.trim());
+        let busy = false;
+        let lastLink = '';
+
+        // Offered only while the Paste URL box is on show and holds a YouTube link.
+        const refresh = () => { box.hidden = link.hidden || !isYoutube(link.value); };
+
+        const put = (input, value, replace) => {
+            if (!input || value === null || value === undefined || value === '') return;
+            if (!replace && input.value.trim() !== '') return;
+            input.value = value;
+        };
+
+        const fill = async replace => {
+            const url = link.value.trim();
+            if (busy || !isYoutube(url)) return;
+            busy = true;
+            button.disabled = true;
+            status.textContent = box.dataset.loading;
+
+            try {
+                const response = await fetch(box.dataset.url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': link.form.querySelector('input[name="_token"]').value,
+                    },
+                    body: JSON.stringify({ url }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.message || box.dataset.failed);
+
+                put(title, data.title, replace);
+                put(duration, data.duration_seconds, replace);
+
+                // The cover goes in the Paste URL box (the server downloads it when the form is saved); it replaces a
+                // cover that is picked or saved already only when asked for.
+                const coverEmpty = preview?.hidden && !coverFile?.files?.length && !cover?.value.trim();
+                if (data.thumbnail_url && cover && (replace || coverEmpty)) {
+                    document.querySelector('[data-image-mode-tab="url"][data-image-field="thumbnail"]')?.click();
+                    cover.value = data.thumbnail_url;
+                    if (preview) { preview.src = data.thumbnail_url; preview.hidden = false; }
+                }
+
+                status.textContent = data.is_live ? box.dataset.live : (replace ? box.dataset.done : box.dataset.doneAuto);
+            } catch (error) {
+                status.textContent = error.message || box.dataset.failed;
+            } finally {
+                busy = false;
+                button.disabled = false;
+            }
+        };
+
+        link.addEventListener('input', refresh);
+        link.addEventListener('change', () => {
+            refresh();
+            const url = link.value.trim();
+            if (box.dataset.auto === '1' && isYoutube(url) && url !== lastLink) {
+                lastLink = url;
+                fill(false);
+            }
+        });
+        // The Upload / Paste URL tabs show and hide the link box (the shared handler runs after this one).
+        document.querySelectorAll('[data-image-mode-tab][data-image-field="stream"]').forEach(tab => tab.addEventListener('click', () => setTimeout(refresh)));
+        button.addEventListener('click', () => { lastLink = link.value.trim(); fill(true); });
+        refresh();
     })();
 </script>

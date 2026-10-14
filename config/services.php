@@ -31,6 +31,13 @@ return [
         'visitor_data' => env('YT_DLP_VISITOR_DATA'),
     ],
 
+    // YouTube Data API v3 (see Src\Catalog\Services\YoutubeVideoDetails): only reads a video's title, length and cover
+    // for the media form. It never carries audio, and a key can't replace the cookies above.
+    'youtube_data' => [
+        'key' => env('YOUTUBE_API_KEY'),
+        'timeout' => (int) env('YOUTUBE_API_TIMEOUT', 10),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
