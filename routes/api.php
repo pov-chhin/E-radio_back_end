@@ -11,11 +11,16 @@ use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\StationController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Middleware\RecordUserCountry;
+use Src\Setting\Http\Controllers\YoutubeCookieSyncController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:20,1,auth-google');
+
+// The cookie-sync browser extension keeps the server's YouTube cookies fresh. Off unless YOUTUBE_COOKIE_SYNC_TOKEN
+// is set; it answers only a request that carries that token.
+Route::post('/youtube-cookies/sync', YoutubeCookieSyncController::class)->middleware('throttle:30,1,youtube-cookie-sync');
 
 // Forgotten password: emailed code → reset token → new password. The third
 // throttle argument names each limit's own bucket — without it every

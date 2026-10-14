@@ -34,6 +34,12 @@ return [
         'visitor_data' => env('YT_DLP_VISITOR_DATA'),
     ],
 
+    // The cookie-sync browser extension may post the signed-in browser's YouTube cookies to
+    // POST /api/youtube-cookies/sync when it sends this token (X-Cookie-Sync-Token). At least 32 characters; empty = off.
+    'youtube_cookie_sync' => [
+        'token' => env('YOUTUBE_COOKIE_SYNC_TOKEN'),
+    ],
+
     // YouTube Data API v3 (see Src\Catalog\Services\YoutubeVideoDetails): only reads a video's title, length and cover
     // for the media form. It never carries audio, and a key can't replace the cookies above.
     'youtube_data' => [

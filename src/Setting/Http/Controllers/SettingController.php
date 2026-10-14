@@ -11,10 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
-use Src\Catalog\Jobs\FetchYoutubeAudio;
-use Src\Catalog\Models\MediaContent;
-use Src\Catalog\Services\YoutubeAudioFetcher;
 use Src\Catalog\Services\YoutubeCookieConverter;
+use Src\Catalog\Services\YoutubeCookieStore;
 use Src\Setting\Models\LanguageSetting;
 use Src\Setting\Models\RadioScraperSetting;
 use Src\Setting\Models\RadioStudioSetting;
@@ -117,7 +115,7 @@ class SettingController extends Controller
     }
 
     /** Saves a Netscape-format YouTube cookies.txt encrypted in the database for yt-dlp. */
-    public function updateYoutube(Request $request): RedirectResponse
+    public function updateYoutube(Request $request, YoutubeCookieStore $store): RedirectResponse
     {
         $data = $request->validate([
             // A browser's JSON export can hold every site's cookies, so it is bigger than the cookies.txt it becomes.
@@ -146,62 +144,19 @@ class SettingController extends Controller
             $contents = YoutubeCookieConverter::fromJson($contents) ?? '';
         }
 
-        if (! $this->validYoutubeCookies($contents)) {
+        if (! YoutubeCookieStore::valid($contents)) {
             return back()->withErrors([
                 'youtube_cookies_file' => __('That is not a valid cookies export containing YouTube cookies (a Netscape cookies.txt, or the JSON your browser extension exports).'),
             ])->with('settings_tab', 'youtube');
         }
 
-        $setting->update(['youtube_cookies' => $contents]);
-
-        $retried = 0;
-
-        MediaContent::query()
-            ->where('processing_status', 'failed')
-            ->whereNotNull('source_url')
-            ->eachById(function (MediaContent $mediaContent) use (&$retried): void {
-                if (YoutubeAudioFetcher::videoId((string) $mediaContent->source_url) === null) {
-                    return;
-                }
-
-                $mediaContent->update([
-                    'processing_status' => 'processing',
-                    'processing_error' => null,
-                ]);
-                FetchYoutubeAudio::dispatch($mediaContent->id, $mediaContent->source_url)->afterCommit();
-                $retried++;
-            });
+        $retried = $store->save($contents);
 
         $status = $retried > 0
             ? trans_choice('YouTube cookies saved securely. Retrying :count failed audio fetch.|YouTube cookies saved securely. Retrying :count failed audio fetches.', $retried, ['count' => $retried])
             : __('YouTube cookies saved securely.');
 
         return back()->with('status', $status)->with('settings_tab', 'youtube');
-    }
-
-    /** A Netscape/Mozilla cookie file has a supported header and at least one YouTube cookie row. */
-    private function validYoutubeCookies(string $contents): bool
-    {
-        if (! str_contains($contents, 'Netscape HTTP Cookie File') && ! str_contains($contents, 'HTTP Cookie File')) {
-            return false;
-        }
-
-        foreach (preg_split('/\R/', $contents) ?: [] as $line) {
-            $line = trim($line);
-
-            if ($line === '' || (str_starts_with($line, '#') && ! str_starts_with($line, '#HttpOnly_'))) {
-                continue;
-            }
-
-            $columns = explode("\t", $line);
-            $domain = strtolower(str_replace('#HttpOnly_', '', $columns[0] ?? ''));
-
-            if (count($columns) >= 7 && ($domain === 'youtube.com' || str_ends_with($domain, '.youtube.com'))) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
