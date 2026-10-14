@@ -74,12 +74,12 @@
                         <td class="muted">{{ $activeTab ? $mediaContent->category->name : ($groupLabels[$mediaContent->category->slug] ?? $mediaContent->category->name) }}</td>
                         <td class="muted" data-order="{{ (int) $mediaContent->stream_size }}">{{ $mediaContent->stream_size_label }}</td>
                         <td>
-                            @if($mediaContent->processing_status === 'processing')
-                                <span class="badge amber">{{ __('Processing') }}</span>
-                            @elseif($mediaContent->processing_status === 'failed')
-                                <span class="badge slate" data-retry-badge title="{{ $mediaContent->processing_error }}">{{ __('Failed') }}</span>
+                            @if(in_array($mediaContent->processing_status, ['processing', 'failed'], true))
+                                @php $audioFailed = $mediaContent->processing_status === 'failed'; @endphp
+                                {{-- Processing and Failed rows keep themselves current: the page asks the server how the audio is doing until it is Ready or Failed (the script in the layout). --}}
+                                <span class="badge {{ $audioFailed ? 'slate' : 'amber' }}" data-status-badge data-state="{{ $mediaContent->processing_status }}" data-status-url="{{ route('admin.media-contents.processing-status', $mediaContent) }}" data-labels="{{ json_encode(['processing' => __('Processing'), 'ready' => __('Ready'), 'failed' => __('Failed')], JSON_UNESCAPED_UNICODE) }}" @if($audioFailed) title="{{ $mediaContent->processing_error }}" @endif>{{ $audioFailed ? __('Failed') : __('Processing') }}</span>
                                 @if(auth('admin')->user()?->hasPermission('edit-media-content'))
-                                    <form method="POST" action="{{ route('admin.media-contents.retry-audio', $mediaContent) }}" data-retry-audio data-processing-label="{{ __('Processing') }}" style="display:inline">
+                                    <form method="POST" action="{{ route('admin.media-contents.retry-audio', $mediaContent) }}" data-retry-audio style="display:{{ $audioFailed ? 'inline' : 'none' }}">
                                         @csrf
                                         <button type="submit" class="secondary-button compact" style="margin-left:6px">{{ __('Retry') }}</button>
                                     </form>

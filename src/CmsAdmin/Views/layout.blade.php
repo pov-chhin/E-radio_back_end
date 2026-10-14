@@ -106,52 +106,109 @@
 </div>
 <audio data-preview-audio preload="none"></audio>
 <script>
-    // "Retry" on a failed audio fetch or conversion is sent from the page itself, so nothing reloads: the row's
-    // "Failed" badge turns into "Processing" where it stands. If the request can't be made this way (a session that
-    // ran out, no JSON back), the form is simply submitted the ordinary way.
-    document.addEventListener('submit', async event => {
-        const form = event.target;
-        if (!(form instanceof HTMLFormElement) || !form.matches('[data-retry-audio]')) return;
-        event.preventDefault();
+    // Audio that is Processing or Failed keeps itself current, and "Retry" works from the page: nothing reloads.
+    // A status badge (data-status-badge) carries the address to ask and its labels. While it says Processing the page
+    // asks the server how the audio is doing, and when it is Ready or Failed the badge changes where it stands (a
+    // failed row gets its Retry button back). Retry is sent from the page too; if that can't be done (a session that
+    // ran out, no JSON back) the form is submitted the ordinary way.
+    (() => {
+        const holderOf = badge => badge.closest('td, label');
+        const controlOf = badge => holderOf(badge)?.querySelector('[data-retry-audio], [data-retry-button]');
+        const labelsOf = badge => { try { return JSON.parse(badge.dataset.labels || '{}'); } catch (error) { return {}; } };
+        const tones = { processing: 'amber', ready: 'green', failed: 'slate' };
 
-        const button = event.submitter || (form.id && document.querySelector('[form="' + form.id + '"]')) || form.querySelector('button');
-        if (button?.disabled) return;
-        if (button) button.disabled = true;
-
-        try {
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: new FormData(form),
-                credentials: 'same-origin',
-                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            const data = await response.json();
-
+        const notify = message => {
             const toast = document.createElement('div');
             toast.className = 'toast';
             toast.innerHTML = '<span><i class="fa fa-check-circle"></i></span>';
-            toast.append(data.message || '');
+            toast.append(message || '');
             document.querySelector('.page-wrap')?.before(toast);
             setTimeout(() => toast.remove(), 6000);
+        };
 
-            if (!data.started) {
+        const show = (badge, state) => {
+            const control = controlOf(badge);
+            badge.className = 'badge ' + (tones[state.status] || 'slate');
+            badge.dataset.state = state.status;
+            badge.textContent = labelsOf(badge)[state.status] || badge.textContent;
+            if (state.status === 'failed' && state.error) badge.title = state.error; else badge.removeAttribute('title');
+            if (control) control.style.display = state.status === 'failed' ? (control.matches('form') ? 'inline' : '') : 'none';
+
+            // The edit page spells the reason out under the badge.
+            const reason = holderOf(badge)?.querySelector('[data-retry-reason]');
+            if (state.status !== 'failed') {
+                reason?.remove();
+            } else if (state.error && control && !control.matches('form')) {
+                const note = reason || document.createElement('small');
+                note.className = 'muted';
+                note.dataset.retryReason = '';
+                note.setAttribute('style', 'display:block;font-weight:400;overflow-wrap:anywhere');
+                note.textContent = state.error;
+                if (!reason) badge.after(note);
+            }
+        };
+
+        const watching = new WeakSet();
+        const watch = async badge => {
+            if (watching.has(badge)) return;
+            watching.add(badge);
+            const until = Date.now() + 20 * 60 * 1000;
+            let wait = 3000;
+            let errors = 0;
+
+            while (document.contains(badge) && Date.now() < until && errors < 5) {
+                await new Promise(resolve => setTimeout(resolve, wait));
+                wait = Math.min(wait * 1.4, 15000);
+                if (document.hidden) continue;
+
+                try {
+                    const response = await fetch(badge.dataset.statusUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+                    const state = await response.json();
+                    if (!response.ok || !tones[state.status]) { errors++; continue; }
+                    errors = 0;
+                    show(badge, state);
+                    if (state.status !== 'processing') break;
+                } catch (error) {
+                    errors++;
+                }
+            }
+
+            watching.delete(badge);
+        };
+
+        document.addEventListener('submit', async event => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement) || !form.matches('[data-retry-audio]')) return;
+            event.preventDefault();
+
+            const button = event.submitter || (form.id && document.querySelector('[form="' + form.id + '"]')) || form.querySelector('button');
+            if (button?.disabled) return;
+            if (button) button.disabled = true;
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                const data = await response.json();
+                notify(data.message);
                 if (button) button.disabled = false;
-                return;
-            }
+                if (!data.started) return;
 
-            const holder = button?.closest('td, label') || form.closest('td');
-            const badge = holder?.querySelector('[data-retry-badge]');
-            if (badge) {
-                badge.className = 'badge amber';
-                badge.textContent = form.dataset.processingLabel || '';
-                badge.removeAttribute('title');
+                const badge = (button?.closest('td, label') || form.closest('td'))?.querySelector('[data-status-badge]');
+                if (badge) {
+                    show(badge, { status: 'processing' });
+                    watch(badge);
+                }
+            } catch (error) {
+                form.submit();
             }
-            holder?.querySelector('[data-retry-reason]')?.remove();
-            if (form.closest('td')) form.remove(); else button?.remove();
-        } catch (error) {
-            form.submit();
-        }
-    });
+        });
+
+        document.querySelectorAll('[data-status-badge][data-state="processing"]').forEach(watch);
+    })();
 </script>
 </body>
 </html>

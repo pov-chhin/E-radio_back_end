@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
@@ -252,6 +253,20 @@ class MediaContentController extends Controller
         }
 
         return $this->retryResult($request, false, __('Nothing to retry — upload the audio again.'));
+    }
+
+    /**
+     * How the audio of one item is doing, for the lists and the edit page that watch a Processing row: they ask
+     * every few seconds and change the row where it stands when it is Ready or Failed (see the layout's script).
+     */
+    public function processingStatus(MediaContent $mediaContent): JsonResponse
+    {
+        $failed = $mediaContent->processing_status === 'failed';
+
+        return response()->json([
+            'status' => $mediaContent->processing_status ?: 'ready',
+            'error' => $failed && $mediaContent->processing_error ? Str::limit($mediaContent->processing_error, 300) : null,
+        ]);
     }
 
     /**

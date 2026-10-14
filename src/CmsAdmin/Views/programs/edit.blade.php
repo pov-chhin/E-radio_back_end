@@ -57,12 +57,12 @@
                         </td>
                         <td class="muted">{{ $episode->duration_seconds ? intdiv($episode->duration_seconds, 60).':'.str_pad($episode->duration_seconds % 60, 2, '0', STR_PAD_LEFT) : '—' }}</td>
                         <td>
-                            @if($episode->processing_status === 'processing')
-                                <span class="badge amber">{{ __('Processing') }}</span>
-                            @elseif($episode->processing_status === 'failed')
-                                <span class="badge slate" data-retry-badge title="{{ $episode->processing_error }}">{{ __('Failed') }}</span>
+                            @if(in_array($episode->processing_status, ['processing', 'failed'], true))
+                                @php $audioFailed = $episode->processing_status === 'failed'; @endphp
+                                {{-- Processing and Failed rows keep themselves current: the page asks the server how the audio is doing until it is Ready or Failed (the script in the layout). --}}
+                                <span class="badge {{ $audioFailed ? 'slate' : 'amber' }}" data-status-badge data-state="{{ $episode->processing_status }}" data-status-url="{{ route('admin.media-contents.processing-status', $episode) }}" data-labels="{{ json_encode(['processing' => __('Processing'), 'ready' => __('Ready'), 'failed' => __('Failed')], JSON_UNESCAPED_UNICODE) }}" @if($audioFailed) title="{{ $episode->processing_error }}" @endif>{{ $audioFailed ? __('Failed') : __('Processing') }}</span>
                                 @if(auth('admin')->user()?->hasPermission('edit-media-content'))
-                                    <form method="POST" action="{{ route('admin.media-contents.retry-audio', $episode) }}" data-retry-audio data-processing-label="{{ __('Processing') }}" style="display:inline">
+                                    <form method="POST" action="{{ route('admin.media-contents.retry-audio', $episode) }}" data-retry-audio style="display:{{ $audioFailed ? 'inline' : 'none' }}">
                                         @csrf
                                         <button type="submit" class="secondary-button compact" style="margin-left:6px">{{ __('Retry') }}</button>
                                     </form>

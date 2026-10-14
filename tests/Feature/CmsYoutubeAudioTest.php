@@ -538,15 +538,64 @@ class CmsYoutubeAudioTest extends TestCase
 
         $edit = $this->get("/admin/media-contents/{$failed->id}/edit")->assertOk()->getContent();
         $this->assertStringContainsString('data-retry-audio', $edit);
-        $this->assertStringContainsString('data-retry-badge', $edit);
+        $this->assertStringContainsString('data-status-badge', $edit);
         $this->assertStringContainsString('data-retry-reason', $edit);
 
         $list = $this->get('/admin/music')->assertOk()->getContent();
         $this->assertStringContainsString('data-retry-audio', $list);
-        $this->assertStringContainsString('data-retry-badge', $list);
+        $this->assertStringContainsString('data-status-badge', $list);
 
         // One script for every page, in the shared layout: it turns the Failed badge into Processing in place.
         $this->assertStringContainsString("form.matches('[data-retry-audio]')", $list);
+    }
+
+    public function test_the_status_address_reports_how_the_audio_is_doing(): void
+    {
+        $episode = $this->episode(['source_url' => self::LINK, 'processing_status' => 'processing']);
+        $url = "/admin/media-contents/{$episode->id}/processing-status";
+
+        $this->getJson($url)->assertOk()->assertExactJson(['status' => 'processing', 'error' => null]);
+
+        $episode->update(['processing_status' => 'failed', 'processing_error' => 'Sign in to confirm you are not a bot']);
+        $this->getJson($url)->assertOk()->assertExactJson(['status' => 'failed', 'error' => 'Sign in to confirm you are not a bot']);
+
+        $episode->update(['processing_error' => str_repeat('x', 900)]);
+        $cut = $this->getJson($url)->json('error');
+        $this->assertSame(str_repeat('x', 300).'...', $cut);
+
+        // Ready never carries an old reason along.
+        $episode->update(['processing_status' => 'ready', 'processing_error' => 'left over']);
+        $this->getJson($url)->assertOk()->assertExactJson(['status' => 'ready', 'error' => null]);
+    }
+
+    public function test_the_status_address_needs_permission_to_view_media_content(): void
+    {
+        $episode = $this->episode(['processing_status' => 'processing']);
+
+        $this->actingAs($this->createAdmin(), 'admin');
+        $this->getJson("/admin/media-contents/{$episode->id}/processing-status")->assertForbidden();
+    }
+
+    public function test_a_processing_row_is_marked_for_watching_and_keeps_its_retry_hidden_until_it_fails(): void
+    {
+        $song = Category::where('slug', 'song')->firstOrFail()->id;
+        $processing = $this->episode(['slug' => 'busy', 'category_id' => $song, 'source_url' => self::LINK, 'processing_status' => 'processing']);
+
+        $list = $this->get('/admin/music')->assertOk()->getContent();
+        $this->assertStringContainsString('data-state="processing"', $list);
+        $this->assertStringContainsString("/admin/media-contents/{$processing->id}/processing-status", $list);
+        // The Retry form is there already (so a failure can show it) but out of sight.
+        $this->assertMatchesRegularExpression('#retry-audio"[^>]*data-retry-audio[^>]*style="display:none"#', $list);
+
+        $edit = $this->get("/admin/media-contents/{$processing->id}/edit")->assertOk()->getContent();
+        $this->assertStringContainsString('data-state="processing"', $edit);
+        $this->assertStringContainsString('id="retry-audio-form"', $edit);
+        $this->assertMatchesRegularExpression('#data-retry-button style="align-self:flex-start;display:none"#', $edit);
+
+        $processing->update(['processing_status' => 'failed', 'processing_error' => 'x']);
+        $failedList = $this->get('/admin/music')->assertOk()->getContent();
+        $this->assertStringContainsString('data-state="failed"', $failedList);
+        $this->assertDoesNotMatchRegularExpression('#data-retry-audio[^>]*style="display:none"#', $failedList);
     }
 
     public function test_retry_only_applies_to_a_failed_episode(): void

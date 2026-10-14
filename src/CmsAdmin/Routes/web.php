@@ -82,6 +82,11 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::post('media-contents/{media_content}/retry-audio', [MediaContentController::class, 'retryAudio'])->name('media-contents.retry-audio')
         ->where('media_content', '[0-9]+')
         ->middleware('permission:edit-media-content');
+    // How one item's audio is doing (Processing / Ready / Failed): the lists and the edit page ask it every few seconds
+    // for a row that is Processing, so the row changes by itself without a reload.
+    Route::get('media-contents/{media_content}/processing-status', [MediaContentController::class, 'processingStatus'])->name('media-contents.processing-status')
+        ->where('media_content', '[0-9]+')
+        ->middleware(['permission:view-media-content', 'throttle:240,1']);
     // "Fill from YouTube" on the media form: a pasted link's title, length and cover (YouTube Data API v3). Open to
     // whoever may create or edit media content (the controller checks), and throttled to spare the API quota.
     Route::post('media-contents/youtube-details', [MediaContentController::class, 'youtubeDetails'])->name('media-contents.youtube-details')
