@@ -423,6 +423,9 @@ class ApiPasswordResetCodeTest extends TestCase
         $this->assertStringContainsString('482913', $html);
         $this->assertStringContainsString('expires in 2 minutes', $html);
         $this->assertStringContainsString('Jane Doe', $html);
+        $this->assertStringContainsString('e-radio-ams-logo.png', $html);
+        $this->assertStringNotContainsString('Regards,', $html);
+        $this->assertStringNotContainsString('Laravel', $html);
     }
 
     public function test_the_flow_leaves_nothing_behind_in_the_cache(): void

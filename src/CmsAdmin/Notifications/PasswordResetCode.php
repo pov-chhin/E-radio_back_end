@@ -26,10 +26,12 @@ class PasswordResetCode extends Notification
     public function toMail(User $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Your '.config('app.name').' password reset code')
-            ->greeting('Hi '.$notifiable->name.',')
-            ->line('Use this code to reset your password:')
-            ->line('**'.$this->code.'**')
-            ->line("It expires in {$this->validForMinutes} ".($this->validForMinutes === 1 ? 'minute' : 'minutes').". If you didn't ask to reset your password, you can ignore this email.");
+            ->from(config('mail.from.address'), 'E-Radio AMS')
+            ->subject('Your E-Radio password reset code')
+            ->view('emails.password-reset-code', [
+                'code' => $this->code,
+                'userName' => $notifiable->name,
+                'validForMinutes' => $this->validForMinutes,
+            ]);
     }
 }
