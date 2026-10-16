@@ -190,6 +190,8 @@
                         @error('youtube_cookies_file') <em>{{ $message }}</em> @enderror
                     </label>
 
+                    @include('setting::partials.youtube-cookie-preview')
+
                     @if($youtubeCookiesSaved)
                         <label class="toggle-setting" style="margin-top:16px">
                             <span><b>{{ __('Remove saved YouTube cookies') }}</b><small>{{ __('YouTube downloads may require a new cookies.txt afterwards.') }}</small></span>
