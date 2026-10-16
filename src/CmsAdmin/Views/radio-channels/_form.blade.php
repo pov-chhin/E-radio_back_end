@@ -9,7 +9,7 @@
         <input id="stream_url" name="stream_url" type="text" value="{{ old('stream_url', $radioChannel->stream_url ?? '') }}" placeholder="https://…">
         @error('stream_url') <em>{{ $message }}</em> @enderror
     </label>
-    <label>{{ __('Cover') }} <small class="muted" style="font-weight:400">{{ __('— kept whole as WebP, never cropped (scaled down to fit 1280 px)') }}</small>
+    <label>{{ __('Cover') }} <small class="muted" style="font-weight:400">{{ __('— kept whole as WebP, never cropped (4:3 ratio)') }}</small>
         @if(isset($radioChannel) && $radioChannel->cover)
             <img src="{{ $radioChannel->cover_url }}" alt="" style="max-width:130px;max-height:130px;width:auto;height:auto;border-radius:8px">
             <span class="check-row" style="margin:0"><input type="checkbox" name="remove_cover" value="1"> {{ __('Remove current cover') }}</span>

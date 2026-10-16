@@ -347,7 +347,7 @@
     "active": "សកម្ម",
     "inactive": "អសកម្ម",
     "— leave blank to save as a draft": "— ទុកទទេដើម្បីរក្សាទុកជាព្រាង",
-    "— kept whole as WebP, never cropped (scaled down to fit 1280 px)": "— រក្សាទុកទាំងមូលជា WebP មិនកាត់ទេ (បង្រួមឲ្យសមនឹង 1280 px)",
+    "— kept whole as WebP, never cropped (4:3 ratio)": "— រក្សាទុកទាំងមូលជា WebP មិនកាត់ទេ (Ratio 4:3)",
     "Remove current cover": "ដករូបគម្របបច្ចុប្បន្នចេញ",
     "Bitrate": "អត្រាប៊ីត",
     "pop, news, khmer": "ប៉ុប, ព័ត៌មាន, ខ្មែរ",

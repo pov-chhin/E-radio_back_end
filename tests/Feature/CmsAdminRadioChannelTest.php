@@ -40,6 +40,19 @@ class CmsAdminRadioChannelTest extends TestCase
         $this->get('/admin/radio-channels')->assertOk()->assertSee('Pulse FM');
     }
 
+    public function test_the_cover_guidance_uses_a_four_by_three_ratio(): void
+    {
+        $this->get('/admin/radio-channels/create')
+            ->assertOk()
+            ->assertSee('— kept whole as WebP, never cropped (4:3 ratio)');
+
+        app()->setLocale('km');
+        $this->assertSame(
+            '— រក្សាទុកទាំងមូលជា WebP មិនកាត់ទេ (Ratio 4:3)',
+            __('— kept whole as WebP, never cropped (4:3 ratio)'),
+        );
+    }
+
     public function test_sync_pulls_new_stations(): void
     {
         Http::fake([
