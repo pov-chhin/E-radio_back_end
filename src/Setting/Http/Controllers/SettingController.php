@@ -46,8 +46,8 @@ class SettingController extends Controller
             // The RustFS storage type can only be picked once its connection is complete.
             'rustfsReady' => $rustfsSetting->s3Disk() !== null,
             'youtubeCookiesSaved' => $youtubeCookies !== null,
-            // Only names, domains and expiry reach the page — the cookie values never do.
-            'youtubeCookies' => $youtubeCookies === null ? [] : YoutubeCookieStore::list($youtubeCookies),
+            // Only the YouTube cookies' names, domains and expiry reach the page — never their values.
+            'youtubeCookies' => $youtubeCookies === null ? [] : YoutubeCookieStore::list($youtubeCookies, youtubeOnly: true),
         ]);
     }
 

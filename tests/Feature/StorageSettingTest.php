@@ -91,25 +91,39 @@ class StorageSettingTest extends TestCase
             ->assertDontSee('secret-session-value');
     }
 
-    public function test_saved_youtube_cookies_are_listed_by_name_without_their_values(): void
+    public function test_only_the_youtube_cookies_are_listed_by_name_without_their_values(): void
     {
         $cookies = "# Netscape HTTP Cookie File\n"
             ."#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsid-secret-value\n"
             ."www.youtube.com\tFALSE\t/\tFALSE\t0\tYSC\tysc-secret-value\n"
-            ."accounts.google.com\tFALSE\t/\tTRUE\t1000000000\tLOGIN_INFO\tlogin-secret-value\n";
+            .".youtube.com\tTRUE\t/\tTRUE\t1000000000\tPREF\tpref-secret-value\n"
+            ."accounts.google.com\tFALSE\t/\tTRUE\t2147483647\tLOGIN_INFO\tlogin-secret-value\n"
+            .".google.com\tTRUE\t/\tTRUE\t2147483647\tSAPISID\tsapisid-secret-value\n";
 
         StorageSetting::firstOrFail()->update(['youtube_cookies' => $cookies]);
 
         $this->get('/admin/settings')
             ->assertOk()
             ->assertSee('Saved cookies')
-            ->assertSeeInOrder(['LOGIN_INFO', 'accounts.google.com', 'YSC', 'www.youtube.com', 'SID', '.youtube.com'])
+            ->assertSeeInOrder(['Domain', 'Include Subdomains', 'Path', 'Secure', 'Expiry', 'Name'])
+            // Listed in the file's own order, as the browser extension shows them.
+            ->assertSeeInOrder(['SID', 'YSC', 'PREF'])
+            ->assertSee('www.youtube.com')
+            ->assertSee('TRUE')
+            ->assertSee('FALSE')
             ->assertSee('HttpOnly')
             ->assertSee('Session')
             ->assertSee('Expired')
+            // The Google sign-in cookies stay saved for yt-dlp but are not listed.
+            ->assertDontSee('LOGIN_INFO')
+            ->assertDontSee('SAPISID')
+            ->assertDontSee('google.com')
             ->assertDontSee('sid-secret-value')
             ->assertDontSee('ysc-secret-value')
+            ->assertDontSee('pref-secret-value')
             ->assertDontSee('login-secret-value');
+
+        $this->assertStringContainsString('LOGIN_INFO', StorageSetting::firstOrFail()->youtube_cookies);
     }
 
     public function test_no_cookie_list_is_shown_when_none_are_saved(): void

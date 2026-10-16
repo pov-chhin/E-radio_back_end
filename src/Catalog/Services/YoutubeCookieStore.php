@@ -49,11 +49,12 @@ class YoutubeCookieStore
     /**
      * The cookies a Netscape file holds, for showing which ones are saved. Values are deliberately left out: they
      * are the signed-in session itself, and the page never displays them. `expires` is a Unix time, 0 for a
-     * session cookie.
+     * session cookie. With $youtubeOnly the Google sign-in cookies that sit beside them are left out of the list
+     * (they stay in the saved file — yt-dlp needs them).
      *
-     * @return list<array{name: string, domain: string, path: string, secure: bool, http_only: bool, expires: int}>
+     * @return list<array{name: string, domain: string, subdomains: bool, path: string, secure: bool, http_only: bool, expires: int}>
      */
-    public static function list(string $contents): array
+    public static function list(string $contents, bool $youtubeOnly = false): array
     {
         $cookies = [];
 
@@ -70,17 +71,22 @@ class YoutubeCookieStore
                 continue;
             }
 
+            $host = strtolower(ltrim(str_replace('#HttpOnly_', '', $columns[0]), '.'));
+
+            if ($youtubeOnly && $host !== 'youtube.com' && ! str_ends_with($host, '.youtube.com')) {
+                continue;
+            }
+
             $cookies[] = [
                 'name' => $columns[5],
                 'domain' => str_replace('#HttpOnly_', '', $columns[0]),
+                'subdomains' => strtoupper($columns[1]) === 'TRUE',
                 'path' => $columns[2],
                 'secure' => strtoupper($columns[3]) === 'TRUE',
                 'http_only' => str_starts_with($columns[0], '#HttpOnly_'),
                 'expires' => max(0, (int) $columns[4]),
             ];
         }
-
-        usort($cookies, fn (array $a, array $b) => [ltrim($a['domain'], '.'), $a['name']] <=> [ltrim($b['domain'], '.'), $b['name']]);
 
         return $cookies;
     }
