@@ -47,6 +47,45 @@ class YoutubeCookieStore
     }
 
     /**
+     * The cookies a Netscape file holds, for showing which ones are saved. Values are deliberately left out: they
+     * are the signed-in session itself, and the page never displays them. `expires` is a Unix time, 0 for a
+     * session cookie.
+     *
+     * @return list<array{name: string, domain: string, path: string, secure: bool, http_only: bool, expires: int}>
+     */
+    public static function list(string $contents): array
+    {
+        $cookies = [];
+
+        foreach (preg_split('/\R/', $contents) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || (str_starts_with($line, '#') && ! str_starts_with($line, '#HttpOnly_'))) {
+                continue;
+            }
+
+            $columns = explode("\t", $line);
+
+            if (count($columns) < 7) {
+                continue;
+            }
+
+            $cookies[] = [
+                'name' => $columns[5],
+                'domain' => str_replace('#HttpOnly_', '', $columns[0]),
+                'path' => $columns[2],
+                'secure' => strtoupper($columns[3]) === 'TRUE',
+                'http_only' => str_starts_with($columns[0], '#HttpOnly_'),
+                'expires' => max(0, (int) $columns[4]),
+            ];
+        }
+
+        usort($cookies, fn (array $a, array $b) => [ltrim($a['domain'], '.'), $a['name']] <=> [ltrim($b['domain'], '.'), $b['name']]);
+
+        return $cookies;
+    }
+
+    /**
      * Saves the cookies and queues every failed YouTube fetch again with them. The caller has checked them with
      * valid(). Returns how many fetches were queued.
      */

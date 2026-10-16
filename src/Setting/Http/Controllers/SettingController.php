@@ -26,6 +26,7 @@ class SettingController extends Controller
     {
         $storageSetting = StorageSetting::firstOrFail();
         $rustfsSetting = RustfsSetting::firstOrFail();
+        $youtubeCookies = $this->savedCredential($storageSetting, 'youtube_cookies');
 
         return view('setting::edit', [
             'setting' => RadioScraperSetting::firstOrFail(),
@@ -44,7 +45,9 @@ class SettingController extends Controller
                 && $this->savedCredential($rustfsSetting, 's3_secret') === null,
             // The RustFS storage type can only be picked once its connection is complete.
             'rustfsReady' => $rustfsSetting->s3Disk() !== null,
-            'youtubeCookiesSaved' => $this->savedCredential($storageSetting, 'youtube_cookies') !== null,
+            'youtubeCookiesSaved' => $youtubeCookies !== null,
+            // Only names, domains and expiry reach the page — the cookie values never do.
+            'youtubeCookies' => $youtubeCookies === null ? [] : YoutubeCookieStore::list($youtubeCookies),
         ]);
     }
 

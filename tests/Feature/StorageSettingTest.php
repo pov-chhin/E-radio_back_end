@@ -91,6 +91,32 @@ class StorageSettingTest extends TestCase
             ->assertDontSee('secret-session-value');
     }
 
+    public function test_saved_youtube_cookies_are_listed_by_name_without_their_values(): void
+    {
+        $cookies = "# Netscape HTTP Cookie File\n"
+            ."#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsid-secret-value\n"
+            ."www.youtube.com\tFALSE\t/\tFALSE\t0\tYSC\tysc-secret-value\n"
+            ."accounts.google.com\tFALSE\t/\tTRUE\t1000000000\tLOGIN_INFO\tlogin-secret-value\n";
+
+        StorageSetting::firstOrFail()->update(['youtube_cookies' => $cookies]);
+
+        $this->get('/admin/settings')
+            ->assertOk()
+            ->assertSee('Saved cookies')
+            ->assertSeeInOrder(['LOGIN_INFO', 'accounts.google.com', 'YSC', 'www.youtube.com', 'SID', '.youtube.com'])
+            ->assertSee('HttpOnly')
+            ->assertSee('Session')
+            ->assertSee('Expired')
+            ->assertDontSee('sid-secret-value')
+            ->assertDontSee('ysc-secret-value')
+            ->assertDontSee('login-secret-value');
+    }
+
+    public function test_no_cookie_list_is_shown_when_none_are_saved(): void
+    {
+        $this->get('/admin/settings')->assertOk()->assertDontSee('Saved cookies');
+    }
+
     public function test_the_alternate_mozilla_header_and_http_only_youtube_cookies_are_accepted(): void
     {
         $cookies = "# HTTP Cookie File\n#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsecret-session-value\n";

@@ -145,6 +145,39 @@
                         <div class="inline-warning" style="margin:0 0 16px">{{ __('YouTube cookies are configured. Upload a new file to replace them when they expire.') }}</div>
                     @endif
 
+                    @if(count($youtubeCookies))
+                        <h4 style="margin:0 0 4px">{{ __('Saved cookies') }} <span class="muted" style="font-weight:400">({{ count($youtubeCookies) }})</span></h4>
+                        <small class="muted" style="display:block;margin-bottom:10px">{{ __('Names only — the values are never shown.') }}</small>
+                        <div class="data-table-wrap" style="margin-bottom:16px;max-height:340px;overflow:auto">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>{{ __('Name') }}</th>
+                                        <th>{{ __('Domain') }}</th>
+                                        <th>{{ __('Expires') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($youtubeCookies as $cookie)
+                                        <tr>
+                                            <td><b>{{ $cookie['name'] }}</b>@if($cookie['http_only']) <span class="badge slate">HttpOnly</span>@endif @if($cookie['secure']) <span class="badge slate">Secure</span>@endif</td>
+                                            <td class="muted">{{ $cookie['domain'] }}</td>
+                                            <td>
+                                                @if($cookie['expires'] === 0)
+                                                    <span class="badge slate">{{ __('Session') }}</span>
+                                                @elseif($cookie['expires'] < now()->timestamp)
+                                                    <span class="badge pink">{{ __('Expired') }} · {{ \Illuminate\Support\Carbon::createFromTimestamp($cookie['expires'])->toFormattedDateString() }}</span>
+                                                @else
+                                                    {{ \Illuminate\Support\Carbon::createFromTimestamp($cookie['expires'])->toFormattedDateString() }}
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+
                     <label>{{ __('YouTube cookies (.txt or .json)') }}
                         <small class="muted" style="font-weight:400">{{ __('A browser extension\'s JSON export works as it is: only the YouTube and Google cookies are kept, the rest is dropped.') }}</small>
                         <input name="youtube_cookies_file" type="file" accept=".txt,.json,text/plain,application/json">
