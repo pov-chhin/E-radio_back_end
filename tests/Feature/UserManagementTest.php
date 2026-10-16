@@ -41,6 +41,17 @@ class UserManagementTest extends TestCase
         $this->get('/admin/permissions')->assertOk();
     }
 
+    public function test_the_sidebar_uses_the_e_radio_brand(): void
+    {
+        config()->set('app.name', 'AMS E-Radio');
+
+        $sidebar = $this->get('/admin')->assertOk()->getContent();
+
+        $this->assertStringContainsString('<b>AMS E-Radio</b>', $sidebar);
+        $this->assertStringContainsString('images/e-radio-ams-logo.png', $sidebar);
+        $this->assertStringNotContainsString('<b>Laravel</b>', $sidebar);
+    }
+
     public function test_it_creates_a_permission(): void
     {
         $this->post('/admin/permissions', [

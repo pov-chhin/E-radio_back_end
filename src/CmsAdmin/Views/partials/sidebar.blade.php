@@ -4,7 +4,9 @@
         <span>cms admin</span>
     </a>
     <div class="station-switcher">
-        <span class="station-avatar">{{ strtoupper(substr(config('app.name'), 0, 2)) }}</span>
+        <span class="station-avatar station-brand-logo">
+            <img src="{{ asset('images/e-radio-ams-logo.png') }}" alt="" aria-hidden="true">
+        </span>
         <span><b>{{ config('app.name') }}</b><small>{{ __('Admin panel') }}</small></span>
     </div>
     @php
