@@ -27,7 +27,7 @@ use Src\CmsAdmin\Notifications\PasswordResetCode;
 class PasswordResetController extends Controller
 {
     /** How long an emailed code works — the app counts this down ("Code expires in 1:59"). */
-    public const CODE_TTL_SECONDS = 60;
+    public const CODE_TTL_SECONDS = 120;
 
     /** Minimum gap between two code requests for the same email. */
     public const RESEND_COOLDOWN_SECONDS = 60;
