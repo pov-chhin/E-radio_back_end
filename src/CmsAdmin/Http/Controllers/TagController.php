@@ -7,11 +7,22 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Src\CmsAdmin\Http\Controllers\Concerns\ResolvesUploadedMedia;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\Tag;
+use Src\Catalog\Services\ImageVariantProcessor;
 
 class TagController extends Controller
 {
+    use ResolvesUploadedMedia;
+
+    /** The exact size the tag's card picture is cropped and converted to — the app draws it at 154×74, at 4× for sharpness. */
+    private const IMAGE_WIDTH = 616;
+
+    private const IMAGE_HEIGHT = 296;
+
+    public function __construct(private readonly ImageVariantProcessor $imageProcessor) {}
+
     public function index(): View
     {
         $tree = Tag::flattenedTree();
@@ -59,6 +70,12 @@ class TagController extends Controller
 
     public function destroy(Tag $tag): RedirectResponse
     {
+        // The tags beneath it go with it (the foreign key cascades), so their pictures must not be left behind.
+        $tag->load('children');
+        foreach (Tag::whereIn('id', [$tag->id, ...$tag->descendantIds()])->get(['id', 'image', 'image_disk']) as $doomed) {
+            $this->deleteStoredMedia($doomed->image, $doomed->image_disk);
+        }
+
         $tag->delete();
 
         return redirect()->route('admin.tags.index')->with('status', __('Tag deleted, along with any child tags.'));
@@ -82,7 +99,13 @@ class TagController extends Controller
                 'required', 'string', 'max:255', 'alpha_dash',
                 Rule::unique('tags', 'slug')->where(fn ($query) => $query->where('parent_id', $parentId))->ignore($tag),
             ],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:5120'],
+            'image_url' => ['nullable', 'string', 'max:2048', 'url'],
+            'remove_image' => ['nullable', 'boolean'],
         ]);
+
+        $data = [...$data, ...$this->resolveStoredImage($this->imageProcessor, $request, 'image', $tag, self::IMAGE_WIDTH, self::IMAGE_HEIGHT)];
+        unset($data['image_url'], $data['remove_image']);
 
         // A sub tag is under whatever category its parent is; only a top-level tag picks its own.
         if ($parentId !== null) {

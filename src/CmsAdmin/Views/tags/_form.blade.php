@@ -31,6 +31,20 @@
         <small class="muted" style="font-weight:400">{{ __('Only needs to be unique among tags with the same parent.') }}</small>
         @error('slug') <em>{{ $message }}</em> @enderror
     </label>
+    <label class="full">{{ __('Card picture') }} <small class="muted" style="font-weight:400">{{ __('— cropped to WebP, 616×296') }}</small>
+        @if(isset($tag) && $tag->image)
+            <img src="{{ $tag->image_url }}" alt="" style="width:154px;height:74px;border-radius:8px;object-fit:cover">
+            <span class="check-row" style="margin:0"><input type="checkbox" name="remove_image" value="1"> {{ __('Remove current picture') }}</span>
+        @endif
+        <div class="tag-view-toggle" style="align-self:flex-start">
+            <button type="button" class="{{ old('image_url') ? '' : 'active' }}" data-image-mode-tab="upload" data-image-field="image">{{ __('Upload') }}</button>
+            <button type="button" class="{{ old('image_url') ? 'active' : '' }}" data-image-mode-tab="url" data-image-field="image">{{ __('Paste URL') }}</button>
+        </div>
+        <input id="image" name="image" type="file" accept="image/*" data-image-mode-panel="upload" data-image-field="image" @if(old('image_url')) hidden disabled @endif>
+        <input name="image_url" type="text" placeholder="https://…" value="{{ old('image_url') }}" data-image-mode-panel="url" data-image-field="image" @unless(old('image_url')) hidden disabled @endunless>
+        @error('image') <em>{{ $message }}</em> @enderror
+        @error('image_url') <em>{{ $message }}</em> @enderror
+    </label>
 </div>
 
 <button type="submit" class="primary-button">{{ __('Save') }}</button>

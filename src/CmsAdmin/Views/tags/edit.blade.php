@@ -11,7 +11,7 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('admin.tags.update', $tag) }}" class="panel form-card">
+    <form method="POST" action="{{ route('admin.tags.update', $tag) }}" class="panel form-card" enctype="multipart/form-data">
         @method('PUT')
         @include('cms-admin::tags._form')
     </form>

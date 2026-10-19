@@ -2,6 +2,8 @@
 
 namespace Src\Catalog\Models;
 
+use App\Support\MediaStorage;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,7 +11,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Tag extends Model
 {
-    protected $fillable = ['parent_id', 'category_id', 'name', 'slug'];
+    protected $fillable = ['parent_id', 'category_id', 'name', 'slug', 'image', 'image_disk'];
+
+    /** `image` stores a path on the disk named in `image_disk` (null = local public) or a plain external URL — resolve either to something an <img> can use. */
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::make(get: function (): ?string {
+            if (blank($this->image)) {
+                return null;
+            }
+
+            return str_starts_with($this->image, 'http://') || str_starts_with($this->image, 'https://')
+                ? $this->image
+                : MediaStorage::url($this->image, $this->image_disk);
+        });
+    }
 
     public function parent(): BelongsTo
     {
