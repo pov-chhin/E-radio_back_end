@@ -362,6 +362,22 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertStringContainsString('residential', $proxied);
     }
 
+    public function test_an_extractor_error_points_at_an_out_of_date_yt_dlp_instead_of_asking_to_report_it(): void
+    {
+        $process = new Process([PHP_BINARY, '-r', 'fwrite(STDERR, "WARNING: [youtube] Unable to download webpage: HTTP Error 403: Forbidden\nERROR: [youtube] QvNjy95J4A4: An extractor error has occurred. (caused by KeyError(\'INNERTUBE_CONTEXT\')); please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template.\n"); exit(1);']);
+        $process->run();
+
+        $fetcher = new YoutubeAudioFetcher;
+        $message = (new \ReflectionMethod($fetcher, 'failureMessage'))->invoke($fetcher, $process);
+
+        $this->assertStringContainsString("KeyError('INNERTUBE_CONTEXT')", $message);
+        $this->assertStringContainsString('HTTP Error 403: Forbidden', $message);
+        $this->assertStringContainsString('out of date', $message);
+        $this->assertStringContainsString('redeploy', $message);
+        $this->assertStringNotContainsString('please report', $message);
+        $this->assertStringNotContainsString('github.com', $message);
+    }
+
     public function test_a_configured_proxy_is_passed_to_yt_dlp_and_nothing_is_added_without_one(): void
     {
         $fetcher = new YoutubeAudioFetcher;

@@ -58,7 +58,6 @@ class YoutubeAudioFetcher
         $command = [
             config('services.yt_dlp.binary', 'yt-dlp'),
             '--no-playlist',
-            '--no-warnings',
             '--no-progress',
             // A live stream never ends, so there is nothing to fetch.
             '--match-filter', '!is_live',
@@ -320,6 +319,19 @@ class YoutubeAudioFetcher
             }
 
             return 'YouTube asks this server to sign in. Upload a fresh Netscape cookies.txt in Admin Settings → YouTube, or send the downloads through a home-address proxy (YT_DLP_PROXY), then retry. A YouTube API key cannot replace browser cookies.';
+        }
+
+        // "An extractor error has occurred (caused by KeyError(...))": yt-dlp itself broke on YouTube's page, which in
+        // practice means this server's yt-dlp is too old for YouTube's current site (or the saved cookies are stale).
+        if ($error !== null && preg_match('/an extractor error has occurred|\(caused by \w*Error\(/i', $error)) {
+            $warning = collect($lines)
+                ->reverse()
+                ->first(fn (string $line) => str_starts_with($line, 'WARNING:'));
+            $details = $warning !== null
+                ? ' The preceding yt-dlp warning was: '.Str::limit(trim(substr($warning, 8)), 500)
+                : '';
+
+            return 'yt-dlp on this server could not read YouTube\'s page ('.$this->withoutProxySecrets(Str::before($error, '; please report')).').'.$this->withoutProxySecrets($details).' It may be out of date: rebuild and redeploy the server so it installs the newest yt-dlp, then retry. If it still fails, use the warning above to diagnose the server connection, upload fresh cookies in Admin Settings → YouTube, or upload the audio file yourself.';
         }
 
         if ($error === null && $process->isSuccessful()) {

@@ -57,10 +57,14 @@ RUN apt-get update \
 # it prefers and Node (tested working) is the fallback; both are copied in as bare binaries from their own images
 # (no npm). The challenge solver scripts (yt-dlp-ejs) only come with the "default" extra, so install that: a plain
 # `pip install yt-dlp` leaves them out. Bookworm's pip refuses system-wide installs unless told otherwise. YouTube
-# changes often: redeploy (rebuild) now and then to pick up a newer yt-dlp.
+# changes often, and an old yt-dlp fails with "An extractor error has occurred (KeyError('INNERTUBE_CONTEXT'))" and the
+# like. The ADD below is the cache-buster: PyPI's description of yt-dlp changes with every release, so Docker re-runs
+# the install below on the first rebuild after a new release instead of reusing a layer with the old version.
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
-RUN pip3 install --no-cache-dir --break-system-packages "yt-dlp[default]" \
+ADD https://pypi.org/pypi/yt-dlp/json /tmp/yt-dlp-latest.json
+RUN pip3 install --no-cache-dir --break-system-packages --upgrade "yt-dlp[default]" \
+    && rm -f /tmp/yt-dlp-latest.json \
     && deno --version | head -1 \
     && node --version \
     && pip3 show yt-dlp-ejs | head -2 \
