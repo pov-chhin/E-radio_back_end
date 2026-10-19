@@ -12,42 +12,21 @@ class ImportAmbientCardImagesCommand extends Command
 {
     protected $signature = 'tags:import-ambient-cards {--force : Replace a picture a mood already has}';
 
-    protected $description = 'Store the original Ambient Music pictures — each mood\'s card (database/data/ambient-cards) and banner illustration (database/data/ambient-banners) — on their moods, so the app loads them from the database';
+    protected $description = 'Store the original Ambient Music card pictures (database/data/ambient-cards) as the pictures of their moods, so the app loads them from the database';
 
-    /**
-     * The tag column each kind of picture goes in, with the folder its files are in (under database/data), the file
-     * for each mood slug, and the size it is stored at — the same the admin uses (CmsAdmin TagController).
-     */
-    private const PICTURES = [
-        'image' => [
-            'directory' => 'ambient-cards',
-            'width' => 616,
-            'height' => 296,
-            'crop' => true,
-            'files' => [
-                'working' => 'working.png',
-                'lobbylounge' => 'relaxing.png',
-                'studying' => 'studying.png',
-                'yoga' => 'yoga.png',
-                'Sports' => 'sports.png',
-            ],
-        ],
-        'banner_image' => [
-            'directory' => 'ambient-banners',
-            'width' => 480,
-            'height' => 480,
-            'crop' => false,
-            'files' => [
-                'working' => 'working.png',
-                'lobbylounge' => 'relaxing.png',
-                'studying' => 'studying.png',
-                'yoga' => 'yoga.png',
-                'reading' => 'reading.png',
-                'Sports' => 'sports.png',
-                'khmer-traditional-music' => 'khmer.png',
-            ],
-        ],
+    /** Mood tag slug => the file in database/data/ambient-cards. */
+    private const CARDS = [
+        'working' => 'working.png',
+        'lobbylounge' => 'relaxing.png',
+        'studying' => 'studying.png',
+        'yoga' => 'yoga.png',
+        'Sports' => 'sports.png',
     ];
+
+    /** Must match the size the admin crops a tag picture to (CmsAdmin TagController). */
+    private const WIDTH = 616;
+
+    private const HEIGHT = 296;
 
     public function handle(ImageVariantProcessor $imageProcessor): int
     {
@@ -59,39 +38,35 @@ class ImportAmbientCardImagesCommand extends Command
             return self::FAILURE;
         }
 
-        foreach (self::PICTURES as $column => $picture) {
-            $this->info($column === 'image' ? 'Cards:' : 'Banners:');
+        foreach (self::CARDS as $slug => $file) {
+            $tag = Tag::where('parent_id', $ambient->id)->where('slug', $slug)->first();
 
-            foreach ($picture['files'] as $slug => $file) {
-                $tag = Tag::where('parent_id', $ambient->id)->where('slug', $slug)->first();
+            if ($tag === null) {
+                $this->warn("  {$slug}: no such mood under Ambient Music — skipped");
 
-                if ($tag === null) {
-                    $this->warn("  {$slug}: no such mood under Ambient Music — skipped");
-
-                    continue;
-                }
-
-                if (filled($tag->{$column}) && ! $this->option('force')) {
-                    $this->line("  {$slug}: already has one — skipped (use --force to replace it)");
-
-                    continue;
-                }
-
-                $path = $imageProcessor->process(
-                    new UploadedFile(database_path("data/{$picture['directory']}/{$file}"), $file, 'image/png', null, true),
-                    config('services.media_storage.image_directory'),
-                    $picture['width'], $picture['height'],
-                    crop: $picture['crop'],
-                    disk: MediaStorage::current(),
-                );
-
-                if (filled($tag->{$column}) && ! str_starts_with($tag->{$column}, 'http')) {
-                    MediaStorage::disk($tag->{"{$column}_disk"})->delete($tag->{$column});
-                }
-
-                $tag->update([$column => $path, "{$column}_disk" => MediaStorage::column()]);
-                $this->line("  {$slug}: stored {$path}");
+                continue;
             }
+
+            if (filled($tag->image) && ! $this->option('force')) {
+                $this->line("  {$slug}: already has a picture — skipped (use --force to replace it)");
+
+                continue;
+            }
+
+            $source = database_path("data/ambient-cards/{$file}");
+            $path = $imageProcessor->process(
+                new UploadedFile($source, $file, 'image/png', null, true),
+                config('services.media_storage.image_directory'),
+                self::WIDTH, self::HEIGHT,
+                disk: MediaStorage::current(),
+            );
+
+            if (filled($tag->image) && ! str_starts_with($tag->image, 'http')) {
+                MediaStorage::disk($tag->image_disk)->delete($tag->image);
+            }
+
+            $tag->update(['image' => $path, 'image_disk' => MediaStorage::column()]);
+            $this->info("  {$slug}: stored {$path}");
         }
 
         return self::SUCCESS;
