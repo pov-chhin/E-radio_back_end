@@ -163,7 +163,7 @@ class CmsDashboardTest extends TestCase
             ->assertDontSee('Recent admin users');
     }
 
-    public function test_it_shows_the_top_10_most_played_songs_below_recent_radio_channels(): void
+    public function test_it_shows_the_top_5_most_played_songs_below_recent_radio_channels(): void
     {
         $this->actingAs($this->createAdmin([]), 'admin');
         $songCategoryId = Category::where('slug', 'song')->firstOrFail()->id;
@@ -180,15 +180,34 @@ class CmsDashboardTest extends TestCase
 
         $html = $this->get('/admin')->assertOk()->assertSee('Most played music')->getContent();
 
-        // Top 10 by play count (Track 12 down to Track 3); the two least-played don't make the cut.
+        // Top 5 by play count (Track 12 down to Track 8); everything below doesn't make the cut.
         $this->assertStringContainsString('Track 12', $html);
-        $this->assertStringContainsString('Track 3', $html);
-        $this->assertStringNotContainsString('Track 2<', $html);
+        $this->assertStringContainsString('Track 8', $html);
+        $this->assertStringNotContainsString('Track 7<', $html);
         $this->assertStringNotContainsString('Track 1<', $html);
 
         // Below "Recent radio channels" means the 3rd panel in the dashboard grid.
         $firstPanel = strpos($html, 'Recent radio channels');
         $secondPanel = strpos($html, 'Most played music');
         $this->assertGreaterThan($firstPanel, $secondPanel);
+    }
+
+    public function test_it_cuts_long_song_titles_to_25_characters_on_the_most_played_panel(): void
+    {
+        $this->actingAs($this->createAdmin([]), 'admin');
+
+        $title = str_repeat('a', 40);
+        MediaContent::create([
+            'category_id' => Category::where('slug', 'song')->firstOrFail()->id,
+            'title' => $title,
+            'slug' => 'a-very-long-title',
+            'media_type' => 'audio',
+            'play_count' => 1,
+        ]);
+
+        $html = $this->get('/admin')->assertOk()->getContent();
+
+        $this->assertStringContainsString('>'.str_repeat('a', 25).'...</b>', $html);
+        $this->assertStringNotContainsString('>'.$title.'</b>', $html);
     }
 }

@@ -143,7 +143,7 @@
         <section class="dash-trio">
             <article class="dash-card">
                 <header class="dash-card-head">
-                    <div><h3>{{ __('Most played music') }}</h3><p>{{ __('Top 10 songs by play count') }}</p></div>
+                    <div><h3>{{ __('Most played music') }}</h3><p>{{ __('Top 5 songs by play count') }}</p></div>
                     @if($adminUser->hasPermission('view-media-content'))
                         <a class="dash-link" href="{{ route('admin.music.index', ['category' => 'song']) }}">{{ __('View all') }}</a>
                     @endif
@@ -163,7 +163,7 @@
                                             @else
                                                 <span class="dash-avatar tone-{{ $loop->iteration <= 3 ? 'primary' : 'slate' }}">{{ $loop->iteration }}</span>
                                             @endif
-                                            <div class="dash-cell-copy"><b>{{ $track->title }}</b><small>{{ $track->artist?->stage_name ?: ($track->artist?->name ?? __('Unknown artist')) }}</small></div>
+                                            <div class="dash-cell-copy"><b title="{{ $track->title }}">{{ \Illuminate\Support\Str::limit($track->title, 25) }}</b><small>{{ $track->artist?->stage_name ?: ($track->artist?->name ?? __('Unknown artist')) }}</small></div>
                                         </div>
                                     </td>
                                     <td class="right">

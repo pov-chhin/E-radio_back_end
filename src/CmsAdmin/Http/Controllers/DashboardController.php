@@ -66,7 +66,7 @@ class DashboardController extends Controller
             'topMusic' => MediaContent::with('artist')
                 ->where('category_id', Category::where('slug', 'song')->value('id'))
                 ->orderByDesc('play_count')
-                ->take(10)
+                ->take(5)
                 ->get(),
             'countries' => $this->usersByCountry(),
         ];
