@@ -45,6 +45,20 @@
         @error('image') <em>{{ $message }}</em> @enderror
         @error('image_url') <em>{{ $message }}</em> @enderror
     </label>
+    <label class="full">{{ __('Banner picture') }} <small class="muted" style="font-weight:400">{{ __('— kept transparent, scaled to fit 480×480') }}</small>
+        @if(isset($tag) && $tag->banner_image)
+            <img src="{{ $tag->banner_image_url }}" alt="" style="height:74px;max-width:154px;object-fit:contain">
+            <span class="check-row" style="margin:0"><input type="checkbox" name="remove_banner_image" value="1"> {{ __('Remove current banner') }}</span>
+        @endif
+        <div class="tag-view-toggle" style="align-self:flex-start">
+            <button type="button" class="{{ old('banner_image_url') ? '' : 'active' }}" data-image-mode-tab="upload" data-image-field="banner_image">{{ __('Upload') }}</button>
+            <button type="button" class="{{ old('banner_image_url') ? 'active' : '' }}" data-image-mode-tab="url" data-image-field="banner_image">{{ __('Paste URL') }}</button>
+        </div>
+        <input id="banner_image" name="banner_image" type="file" accept="image/*" data-image-mode-panel="upload" data-image-field="banner_image" @if(old('banner_image_url')) hidden disabled @endif>
+        <input name="banner_image_url" type="text" placeholder="https://…" value="{{ old('banner_image_url') }}" data-image-mode-panel="url" data-image-field="banner_image" @unless(old('banner_image_url')) hidden disabled @endunless>
+        @error('banner_image') <em>{{ $message }}</em> @enderror
+        @error('banner_image_url') <em>{{ $message }}</em> @enderror
+    </label>
 </div>
 
 <button type="submit" class="primary-button">{{ __('Save') }}</button>

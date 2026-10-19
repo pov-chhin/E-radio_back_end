@@ -152,6 +152,151 @@ class CmsTagImageTest extends TestCase
         $this->assertDatabaseMissing('tags', ['slug' => 'qa-bad']);
     }
 
+    /** The five moods the original card pictures belong to, by tag slug. */
+    private const CARD_MOODS = ['working', 'lobbylounge', 'studying', 'yoga', 'Sports'];
+
+    private function mood(string $slug): Tag
+    {
+        $ambient = Tag::where('slug', 'ambient-music')->whereNull('parent_id')->firstOrFail();
+
+        return Tag::where('parent_id', $ambient->id)->where('slug', $slug)->firstOrFail();
+    }
+
+    /** The migrations seed no Sports mood; the live one (added in the admin) is slugged `Sports`. */
+    private function addLiveMoods(): void
+    {
+        $ambient = Tag::where('slug', 'ambient-music')->whereNull('parent_id')->firstOrFail();
+
+        Tag::firstOrCreate(
+            ['parent_id' => $ambient->id, 'slug' => 'Sports'],
+            ['category_id' => $ambient->category_id, 'name' => 'Sports'],
+        );
+    }
+
+    public function test_the_import_command_stores_the_original_card_pictures_on_their_moods(): void
+    {
+        $this->addLiveMoods();
+        $this->artisan('tags:import-ambient-cards')->assertSuccessful();
+
+        foreach (self::CARD_MOODS as $slug) {
+            $tag = $this->mood($slug);
+            $this->assertStringEndsWith('.webp', $tag->image, $slug);
+            $this->assertSame([616, 296], $this->dimensionsOf($tag->image), $slug);
+            $this->assertSame($tag->image_url, $this->apiNode($slug)['image_url'], $slug);
+        }
+
+        // Reading and Khmer Traditional Music never had a card picture.
+        $this->assertNull($this->mood('reading')->image);
+        $this->assertNull($this->mood('khmer-traditional-music')->image);
+    }
+
+    public function test_the_import_command_also_stores_every_banner_illustration_keeping_its_transparency(): void
+    {
+        $this->addLiveMoods();
+
+        $this->artisan('tags:import-ambient-cards')->assertSuccessful();
+
+        foreach ([...self::CARD_MOODS, 'reading', 'khmer-traditional-music'] as $slug) {
+            $tag = $this->mood($slug);
+            $this->assertStringEndsWith('.webp', $tag->banner_image, $slug);
+            $this->assertSame($tag->banner_image_url, $this->apiNode($slug)['banner_image_url'], $slug);
+
+            // Scaled down to fit, never cropped or enlarged: nothing past 480, the corner still see-through.
+            [$width, $height] = $this->dimensionsOf($tag->banner_image);
+            $this->assertLessThanOrEqual(480, max($width, $height), $slug);
+            $image = imagecreatefromstring(Storage::disk('public')->get($tag->banner_image));
+            $this->assertSame(127, (imagecolorat($image, 0, 0) >> 24) & 0x7F, "{$slug} lost its transparency");
+        }
+    }
+
+    public function test_the_import_command_leaves_a_picture_the_admin_uploaded_unless_forced(): void
+    {
+        $this->addLiveMoods();
+        $working = $this->mood('working');
+        $this->put("/admin/tags/{$working->id}", [
+            'name' => $working->name, 'slug' => 'working', 'parent_id' => $working->parent_id,
+            'image' => UploadedFile::fake()->image('mine.png', 700, 400),
+        ])->assertSessionHasNoErrors();
+        $mine = $working->fresh()->image;
+
+        $this->artisan('tags:import-ambient-cards')->assertSuccessful();
+
+        $this->assertSame($mine, $working->fresh()->image);
+        Storage::disk('public')->assertExists($mine);
+        $this->assertNotNull($this->mood('yoga')->image);
+
+        $this->artisan('tags:import-ambient-cards --force')->assertSuccessful();
+
+        $this->assertNotSame($mine, $working->fresh()->image);
+        Storage::disk('public')->assertMissing($mine);
+        Storage::disk('public')->assertExists($working->fresh()->image);
+    }
+
+    public function test_a_banner_picture_is_scaled_to_fit_not_cropped_and_served_by_the_api(): void
+    {
+        $this->post('/admin/tags', [
+            'name' => 'QA Banner', 'slug' => 'qa-banner',
+            'banner_image' => UploadedFile::fake()->image('hero.png', 300, 600),
+        ])->assertSessionHasNoErrors();
+
+        $tag = Tag::where('slug', 'qa-banner')->firstOrFail();
+        $this->assertStringEndsWith('.webp', $tag->banner_image);
+        // 300×600 fits 480×480 at 0.8 — the shape is kept.
+        $this->assertSame([240, 480], $this->dimensionsOf($tag->banner_image));
+        $this->assertNull($tag->banner_image_disk);
+        $this->assertNull($tag->image);
+        $this->assertSame($tag->banner_image_url, $this->apiNode('qa-banner')['banner_image_url']);
+        $this->assertNull($this->apiNode('qa-banner')['image_url']);
+    }
+
+    public function test_a_small_banner_picture_is_not_enlarged(): void
+    {
+        $this->post('/admin/tags', [
+            'name' => 'QA Small', 'slug' => 'qa-small',
+            'banner_image' => UploadedFile::fake()->image('hero.png', 200, 100),
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame([200, 100], $this->dimensionsOf(Tag::where('slug', 'qa-small')->firstOrFail()->banner_image));
+    }
+
+    public function test_replacing_and_removing_the_banner_picture_cleans_up_the_files(): void
+    {
+        $tag = Tag::create(['name' => 'Mood', 'slug' => 'qa-banner-life']);
+        $card = null;
+
+        $this->put("/admin/tags/{$tag->id}", ['name' => 'Mood', 'slug' => 'qa-banner-life',
+            'image' => UploadedFile::fake()->image('c.png', 700, 400), 'banner_image' => UploadedFile::fake()->image('a.png', 300, 300)]);
+        $card = $tag->fresh()->image;
+        $old = $tag->fresh()->banner_image;
+
+        $this->put("/admin/tags/{$tag->id}", ['name' => 'Mood', 'slug' => 'qa-banner-life', 'banner_image' => UploadedFile::fake()->image('b.png', 300, 300)])
+            ->assertSessionHasNoErrors();
+        $new = $tag->fresh()->banner_image;
+        $this->assertNotSame($old, $new);
+        Storage::disk('public')->assertMissing($old);
+        Storage::disk('public')->assertExists($new);
+        // The card picture was left alone.
+        $this->assertSame($card, $tag->fresh()->image);
+
+        $this->put("/admin/tags/{$tag->id}", ['name' => 'Mood', 'slug' => 'qa-banner-life', 'remove_banner_image' => '1'])->assertSessionHasNoErrors();
+        $this->assertNull($tag->fresh()->banner_image);
+        $this->assertNull($tag->fresh()->banner_image_disk);
+        Storage::disk('public')->assertMissing($new);
+        $this->assertSame($card, $tag->fresh()->image);
+        Storage::disk('public')->assertExists($card);
+    }
+
+    public function test_deleting_a_tag_also_deletes_its_banner_picture(): void
+    {
+        $tag = Tag::create(['name' => 'Mood', 'slug' => 'qa-banner-doomed']);
+        $this->put("/admin/tags/{$tag->id}", ['name' => 'Mood', 'slug' => 'qa-banner-doomed', 'banner_image' => UploadedFile::fake()->image('a.png', 300, 300)]);
+        $path = $tag->fresh()->banner_image;
+
+        $this->delete("/admin/tags/{$tag->id}")->assertRedirect();
+
+        Storage::disk('public')->assertMissing($path);
+    }
+
     public function test_the_form_can_upload_a_file(): void
     {
         $tag = Tag::create(['name' => 'Mood', 'slug' => 'qa-form']);
@@ -162,6 +307,8 @@ class CmsTagImageTest extends TestCase
             $this->assertStringContainsString('enctype="multipart/form-data"', $form, $url);
             $this->assertMatchesRegularExpression('/<input id="image" name="image" type="file"/', $form, $url);
             $this->assertStringContainsString('name="image_url"', $form, $url);
+            $this->assertMatchesRegularExpression('/<input id="banner_image" name="banner_image" type="file"/', $form, $url);
+            $this->assertStringContainsString('name="banner_image_url"', $form, $url);
         }
     }
 }

@@ -4,6 +4,7 @@ namespace Src\Catalog\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Src\Catalog\Console\Commands\FetchYoutubeAudioCommand;
+use Src\Catalog\Console\Commands\ImportAmbientCardImagesCommand;
 
 class CatalogServiceProvider extends ServiceProvider
 {
@@ -14,6 +15,7 @@ class CatalogServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 FetchYoutubeAudioCommand::class,
+                ImportAmbientCardImagesCommand::class,
             ]);
         }
     }

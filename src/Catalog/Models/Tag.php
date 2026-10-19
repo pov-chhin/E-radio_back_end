@@ -11,20 +11,29 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Tag extends Model
 {
-    protected $fillable = ['parent_id', 'category_id', 'name', 'slug', 'image', 'image_disk'];
+    protected $fillable = ['parent_id', 'category_id', 'name', 'slug', 'image', 'image_disk', 'banner_image', 'banner_image_disk'];
 
     /** `image` stores a path on the disk named in `image_disk` (null = local public) or a plain external URL — resolve either to something an <img> can use. */
     protected function imageUrl(): Attribute
     {
-        return Attribute::make(get: function (): ?string {
-            if (blank($this->image)) {
-                return null;
-            }
+        return Attribute::make(get: fn () => $this->resolveMediaUrl($this->image, $this->image_disk));
+    }
 
-            return str_starts_with($this->image, 'http://') || str_starts_with($this->image, 'https://')
-                ? $this->image
-                : MediaStorage::url($this->image, $this->image_disk);
-        });
+    /** The banner illustration, resolved the same way from `banner_image` / `banner_image_disk`. */
+    protected function bannerImageUrl(): Attribute
+    {
+        return Attribute::make(get: fn () => $this->resolveMediaUrl($this->banner_image, $this->banner_image_disk));
+    }
+
+    private function resolveMediaUrl(?string $value, ?string $disk): ?string
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        return str_starts_with($value, 'http://') || str_starts_with($value, 'https://')
+            ? $value
+            : MediaStorage::url($value, $disk);
     }
 
     public function parent(): BelongsTo

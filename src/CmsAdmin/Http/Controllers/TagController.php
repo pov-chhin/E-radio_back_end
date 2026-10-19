@@ -21,6 +21,9 @@ class TagController extends Controller
 
     private const IMAGE_HEIGHT = 296;
 
+    /** The banner illustration is only scaled down to fit this box (never cropped or enlarged), with its transparency kept — the app draws it about 152 wide, at 3× for sharpness. */
+    private const BANNER_SIZE = 480;
+
     public function __construct(private readonly ImageVariantProcessor $imageProcessor) {}
 
     public function index(): View
@@ -72,8 +75,9 @@ class TagController extends Controller
     {
         // The tags beneath it go with it (the foreign key cascades), so their pictures must not be left behind.
         $tag->load('children');
-        foreach (Tag::whereIn('id', [$tag->id, ...$tag->descendantIds()])->get(['id', 'image', 'image_disk']) as $doomed) {
+        foreach (Tag::whereIn('id', [$tag->id, ...$tag->descendantIds()])->get(['id', 'image', 'image_disk', 'banner_image', 'banner_image_disk']) as $doomed) {
             $this->deleteStoredMedia($doomed->image, $doomed->image_disk);
+            $this->deleteStoredMedia($doomed->banner_image, $doomed->banner_image_disk);
         }
 
         $tag->delete();
@@ -102,10 +106,14 @@ class TagController extends Controller
             'image' => ['nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:5120'],
             'image_url' => ['nullable', 'string', 'max:2048', 'url'],
             'remove_image' => ['nullable', 'boolean'],
+            'banner_image' => ['nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:5120'],
+            'banner_image_url' => ['nullable', 'string', 'max:2048', 'url'],
+            'remove_banner_image' => ['nullable', 'boolean'],
         ]);
 
         $data = [...$data, ...$this->resolveStoredImage($this->imageProcessor, $request, 'image', $tag, self::IMAGE_WIDTH, self::IMAGE_HEIGHT)];
-        unset($data['image_url'], $data['remove_image']);
+        $data = [...$data, ...$this->resolveStoredImage($this->imageProcessor, $request, 'banner_image', $tag, self::BANNER_SIZE, self::BANNER_SIZE, crop: false)];
+        unset($data['image_url'], $data['remove_image'], $data['banner_image_url'], $data['remove_banner_image']);
 
         // A sub tag is under whatever category its parent is; only a top-level tag picks its own.
         if ($parentId !== null) {
