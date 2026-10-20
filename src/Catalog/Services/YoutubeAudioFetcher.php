@@ -72,6 +72,8 @@ class YoutubeAudioFetcher
             $command[] = $runtime;
         }
 
+        array_push($command, ...$this->potProviderArguments());
+
         $proxyArguments = $this->proxyArguments();
         $proxyOffset = count($command);
         array_push($command, ...$proxyArguments);
@@ -289,6 +291,29 @@ class YoutubeAudioFetcher
         }
 
         return ['--proxy', $proxy];
+    }
+
+    /**
+     * YouTube answers some downloads with 403 unless the request carries a "PO token". The bgutil plugin inside yt-dlp
+     * fetches one from a token server (YT_DLP_POT_BASE_URL); without that setting the plugin only tries its default,
+     * a server on this same machine, and yt-dlp carries on without a token.
+     *
+     * @return list<string>
+     */
+    private function potProviderArguments(): array
+    {
+        $baseUrl = trim((string) config('services.yt_dlp.pot_base_url'));
+
+        if ($baseUrl === '') {
+            return [];
+        }
+
+        // A semicolon would start another extractor argument.
+        if (! preg_match('#^https?://[^\s;/]+(/[^\s;]*)?$#i', $baseUrl)) {
+            throw new RuntimeException('YT_DLP_POT_BASE_URL is not a web address. Use a form like http://pot-provider:4416.');
+        }
+
+        return ['--extractor-args', 'youtubepot-bgutilhttp:base_url='.rtrim($baseUrl, '/')];
     }
 
     /** The proxy address (and its password) can show up in yt-dlp's errors, which are stored and shown to admins. */

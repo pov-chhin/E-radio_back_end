@@ -37,6 +37,7 @@ services:
       RUN_QUEUE_WORKER: "0"
       # The image has yt-dlp on its PATH; .env may hold a path from the dev PC.
       YT_DLP_BINARY: yt-dlp
+      YT_DLP_POT_BASE_URL: http://pot-provider:4416
     ports:
       - "0.0.0.0:8000:80"
     volumes:
@@ -67,12 +68,24 @@ services:
       DB_PORT: 3306
       RUN_MIGRATIONS: "0"
       YT_DLP_BINARY: yt-dlp
+      YT_DLP_POT_BASE_URL: http://pot-provider:4416
     command: ["php", "artisan", "queue:listen", "--tries=1", "--timeout=0"]
     volumes:
       - eradio_storage:/var/www/html/storage
     depends_on:
       app:
         condition: service_healthy
+
+  # Makes the "PO token" YouTube wants for some downloads (yt-dlp's bgutil plugin asks it; see YT_DLP_POT_BASE_URL). It has no
+  # password, so no `ports:` — only the services of this stack reach it. Keep the tag equal to bgutil-ytdlp-pot-provider's
+  # version in the Dockerfile.
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
+    init: true
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
 
 volumes:
   eradio_db:

@@ -30,6 +30,8 @@ return [
         // Optional proxy for yt-dlp only (http://, https://, socks5://[user:password@]host:port). YouTube blocks datacenter
         // addresses (a VPS) but not home ones: a proxy that leaves from a home or residential address gets past that.
         'proxy' => env('YT_DLP_PROXY') ?: null,
+        // Optional address of a bgutil PO-token server (http://pot-provider:4416): some YouTube downloads answer 403 without a token.
+        'pot_base_url' => env('YT_DLP_POT_BASE_URL') ?: null,
         // Optional cookie-free Innertube visitor data. This is not a YouTube API key and is less reliable than cookies.
         'visitor_data' => env('YT_DLP_VISITOR_DATA'),
     ],

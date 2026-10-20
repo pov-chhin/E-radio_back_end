@@ -402,6 +402,30 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertSame(['--proxy', 'socks5h://user:pa55@127.0.0.1:1080'], $method->invoke($fetcher));
     }
 
+    public function test_a_po_token_server_is_passed_to_the_bgutil_plugin_and_nothing_is_added_without_one(): void
+    {
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'potProviderArguments');
+
+        config(['services.yt_dlp.pot_base_url' => null]);
+        $this->assertSame([], $method->invoke($fetcher));
+
+        config(['services.yt_dlp.pot_base_url' => ' http://pot-provider:4416/ ']);
+        $this->assertSame(['--extractor-args', 'youtubepot-bgutilhttp:base_url=http://pot-provider:4416'], $method->invoke($fetcher));
+    }
+
+    public function test_a_po_token_server_setting_that_is_not_a_web_address_is_refused(): void
+    {
+        config(['services.yt_dlp.pot_base_url' => 'pot-provider:4416;other=1']);
+
+        $fetcher = new YoutubeAudioFetcher;
+        $method = new \ReflectionMethod($fetcher, 'potProviderArguments');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('YT_DLP_POT_BASE_URL is not a web address');
+        $method->invoke($fetcher);
+    }
+
     public function test_a_proxy_setting_that_is_not_an_address_is_refused_with_a_clear_message(): void
     {
         config(['services.yt_dlp.proxy' => '127.0.0.1:1080']);

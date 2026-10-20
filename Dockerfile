@@ -60,10 +60,13 @@ RUN apt-get update \
 # changes often, and an old yt-dlp fails with "An extractor error has occurred (KeyError('INNERTUBE_CONTEXT'))" and the
 # like. The ADD below is the cache-buster: PyPI's description of yt-dlp changes with every release, so Docker re-runs
 # the install below on the first rebuild after a new release instead of reusing a layer with the old version.
+# bgutil-ytdlp-pot-provider is yt-dlp's plugin that asks a separate "PO token" server (YT_DLP_POT_BASE_URL, the
+# brainicism/bgutil-ytdlp-pot-provider container) for the proof-of-browser token YouTube wants for some downloads;
+# keep its version equal to that container's tag.
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 ADD https://pypi.org/pypi/yt-dlp/json /tmp/yt-dlp-latest.json
-RUN pip3 install --no-cache-dir --break-system-packages --upgrade "yt-dlp[default]" \
+RUN pip3 install --no-cache-dir --break-system-packages --upgrade "yt-dlp[default]" "bgutil-ytdlp-pot-provider==2.0.2" \
     && rm -f /tmp/yt-dlp-latest.json \
     && deno --version | head -1 \
     && node --version \
