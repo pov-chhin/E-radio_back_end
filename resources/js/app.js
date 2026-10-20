@@ -113,11 +113,32 @@ if (streamInput && durationInput) {
         probe.preload = 'metadata';
         const cleanup = () => URL.revokeObjectURL(probe.src);
         probe.addEventListener('loadedmetadata', () => {
-            if (Number.isFinite(probe.duration) && probe.duration > 0) durationInput.value = Math.round(probe.duration);
+            if (Number.isFinite(probe.duration) && probe.duration > 0) {
+                durationInput.value = Math.round(probe.duration);
+                durationInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             cleanup();
         }, { once: true });
         probe.addEventListener('error', cleanup, { once: true });
         probe.src = URL.createObjectURL(file);
+    });
+}
+
+// The duration box shows the seconds the hidden field carries as m:ss (h:mm:ss from an hour up). Whatever sets the
+// field — the file picker above, "Fill from YouTube" — sends it an `input` event to refresh the box.
+const durationDisplay = qs('[data-duration-display]');
+if (durationInput && durationDisplay) {
+    durationInput.addEventListener('input', () => {
+        const total = Number.parseInt(durationInput.value, 10);
+        if (!Number.isFinite(total) || total < 0) {
+            durationDisplay.value = '';
+            return;
+        }
+        const pad = n => String(n).padStart(2, '0');
+        const seconds = total % 60;
+        durationDisplay.value = total >= 3600
+            ? `${Math.floor(total / 3600)}:${pad(Math.floor((total % 3600) / 60))}:${pad(seconds)}`
+            : `${Math.floor(total / 60)}:${pad(seconds)}`;
     });
 }
 

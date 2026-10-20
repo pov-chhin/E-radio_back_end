@@ -11,15 +11,17 @@
     </div>
     @php
         $adminNav = [
-            ['route' => 'admin.dashboard', 'pattern' => 'admin.dashboard', 'label' => 'Overview', 'icon' => 'th-large', 'permission' => null],
-            ['route' => 'admin.radio-channels.index', 'pattern' => 'admin.radio-channels.*', 'label' => 'Radio Channels', 'icon' => 'server', 'permission' => 'view-radio-channels'],
+            ['route' => 'admin.dashboard', 'pattern' => 'admin.dashboard', 'label' => 'Dashboard', 'icon' => 'th-large', 'permission' => null],
+            // The Content group: the podcasts, the content, and the radio. Each item names the group, so its heading
+            // shows whichever of them the admin can see.
+            ['route' => 'admin.programs.index', 'pattern' => 'admin.programs.*', 'label' => 'Podcasts Program', 'icon' => 'podcast', 'permission' => 'view-programs', 'section' => 'Content',
+                'active' => fn () => request()->routeIs('admin.programs.*') || (request()->routeIs('admin.media-contents.*') && request()->filled('podcast'))],
+            ['route' => 'admin.music.index', 'pattern' => 'admin.music.*', 'label' => 'Content', 'icon' => 'newspaper-o', 'permission' => 'view-media-content', 'section' => 'Content',
+                'active' => fn () => request()->routeIs('admin.music.*') || (request()->routeIs('admin.media-contents.*') && ! request()->filled('podcast'))],
+            ['route' => 'admin.radio-channels.index', 'pattern' => 'admin.radio-channels.*', 'label' => 'Radio Channels', 'icon' => 'server', 'permission' => 'view-radio-channels', 'section' => 'Content'],
             // The radio studio lives on its own site: a link out (new tab), shown to whoever sees Radio Channels. Its
             // address is edited under Settings → Radio Studio; with none set there is no link.
-            ['url' => \Src\Setting\Models\RadioStudioSetting::studioUrl(), 'label' => 'Radio Studio', 'icon' => 'headphones', 'permission' => 'view-radio-channels'],
-            ['route' => 'admin.programs.index', 'pattern' => 'admin.programs.*', 'label' => 'Podcasts', 'icon' => 'podcast', 'permission' => 'view-programs', 'section' => 'Taxonomy',
-                'active' => fn () => request()->routeIs('admin.programs.*') || (request()->routeIs('admin.media-contents.*') && request()->filled('podcast'))],
-            ['route' => 'admin.music.index', 'pattern' => 'admin.music.*', 'label' => 'Article', 'icon' => 'newspaper-o', 'permission' => 'view-media-content',
-                'active' => fn () => request()->routeIs('admin.music.*') || (request()->routeIs('admin.media-contents.*') && ! request()->filled('podcast'))],
+            ['url' => \Src\Setting\Models\RadioStudioSetting::studioUrl(), 'label' => 'Radio Studio', 'icon' => 'headphones', 'permission' => 'view-radio-channels', 'section' => 'Content'],
             ['route' => 'admin.categories.index', 'pattern' => 'admin.categories.*', 'label' => 'Categories', 'icon' => 'sitemap', 'permission' => 'view-categories', 'section' => 'Taxonomy'],
             ['route' => 'admin.tags.index', 'pattern' => 'admin.tags.*', 'label' => 'Tags', 'icon' => 'tags', 'permission' => 'view-tags'],
             ['route' => 'admin.artists.index', 'pattern' => 'admin.artists.*', 'label' => 'Artists', 'icon' => 'microphone', 'permission' => 'view-artists'],
@@ -32,7 +34,7 @@
         ];
     @endphp
     <nav class="main-nav" aria-label="{{ __('Main navigation') }}">
-        <p>{{ __('Workspace') }}</p>
+        <p>{{ __('Overviews') }}</p>
         @php $currentSection = null; @endphp
         @foreach($adminNav as $item)
             @continue($item['permission'] && ! $admin?->hasPermission($item['permission']))

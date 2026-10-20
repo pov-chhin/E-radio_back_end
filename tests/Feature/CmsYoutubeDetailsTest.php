@@ -192,7 +192,7 @@ class CmsYoutubeDetailsTest extends TestCase
 
     public function test_the_form_offers_the_button_and_auto_fills_only_when_a_key_is_set(): void
     {
-        $this->get('/admin/media-contents/create')
+        $this->get('/admin/media-contents/create?category=none')
             ->assertOk()
             ->assertSee('data-youtube-fill', false)
             ->assertSee('data-auto="1"', false)
@@ -201,6 +201,6 @@ class CmsYoutubeDetailsTest extends TestCase
 
         config(['services.youtube_data.key' => null]);
 
-        $this->get('/admin/media-contents/create')->assertOk()->assertSee('data-auto="0"', false);
+        $this->get('/admin/media-contents/create?category=none')->assertOk()->assertSee('data-auto="0"', false);
     }
 }

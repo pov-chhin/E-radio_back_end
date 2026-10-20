@@ -21,7 +21,7 @@
     <main class="main-content">
         <header class="topbar">
             <button class="mobile-menu" data-menu-toggle aria-label="{{ __('Open menu') }}"><i class="fa fa-bars"></i></button>
-            <div class="breadcrumbs"><span>{{ __('Admin panel') }}</span><b>/</b><strong>{{ __($__env->yieldContent('title') ?: 'Overview') }}</strong></div>
+            <div class="breadcrumbs"><span>{{ __('Admin panel') }}</span><b>/</b><strong>{{ __($__env->yieldContent('title') ?: 'Dashboard') }}</strong></div>
             <div class="top-actions">
                 @php
                     $latestNotifications = $admin?->notifications()->latest()->take(6)->get();

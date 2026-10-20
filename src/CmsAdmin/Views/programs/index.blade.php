@@ -5,11 +5,11 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Taxonomy') }}</p>
+            <p class="eyebrow">{{ __('Content') }}</p>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px">
                 <h1>{{ __('Podcasts') }}</h1>
                 {{-- One tab per podcast type, taken from the tags under Podcast; each submits the GET form with its slug. --}}
-                <form method="GET" action="{{ route('admin.programs.index') }}" aria-label="{{ __('Filter by podcast type') }}">
+                <form method="GET" action="{{ route('admin.programs.index') }}" aria-label="{{ __('Filter by podcast category') }}">
                     <div class="tag-view-toggle">
                         <button type="submit" name="type" value="" style="padding:7px 14px;font-size:10px" @class(['active' => ! $activeType])>{{ __('All') }}</button>
                         @foreach($types as $type)
@@ -21,7 +21,7 @@
             <p>{{ __('Shows and their episodes, as listeners see them in the app.') }}</p>
         </div>
         {{-- One straight link to the create page; the podcast type is picked on the form (an open type tab is already selected there). --}}
-        <a href="{{ route('admin.programs.create', $activeType ? ['type' => $activeType->slug] : []) }}" class="primary-button">{{ __('New') }} <i class="fa fa-plus" aria-hidden="true"></i></a>
+        <a href="{{ route('admin.programs.create', $activeType ? ['type' => $activeType->slug] : []) }}" class="primary-button">{{ __('New Podcast Program') }} <i class="fa fa-plus" aria-hidden="true"></i></a>
     </div>
 
     <div class="data-table-wrap">
@@ -29,7 +29,7 @@
             <thead>
                 <tr>
                     <th>{{ __('Name') }}</th>
-                    <th>{{ __('Podcast type') }}</th>
+                    <th>{{ __('Podcast Category') }}</th>
                     <th>{{ __('Episodes') }}</th>
                     <th>{{ __('Status') }}</th>
                     <th class="right">{{ __('Actions') }}</th>

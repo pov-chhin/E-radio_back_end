@@ -4,6 +4,13 @@
     // A new episode added from a podcast's page starts public, so "Publish" publishes it; "Save draft" still stashes it as private.
     $currentStatus = old('status', $mediaContent->status ?? (($podcast ?? null) ? 'public' : 'private'));
     $statusTone = ['public' => 'green', 'scheduled' => 'amber', 'private' => 'slate'][$currentStatus];
+    // A length in seconds as m:ss (h:mm:ss from an hour up); nothing for no length.
+    $formatDuration = fn ($total) => ($total === null || $total === '') ? '' : (
+        (int) $total >= 3600
+            ? sprintf('%d:%02d:%02d', intdiv((int) $total, 3600), intdiv((int) $total % 3600, 60), (int) $total % 60)
+            : sprintf('%d:%02d', intdiv((int) $total, 60), (int) $total % 60)
+    );
+    $durationSeconds = old('duration_seconds', $mediaContent->duration_seconds ?? '');
 @endphp
 
 <div class="editor-topbar">
@@ -25,7 +32,7 @@
     <strong class="editor-topbar-title" @if($newTitle) data-title-template="{{ __('New :category Media Content', ['category' => ':category']) }}" data-title-plain="{{ __('New media content') }}" data-title-plain-crumb="{{ __('New Media Content') }}" @elseif($editTitle) data-title-template="{{ __('Edit :category Media Content', ['category' => ':category']) }}" data-title-plain-crumb="{{ __('Edit Media Content') }}" @endif>{{
         isset($mediaContent)
             ? $mediaContent->title
-            : (($podcast ?? null) ? __('New episode') : (($titleCategory ?? null) ? __('New :category Media Content', ['category' => $titleCategory->name]) : __('New media content')))
+            : (($podcast ?? null) ? __('New episode') : (($titleCategory ?? null) ? __('New :category Media Content', ['category' => $titleCategory->titleName()]) : __('New media content')))
     }}</strong>
     <div class="editor-topbar-actions">
         <button type="submit" class="secondary-button" data-save-draft>{{ __('Save draft') }}</button>
@@ -65,10 +72,9 @@
 
 <div class="editor-layout">
     <div class="editor-main">
-        <input id="title" name="title" type="text" class="editor-title-input" placeholder="{{ ($podcast ?? null) ? __('Episode title') : __('Media title') }}" value="{{ old('title', $mediaContent->title ?? '') }}" required>
-        <label class="editor-slug-row">{{ __('Slug') }}
-            <input id="slug" name="slug" type="text" value="{{ old('slug', $mediaContent->slug ?? '') }}" placeholder="{{ __('Made from the title if left empty') }}" pattern="[A-Za-z0-9_-]+" title="{{ __('Use letters, numbers, dashes, or underscores.') }}" data-slug-input>
-        </label>
+        <input id="title" name="title" type="text" class="editor-title-input" placeholder="{{ ($podcast ?? null) ? __('Episode title') : __($titlePlaceholder ?? 'Title Song or Title Audio or Title Podcasts Eps or Title Ambient') }}" value="{{ old('title', $mediaContent->title ?? '') }}" required>
+        {{-- A thin line under the title, where the Slug row's bottom border used to be. --}}
+        <hr class="editor-title-rule" style="width:100%;border:0;border-top:1px solid var(--line);margin:-8px 0 0">
         @error('title') <em>{{ $message }}</em> @enderror
         @error('slug') <em>{{ $message }}</em> @enderror
 
@@ -76,9 +82,11 @@
             <h4>{{ __('Content') }}</h4>
             <div class="form-grid">
                 <input id="media_type" name="media_type" type="hidden" value="audio">
-                <label class="full">{{ __('Duration (seconds)') }}
-                    <small class="muted" style="font-weight:400">{{ __('Filled in automatically from the uploaded file — override only if it looks wrong.') }}</small>
-                    <input id="duration_seconds" name="duration_seconds" type="number" min="0" value="{{ old('duration_seconds', $mediaContent->duration_seconds ?? '') }}">
+                <label class="full">{{ __('Duration (m:s)') }}
+                    <small class="muted" style="font-weight:400">{{ __('Filled in automatically from the uploaded file or the YouTube link.') }}</small>
+                    {{-- The hidden field carries the seconds the server saves; the box beside it only shows them as m:s (a disabled box is never sent). --}}
+                    <input id="duration_seconds" name="duration_seconds" type="hidden" value="{{ $durationSeconds }}">
+                    <input type="text" value="{{ $formatDuration($durationSeconds) }}" placeholder="0:00" disabled data-duration-display>
                     @error('duration_seconds') <em>{{ $message }}</em> @enderror
                 </label>
                 <label class="full">{{ __('Stream / content') }}
@@ -105,9 +113,7 @@
                         @php
                             $isExternalStream = str_starts_with($mediaContent->stream, 'http://') || str_starts_with($mediaContent->stream, 'https://');
                             $seconds = (int) $mediaContent->duration_seconds;
-                            $length = $seconds >= 3600
-                                ? sprintf('%d:%02d:%02d', intdiv($seconds, 3600), intdiv($seconds % 3600, 60), $seconds % 60)
-                                : sprintf('%d:%02d', intdiv($seconds, 60), $seconds % 60);
+                            $length = $formatDuration($seconds);
                         @endphp
                         <div class="current-file">
                             @if($mediaContent->processing_status === 'ready' && ! $mediaContent->stream_missing)
@@ -161,7 +167,7 @@
 
     <aside class="editor-sidebar">
         <div class="sidebar-box">
-            <h4>{{ __('Featured image') }} <small class="muted" style="font-weight:400">{{ __('— shown in full, WebP, up to 1280px') }}</small></h4>
+            <h4>{{ __('Featured image') }} <small class="muted" style="font-weight:400">{{ __('ratio 3:4') }}</small></h4>
             <img
                 src="{{ isset($mediaContent) && $mediaContent->thumbnail ? $mediaContent->thumbnail_url : '' }}"
                 alt="{{ __('Featured image preview') }}"
@@ -210,13 +216,15 @@
                 $podcastRequired = $podcastRequired ?? false;
                 $lockedProgramId = $lockedProgramId ?? null;
             @endphp
-            <label>{{ __('Category') }}
+            {{-- The Song form has nothing to choose here, so the field is out of sight; it stays in the page because the
+                 scripts read the Category (the tag list, the title) and the form posts it. --}}
+            <label @if(in_array('category', $hiddenFields, true)) style="display:none" @endif>{{ __('Category') }}
                 {{-- "New Song" fixes the category; a disabled select posts nothing, so a hidden field carries it. --}}
                 @if($lockedCategoryId)<input type="hidden" name="category_id" value="{{ $lockedCategoryId }}">@endif
                 <select id="category_id" @if($lockedCategoryId) disabled @else name="category_id" required @endif>
                     <option value="">{{ __('Select a category…') }}</option>
                     @foreach($categories as $category)
-                        <option value="{{ $category->id }}" @selected((int) old('category_id', $mediaContent->category_id ?? $podcast?->category_id ?? $defaultCategoryId ?? '') === $category->id)>{{ $category->name }}</option>
+                        <option value="{{ $category->id }}" data-title-name="{{ $category->titleName() }}" @selected((int) old('category_id', $mediaContent->category_id ?? $podcast?->category_id ?? $defaultCategoryId ?? '') === $category->id)>{{ $category->name }}</option>
                     @endforeach
                 </select>
                 @error('category_id') <em>{{ $message }}</em> @enderror
@@ -225,7 +233,7 @@
             @unless(in_array('podcast', $hiddenFields, true))
                 <label>
                     <span style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-                        {{ __('Podcast') }}
+                        {{ __('Podcast Program') }}
                         {{-- A new podcast is made on its own page, in a new tab so this form isn't lost; reload here to pick it. --}}
                         @if(! $lockedProgramId && auth('admin')->user()?->hasPermission('create-programs'))
                             <a href="{{ route('admin.programs.create') }}" target="_blank" rel="noopener" class="primary-button compact" style="height:24px;padding:0 11px;font-size:9px;box-shadow:none" title="{{ __('Create a new podcast (opens in a new tab)') }}">{{ __('New') }}</a>
@@ -241,44 +249,68 @@
                             <option value="">{{ __('No podcast') }}</option>
                         @endif
                         @foreach($programs as $program)
-                            <option value="{{ $program->id }}" data-category-id="{{ $program->category_id }}" @selected((int) old('program_id', $mediaContent->program_id ?? $podcast?->id ?? '') === $program->id)>{{ $program->name }}</option>
+                            <option value="{{ $program->id }}" data-category-id="{{ $program->category_id }}" data-tag-id="{{ $program->tag_id }}" @selected((int) old('program_id', $mediaContent->program_id ?? $podcast?->id ?? '') === $program->id)>{{ $program->name }}</option>
                         @endforeach
                     </select>
                     @error('program_id') <em>{{ $message }}</em> @enderror
                 </label>
             @endunless
-            @unless(in_array('artist', $hiddenFields, true))
-                <label>{{ __('Artist') }}
-                    <select id="artist_id" name="artist_id">
-                        <option value="">{{ __('No artist') }}</option>
-                        @foreach($artists as $artist)
-                            <option value="{{ $artist->id }}" @selected((int) old('artist_id', $mediaContent->artist_id ?? '') === $artist->id)>{{ $artist->stage_name ?: $artist->name }}</option>
-                        @endforeach
-                    </select>
-                    @error('artist_id') <em>{{ $message }}</em> @enderror
-                </label>
-            @endunless
-        </div>
-
-        <div class="sidebar-box">
-            <h4>{{ __('Tags') }}</h4>
+            {{-- Tags are part of this card, under the Category: the tree follows the Category picked above. --}}
+            {{-- Names the International / Local select below; the script leaves it out when the tree on show has no regions (News, Health). --}}
+            <span data-tag-caption style="display:block;font-size:9px;font-weight:700;margin:0 0 6px">{{ __('Region') }}</span>
             @php $selectedTags = collect(old('tags', isset($mediaContent) ? $mediaContent->tags->pluck('id')->all() : [])); @endphp
             @if($tagTree->isEmpty())
                 <p class="muted">{!! __('No tags yet — :link.', ['link' => '<a href="'.e(route('admin.tags.create')).'">'.e(__('create one')).'</a>']) !!}</p>
             @else
-                {{-- International / Local: hides the other branch of the tree; only offered while the tree on show has them. --}}
+                {{-- International / Local, as a dropdown: picks which branch of the tree is listed (the other is hidden); only offered while the tree on show has them. --}}
                 <label class="tag-region" style="margin:0 0 9px">
                     <select data-tag-region aria-label="{{ __('Filter tags by region') }}">
                         <option value="international">{{ __('International') }}</option>
                         <option value="local">{{ __('Local') }}</option>
                     </select>
                 </label>
+                {{-- Names what the list below starts with (Genre, under International); the script fills it in and shows it. --}}
+                <span data-tag-tree-title style="display:none;font-size:9px;font-weight:700;margin:0 0 6px"></span>
                 <div class="tag-tree" data-tag-tree>
-                    @include('cms-admin::partials.tag-tree', ['nodes' => $tagTree, 'selectedTags' => $selectedTags])
+                    {{-- The top row of News, Health, Economy/Finance, Ambient Music and Podcast is left out, so each lists only its own rows; Economy/Finance's two (International, Local) are radio buttons. --}}
+                    @include('cms-admin::partials.tag-tree', [
+                        'nodes' => $tagTree,
+                        'selectedTags' => $selectedTags,
+                        'foldRoots' => $categories->whereIn('slug', ['news', 'health', 'economyfinance', 'ambient-music', 'podcast'])->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                        'radioRoots' => $categories->where('slug', 'economyfinance')->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                    ])
                 </div>
                 <p class="muted" style="margin:0;font-size:10px" data-tag-category-hint hidden>{{ __('Choose a category to pick its tags.') }}</p>
             @endif
         </div>
+
+        {{-- The Artist has a card of its own, under Details (the News form leaves it out). --}}
+        @unless(in_array('artist', $hiddenFields, true))
+            @php $selectedArtists = collect(old('artist_ids', isset($mediaContent) ? $mediaContent->artists->pluck('id')->all() : []))->map(fn ($id) => (int) $id); @endphp
+            <div class="sidebar-box">
+                <label for="artist_search">{{ __('Artist') }}
+                    {{-- Narrows the list below to the names that contain what is typed (the script); it is not sent with the form. --}}
+                    <input id="artist_search" type="search" placeholder="{{ __('Search artist…') }}" aria-label="{{ __('Search artist') }}" autocomplete="off" data-artist-search>
+                </label>
+                {{-- Any number of artists can be ticked. --}}
+                @if($artists->isEmpty())
+                    <p class="muted" style="margin:0">{!! __('No artists yet — :link.', ['link' => '<a href="'.e(route('admin.artists.create')).'">'.e(__('create one')).'</a>']) !!}</p>
+                @else
+                    {{-- Five artists show; more scroll (the script sets the height from the real rows; this is the fallback). --}}
+                    <div class="tag-tree" style="max-height:164px" data-artist-list>
+                        @foreach($artists as $artist)
+                            <label class="tag-tree-leaf" data-artist-row>
+                                <input type="checkbox" name="artist_ids[]" value="{{ $artist->id }}" @checked($selectedArtists->contains($artist->id))>
+                                <span>{{ $artist->stage_name ?: $artist->name }}</span>
+                            </label>
+                        @endforeach
+                        <p class="muted" style="margin:6px 8px;font-size:10px" data-artist-empty hidden>{{ __('No matching artists.') }}</p>
+                    </div>
+                @endif
+                @error('artist_ids') <em style="color:var(--pink);font-size:8px;font-style:normal">{{ $message }}</em> @enderror
+                @error('artist_ids.*') <em style="color:var(--pink);font-size:8px;font-style:normal">{{ $message }}</em> @enderror
+            </div>
+        @endunless
     </aside>
 </div>
 
@@ -323,7 +355,7 @@
                 // Trees that sit under no category are offered whatever the category is.
                 const show = id !== '' && (!narrowed || node.dataset.categoryId === id || node.dataset.categoryId === '');
                 node.style.display = show ? '' : 'none';
-                if (!show && clear) node.querySelectorAll('input[type=checkbox]').forEach(input => { input.checked = false; });
+                if (!show && clear) node.querySelectorAll('input[type=checkbox], input[type=radio]').forEach(input => { input.checked = false; });
             });
             tree.style.display = roots.some(node => node.style.display !== 'none') ? '' : 'none';
             hint?.toggleAttribute('hidden', id !== '');
@@ -337,21 +369,66 @@
     // branch is hidden wherever it appears (under Song, under Economy/Finance, …) and the picked one is listed
     // on its own: its row and the rows above it (Song) are left out, so the list starts at Genre. A region with
     // no branches of its own stays where it is. It only narrows what is shown: a ticked tag in a hidden branch
-    // stays ticked. The select is offered only while the tree on show has regions, and it starts on
+    // stays ticked. The dropdown is offered only while the tree on show has regions, and it starts on
     // International — or on the region an item already has a ticked tag in.
     (() => {
         const tree = document.querySelector('[data-tag-tree]');
         const select = document.querySelector('[data-tag-region]');
         if (!tree || !select) return;
         const field = select.closest('label');
+        const picked = () => select.value;
         const nameOf = node => node.querySelector('span')?.textContent.trim().toLowerCase();
         const summaryOf = node => node.querySelector(':scope > summary');
         const childrenOf = node => node.querySelector(':scope > .tag-tree-children');
         const parentNode = node => node.parentElement.closest('details.tag-tree-node');
-        const regionNodes = [...tree.querySelectorAll('details.tag-tree-node, label.tag-tree-leaf')]
+        // Only a region with rows of its own under it (Song > International > Genre) is picked with the radio buttons
+        // above; a tree whose regions are single tags (Economy/Finance) lists them as radio buttons of its own.
+        const regionNodes = [...tree.querySelectorAll('details.tag-tree-node')]
             .filter(node => ['international', 'local'].includes(nameOf(node)));
         const openBefore = new Map();
         const regionsOnShow = () => regionNodes.filter(node => node.closest('[data-category-id]').style.display !== 'none');
+        const title = document.querySelector('[data-tag-tree-title]');
+        const caption = document.querySelector('[data-tag-caption]');
+
+        const labelOf = node => node.querySelector('span')?.textContent.trim();
+
+        // A row that gives way to a caption or title: its own row (arrow, tick box, name) is left out and the rows
+        // under it are listed, flush left. A tag that is ticked already stays ticked (a hidden box is still sent).
+        const foldAway = node => {
+            if (!openBefore.has(node)) openBefore.set(node, node.open);
+            node.open = true;
+            summaryOf(node).style.display = 'none';
+            childrenOf(node).style.marginLeft = '0';
+        };
+
+        // The "Region" caption goes with the International / Local dropdown: it shows while it is offered. A tree
+        // with no regions (News, Health, Economy/Finance, Ambient Music, Podcast) has none, so there is no caption. A tree
+        // flagged to give way (those five) leaves its top row out: its own rows are listed on their own.
+        const refreshCaption = () => {
+            if (caption) caption.style.display = regionsOnShow().length ? 'block' : 'none';
+
+            [...tree.children]
+                .filter(node => node.hasAttribute('data-fold-root') && node.style.display !== 'none' && node.matches('details.tag-tree-node'))
+                .forEach(foldAway);
+        };
+
+        // The title over the list names the rows under the picked region (Genre, under International), and those rows
+        // give way to it: their own row (arrow, tick box, name) is left out and their children are listed, flush left.
+        // A tag that is ticked already stays ticked (a hidden box is still sent). With no region on show, or the list
+        // hidden, there is no title and every row stays.
+        const refreshTitle = () => {
+            if (!title) return;
+            const region = regionsOnShow().find(node => nameOf(node) === picked() && node.matches('details'));
+            const tops = !region || tree.style.display === 'none'
+                ? []
+                : [...childrenOf(region).children].filter(node => node.matches('details.tag-tree-node'));
+
+            tops.forEach(foldAway);
+
+            const text = tops.map(labelOf).filter(Boolean).join(' / ');
+            title.textContent = text;
+            title.style.display = text ? 'block' : 'none';
+        };
 
         const apply = () => {
             field.style.display = regionsOnShow().length ? '' : 'none';
@@ -362,9 +439,9 @@
                 childrenOf(node).style.marginLeft = '';
                 if (openBefore.has(node)) { node.open = openBefore.get(node); openBefore.delete(node); }
             });
-            regionNodes.forEach(node => { node.style.display = nameOf(node) === select.value ? '' : 'none'; });
+            regionNodes.forEach(node => { node.style.display = nameOf(node) === picked() ? '' : 'none'; });
 
-            regionNodes.filter(node => nameOf(node) === select.value && node.matches('details')).forEach(region => {
+            regionNodes.filter(node => nameOf(node) === picked() && node.matches('details')).forEach(region => {
                 for (let node = region; node; node = parentNode(node)) {
                     if (!openBefore.has(node)) openBefore.set(node, node.open);
                     node.open = true;
@@ -372,6 +449,9 @@
                     childrenOf(node).style.marginLeft = '0';
                 }
             });
+
+            refreshTitle();
+            refreshCaption();
         };
 
         // Start on the region an item already has a ticked tag in (a song filed under Local), else the first one.
@@ -387,6 +467,99 @@
         apply();
     })();
 
+    // Tags follow the Podcast Program: a program has a type (a tag under Podcast). While a program with a type is
+    // picked — and its tag is in the list on show — the list is locked: only that tag is ticked and nothing can be
+    // changed by hand. A disabled box is not sent with a form, so the ticked ones are added to what is sent. Picking
+    // "No podcast", or a program with no type, unlocks the list and gives back the ticks it had before. A new item
+    // starts with the tag of the program it starts on; an item being edited keeps the tags it has (locked) until its
+    // program is changed.
+    (() => {
+        const program = document.getElementById('program_id');
+        const tree = document.querySelector('[data-tag-tree]');
+        if (!program || !tree || !program.form) return;
+        const isNew = !program.form.querySelector('input[name="_method"]'); // an edit form is sent as PUT
+        const boxes = () => [...tree.querySelectorAll('input[name="tags[]"]')];
+        const onShow = box => { const top = box.closest('[data-category-id]'); return !top || top.style.display !== 'none'; };
+        let before = null; // the boxes that were ticked before the list began to follow a program
+
+        const follow = reset => {
+            const id = program.selectedOptions[0]?.dataset.tagId;
+            const next = id ? boxes().find(box => box.value === id) : null;
+
+            if (next && onShow(next)) {
+                if (!before) before = boxes().filter(box => box.checked);
+                boxes().forEach(box => {
+                    if (reset) box.checked = box === next;
+                    box.disabled = true;
+                });
+            } else {
+                boxes().forEach(box => {
+                    if (before) box.checked = before.includes(box);
+                    box.disabled = false;
+                });
+                before = null;
+            }
+        };
+
+        program.addEventListener('change', () => follow(true));
+        document.getElementById('category_id')?.addEventListener('change', () => follow(true));
+        program.form.addEventListener('formdata', event => {
+            boxes().filter(box => box.disabled && box.checked).forEach(box => event.formData.append('tags[]', box.value));
+        });
+        follow(isNew);
+    })();
+
+    // The radio buttons in the tag list (Economy/Finance's International and Local) pick one at a time; clicking the
+    // one that is picked clears it again, so an item can have neither.
+    (() => {
+        const radios = [...document.querySelectorAll('[data-tag-tree] input[type=radio]')];
+        const remember = () => radios.forEach(radio => { radio.dataset.was = radio.checked ? '1' : ''; });
+        remember();
+        radios.forEach(radio => radio.addEventListener('click', () => {
+            if (radio.dataset.was === '1') radio.checked = false;
+            remember();
+        }));
+    })();
+
+    // Artist: the list shows five artists and scrolls beyond that; the search box narrows it to the names that
+    // contain what is typed. A ticked artist stays in the list whatever is typed, so what is chosen is always on
+    // show; Enter doesn't send the form.
+    (() => {
+        const search = document.querySelector('[data-artist-search]');
+        const list = document.querySelector('[data-artist-list]');
+        const rows = [...document.querySelectorAll('[data-artist-row]')];
+        if (!search || !list || !rows.length) return;
+        const empty = document.querySelector('[data-artist-empty]');
+
+        // Tall enough for exactly five rows (measured, so it follows the font), box padding and border included.
+        // Measured again once the page, fonts included, has loaded; a reading too small to be five rows (the styles
+        // are not there yet) is ignored and the fallback height in the markup stays.
+        const fifth = rows[4];
+        const fit = () => {
+            const box = getComputedStyle(list);
+            const height = fifth.getBoundingClientRect().bottom - list.getBoundingClientRect().top
+                + parseFloat(box.paddingBottom) + parseFloat(box.borderBottomWidth);
+            if (height >= 100) list.style.maxHeight = `${Math.ceil(height)}px`;
+        };
+        if (fifth) {
+            fit();
+            window.addEventListener('load', fit);
+        }
+
+        search.addEventListener('input', () => {
+            list.scrollTop = 0;
+            const needle = search.value.trim().toLowerCase();
+            let shown = 0;
+            rows.forEach(row => {
+                const show = !needle || row.textContent.toLowerCase().includes(needle) || row.querySelector('input').checked;
+                row.style.display = show ? '' : 'none';
+                if (show) shown++;
+            });
+            if (empty) empty.hidden = shown > 0;
+        });
+        search.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
+    })();
+
     // The title names the category picked — "New Song Media Content", "Edit Song Media Content" — in the page
     // header and the browser tab, and for a new item in the top bar too (an edited item's top bar keeps its own
     // title); with none picked it reads "New Media Content" / "Edit Media Content". (The server renders the first.)
@@ -397,7 +570,8 @@
         const crumb = document.querySelector('.breadcrumbs strong');
 
         select.addEventListener('change', () => {
-            const name = select.value ? select.selectedOptions[0].textContent.trim() : '';
+            const picked = select.selectedOptions[0];
+            const name = select.value ? (picked.dataset.titleName || picked.textContent).trim() : '';
             const named = name ? title.dataset.titleTemplate.replace(':category', name) : null;
             if (title.dataset.titlePlain !== undefined) title.textContent = named ?? title.dataset.titlePlain;
             if (crumb) crumb.textContent = named ?? title.dataset.titlePlainCrumb;
@@ -455,6 +629,7 @@
 
                 put(title, data.title, replace);
                 put(duration, data.duration_seconds, replace);
+                duration?.dispatchEvent(new Event('input', { bubbles: true }));
 
                 // The cover goes in the Paste URL box (the server downloads it when the form is saved); it replaces a
                 // cover that is picked or saved already only when asked for.

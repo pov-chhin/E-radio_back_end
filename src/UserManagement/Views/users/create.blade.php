@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Team') }}</p>
+            <p class="eyebrow">{{ __('Access control') }}</p>
             <h1>{{ __('Register User') }}</h1>
             <p>{{ __('Create a new account with access to the admin panel.') }}</p>
         </div>

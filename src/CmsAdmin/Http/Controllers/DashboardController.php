@@ -63,7 +63,7 @@ class DashboardController extends Controller
                 ->latest()
                 ->take(8)
                 ->get(),
-            'topMusic' => MediaContent::with('artist')
+            'topMusic' => MediaContent::with('artists')
                 ->where('category_id', Category::where('slug', 'song')->value('id'))
                 ->orderByDesc('play_count')
                 ->take(5)

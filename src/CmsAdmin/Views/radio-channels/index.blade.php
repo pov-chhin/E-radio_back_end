@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Network') }}</p>
+            <p class="eyebrow">{{ __('Content') }}</p>
             <h1>{{ __('Radio Channels') }}</h1>
             <p>{{ __('Stations scraped from radio-browser.info, plus any you add manually. Review and publish manually.') }}</p>
         </div>

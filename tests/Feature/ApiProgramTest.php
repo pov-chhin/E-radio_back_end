@@ -34,9 +34,12 @@ class ApiProgramTest extends TestCase
         ]);
     }
 
+    /** `artist_ids` in the overrides credits those artists on it. */
     private function episode(Program $program, string $title, array $overrides = []): MediaContent
     {
-        return MediaContent::create([
+        $artistIds = \Illuminate\Support\Arr::pull($overrides, 'artist_ids', []);
+
+        $episode = MediaContent::create([
             'category_id' => $program->category_id,
             'program_id' => $program->id,
             'title' => $title,
@@ -47,6 +50,9 @@ class ApiProgramTest extends TestCase
             'published_at' => now()->subDay(),
             ...$overrides,
         ]);
+        $episode->artists()->sync($artistIds);
+
+        return $episode;
     }
 
     public function test_index_lists_only_published_shows_with_a_playable_episode(): void
@@ -88,8 +94,8 @@ class ApiProgramTest extends TestCase
         $show = $this->program('Psychology & Growth');
         $old = Artist::create(['name' => 'Old Host', 'slug' => 'old-host']);
         $new = Artist::create(['name' => 'Dr. Serey Roth', 'slug' => 'dr-serey-roth']);
-        $this->episode($show, 'Older', ['artist_id' => $old->id, 'thumbnail' => 'https://example.com/old.png', 'published_at' => now()->subDays(3)]);
-        $this->episode($show, 'Newer', ['artist_id' => $new->id, 'thumbnail' => 'https://example.com/new.png', 'published_at' => now()->subHour()]);
+        $this->episode($show, 'Older', ['artist_ids' => [$old->id], 'thumbnail' => 'https://example.com/old.png', 'published_at' => now()->subDays(3)]);
+        $this->episode($show, 'Newer', ['artist_ids' => [$new->id], 'thumbnail' => 'https://example.com/new.png', 'published_at' => now()->subHour()]);
 
         $this->getJson('/api/programs')
             ->assertOk()

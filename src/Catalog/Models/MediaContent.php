@@ -13,7 +13,7 @@ use Src\User\User as AdminUser;
 class MediaContent extends Model
 {
     protected $fillable = [
-        'category_id', 'program_id', 'title', 'slug', 'artist_id', 'author_id', 'description',
+        'category_id', 'program_id', 'title', 'slug', 'author_id', 'description',
         'media_type', 'stream', 'stream_disk', 'processing_status', 'source_path', 'source_url', 'processing_error',
         'thumbnail', 'thumbnail_disk', 'duration_seconds', 'play_count', 'favorite_count',
         'is_published', 'published_at',
@@ -48,9 +48,18 @@ class MediaContent extends Model
         return $this->belongsTo(Program::class);
     }
 
-    public function artist(): BelongsTo
+    /** Everyone credited on it, by name. */
+    public function artists(): BelongsToMany
     {
-        return $this->belongsTo(Artist::class);
+        return $this->belongsToMany(Artist::class)->orderBy('artists.name');
+    }
+
+    /** Who is credited, by stage name where an artist has one, joined for a list: "A, B". */
+    protected function artistNames(): Attribute
+    {
+        return Attribute::make(get: fn (): string => $this->artists
+            ->map(fn (Artist $artist) => $artist->stage_name ?: $artist->name)
+            ->implode(', '));
     }
 
     /** The admin account credited as the author — defaults to whoever created it. */

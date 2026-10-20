@@ -22,7 +22,7 @@ class MusicController extends Controller
     public const TABS = [
         'song' => ['label' => 'Song', 'new_name' => 'Song', 'categories' => ['song'], 'new' => 'song'],
         'audio' => ['label' => 'Audio', 'new_name' => 'Audio', 'categories' => ['news', 'health', 'economyfinance'], 'new' => 'news'],
-        'podcast' => ['label' => 'Podcasts', 'new_name' => 'Podcast', 'categories' => ['podcast'], 'new' => 'podcast'],
+        'podcast' => ['label' => 'Podcast EPS', 'new_name' => 'Podcast EPS', 'categories' => ['podcast'], 'new' => 'podcast'],
         'ambient' => ['label' => 'Ambient Music', 'new_name' => 'Ambient Music', 'categories' => ['ambient-music'], 'tagged' => 'ambient-music', 'new' => 'ambient-music'],
     ];
 
@@ -41,7 +41,7 @@ class MusicController extends Controller
         $requested = $request->query('category');
         $activeTab = is_string($requested) ? $tabs->get($requested) : null;
 
-        $mediaContents = MediaContent::with(['category', 'artist', 'author'])
+        $mediaContents = MediaContent::with(['category', 'artists', 'author'])
             ->where(function ($query) use ($activeTab) {
                 $query->whereIn('category_id', Category::whereIn('slug', $activeTab['categories'] ?? self::ALL_CATEGORIES)->select('id'));
 

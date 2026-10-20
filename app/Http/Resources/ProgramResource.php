@@ -25,8 +25,8 @@ class ProgramResource extends JsonResource
                 'name' => $this->type->name,
                 'slug' => $this->type->slug,
             ] : null),
-            // Programs have no host of their own — the newest episode's artist stands in.
-            'host_name' => $latest?->artist?->name,
+            // Programs have no host of their own — the newest episode's artists stand in.
+            'host_name' => $latest?->artists->pluck('name')->implode(', ') ?: null,
             'episode_count' => $this->whenCounted('episodes'),
             'episodes' => MediaContentResource::collection($this->whenLoaded('episodes')),
         ];

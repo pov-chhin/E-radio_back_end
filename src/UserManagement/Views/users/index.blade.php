@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Team') }}</p>
+            <p class="eyebrow">{{ __('Access control') }}</p>
             <h1>{{ __('Admin Users') }}</h1>
             <p>{{ __('Accounts that can sign into the CMS admin panel.') }}</p>
         </div>

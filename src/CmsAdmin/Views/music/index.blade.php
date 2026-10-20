@@ -1,13 +1,13 @@
 @extends('cms-admin::layout')
 
-@section('title', 'Article')
+@section('title', 'Content')
 
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Taxonomy') }}</p>
+            <p class="eyebrow">{{ __('Content') }}</p>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px">
-                <h1>{{ __('Article') }}</h1>
+                <h1>{{ __('Content') }}</h1>
                 {{-- One tab per group (Song; Audio = News / Health / Economy/Finance; Podcasts); each submits the GET form with its key. --}}
                 <form method="GET" action="{{ route('admin.music.index') }}" aria-label="{{ __('Filter by category') }}">
                     <div class="tag-view-toggle">
@@ -51,7 +51,7 @@
                             $shortTitle = rtrim(implode('', array_slice($letters, 0, 25)));
                             $shortTitle = rtrim(preg_replace('/\x{17D2}$/u', '', $shortTitle)).'...';
                         }
-                        $people = collect([$mediaContent->artist?->stage_name ?: $mediaContent->artist?->name, $mediaContent->author?->name])->filter()->implode(' · ');
+                        $people = collect([$mediaContent->artist_names, $mediaContent->author?->name])->filter()->implode(' · ');
                     @endphp
                     <tr>
                         {{-- The table sorts and searches the full title (and names), not the shortened text on show. --}}
@@ -64,7 +64,7 @@
                                 @endif
                                 <span class="media-title-copy">
                                     <b @if($shortTitle !== $mediaContent->title)title="{{ $mediaContent->title }}"@endif>{{ $shortTitle }}</b>
-                                    @if($mediaContent->artist || $mediaContent->author)
+                                    @if($people !== '')
                                         <small class="muted">{{ $people }}</small>
                                     @endif
                                 </span>

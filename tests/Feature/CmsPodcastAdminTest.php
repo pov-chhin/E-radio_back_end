@@ -54,9 +54,12 @@ class CmsPodcastAdminTest extends TestCase
         ]);
     }
 
+    /** `artist_ids` in the attributes credits those artists on it. */
     private function episode(Program $podcast, string $title, array $attributes = []): MediaContent
     {
-        return MediaContent::create([
+        $artistIds = \Illuminate\Support\Arr::pull($attributes, 'artist_ids', []);
+
+        $episode = MediaContent::create([
             'category_id' => $podcast->category_id,
             'program_id' => $podcast->id,
             'title' => $title,
@@ -64,6 +67,9 @@ class CmsPodcastAdminTest extends TestCase
             'media_type' => 'audio',
             ...$attributes,
         ]);
+        $episode->artists()->sync($artistIds);
+
+        return $episode;
     }
 
     public function test_the_sidebar_and_list_call_them_podcasts(): void
@@ -146,7 +152,7 @@ class CmsPodcastAdminTest extends TestCase
         }
     }
 
-    public function test_the_podcast_form_has_a_big_title_a_slug_under_it_and_its_settings_in_a_sidebar(): void
+    public function test_the_podcast_form_has_a_big_title_a_line_under_it_and_its_settings_in_a_sidebar(): void
     {
         $this->signIn();
         $podcast = $this->podcast('Morning Brief');
@@ -155,16 +161,22 @@ class CmsPodcastAdminTest extends TestCase
             $form = $this->get($url)->assertOk()->getContent();
 
             // The title is the field `name`, called Title: a big input like the media editor's, with no "Name" label.
-            $this->assertMatchesRegularExpression('/<input id="name" name="name" type="text" class="editor-title-input" placeholder="Podcast title" aria-label="Title"/', $form, $url);
+            $this->assertMatchesRegularExpression('/<input id="name" name="name" type="text" class="editor-title-input" placeholder="Program Podcast title" aria-label="Title"/', $form, $url);
             $this->assertStringNotContainsString('<label>Name', $form, $url);
-            // The slug sits right under it, in the media editor's slug row.
-            $this->assertMatchesRegularExpression('/id="name".*?<label class="editor-slug-row">Slug\s*<input id="slug" name="slug" type="text" placeholder="Made from the title as you type"/s', $form, $url);
+            // No slug box: a thin line sits right under the title instead, and the server makes the slug.
+            $this->assertStringNotContainsString('name="slug"', $form, $url);
+            $this->assertStringNotContainsString('editor-slug-row', $form, $url);
+            $this->assertMatchesRegularExpression('/id="name"[^>]*>\s*(?:<em[^>]*>[^<]*<\/em>\s*)?<\/div>\s*<hr class="editor-title-rule"/s', $form, $url);
             // The description is a card; Published, the type and the cover are in the sidebar.
             $this->assertMatchesRegularExpression('/<div class="editor-main">.*?<h4>Description<\/h4>\s*<div class="rich-editor" data-rich-text><\/div>\s*<textarea id="description" name="description" data-rich-text-source hidden>/s', $form, $url);
             $sidebar = substr($form, strpos($form, '<aside class="editor-sidebar">'));
             $this->assertStringContainsString('name="is_published"', $sidebar, $url);
-            $this->assertMatchesRegularExpression('/<label>Podcast type\s*<select id="tag_id"/', $sidebar, $url);
+            $this->assertMatchesRegularExpression('/<label>Podcast Category\s*<select id="tag_id"/', $sidebar, $url);
             $this->assertStringContainsString('name="cover_image"', $sidebar, $url);
+            // The cover's preview is shown at 3:4, and the note under it says so (no "scaled down" wording any more).
+            $this->assertStringContainsString('data-cover-preview style="display:block;width:100%;aspect-ratio:3/4;object-fit:cover;', $sidebar, $url);
+            $this->assertStringContainsString(e("Ratio 3:4. Optional: the newest episode's picture is used without one."), $sidebar, $url);
+            $this->assertStringNotContainsString('scaled down', $sidebar, $url);
             // The sidebar's order, like the media editor's: the picture first, then Status, then Details.
             $cards = [strpos($sidebar, '<h4>Cover image</h4>'), strpos($sidebar, '<h4>Status</h4>'), strpos($sidebar, '<h4>Details</h4>')];
             $this->assertNotContains(false, $cards, $url);
@@ -203,11 +215,19 @@ class CmsPodcastAdminTest extends TestCase
         $this->assertStringContainsString("file.addEventListener('change', refresh);", $form);
     }
 
+    public function test_the_podcasts_list_has_a_new_podcast_program_button(): void
+    {
+        $this->signIn();
+
+        $this->get('/admin/podcasts')->assertOk()
+            ->assertSee('href="'.e(route('admin.programs.create')).'" class="primary-button">New Podcast Program <i class="fa fa-plus"', false);
+    }
+
     public function test_the_description_uses_the_rich_text_editor_like_media_content(): void
     {
         $this->signIn();
         $podcast = $this->podcast('Morning Brief');
-        $media = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+        $media = $this->get('/admin/media-contents/create?category=none')->assertOk()->getContent();
 
         foreach (['/admin/podcasts/create', "/admin/podcasts/{$podcast->id}/edit"] as $url) {
             $form = $this->get($url)->assertOk()->getContent();
@@ -282,7 +302,7 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->signIn();
         $podcast = $this->podcast('Morning Brief');
 
-        foreach (['/admin/podcasts/create' => ['New Podcast', 'Create podcast'], "/admin/podcasts/{$podcast->id}/edit" => ['Morning Brief', 'Save changes']] as $url => [$title, $button]) {
+        foreach (['/admin/podcasts/create' => ['New Program Podcast', 'Create podcast'], "/admin/podcasts/{$podcast->id}/edit" => ['Morning Brief', 'Save changes']] as $url => [$title, $button]) {
             $html = $this->get($url)->assertOk()->getContent();
             $form = substr($html, $start = strpos($html, 'class="editor-form"'), strpos($html, '</form>', $start) - $start);
 
@@ -368,8 +388,8 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->signIn();
 
         $form = $this->get('/admin/podcasts/create')->assertOk()->getContent();
-        $this->assertMatchesRegularExpression('/<label>Podcast type\s*<select id="tag_id"/', $form);
-        $this->assertStringContainsString('Select a podcast type…', $form);
+        $this->assertMatchesRegularExpression('/<label>Podcast Category\s*<select id="tag_id"/', $form);
+        $this->assertStringContainsString('Select a podcast category…', $form);
         // The tags under Podcast, and nothing else — no categories, no other trees.
         $select = substr($form, $start = strpos($form, '<select id="tag_id"'), strpos($form, '</select>', $start) - $start);
         foreach (['Health', 'Economy/Finance', 'Education', 'Politic', 'Civilization'] as $name) {
@@ -381,10 +401,10 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->assertStringNotContainsString('id="category_id"', $form);
 
         $list = $this->get('/admin/podcasts')->assertOk()->getContent();
-        $this->assertStringContainsString('<th>Podcast type</th>', $list);
+        $this->assertStringContainsString('<th>Podcast Category</th>', $list);
 
         $this->post('/admin/podcasts', ['name' => 'No Type', 'slug' => ''])
-            ->assertSessionHasErrors(['tag_id' => 'The podcast type field is required.']);
+            ->assertSessionHasErrors(['tag_id' => 'The podcast category field is required.']);
     }
 
     public function test_a_new_program_is_filed_under_the_podcast_category_with_its_type(): void
@@ -536,7 +556,7 @@ Second line, with & ampersand and \"quotes\"."]);
     {
         $this->signIn();
 
-        $html = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+        $html = $this->get('/admin/media-contents/create?category=none')->assertOk()->getContent();
         $ambient = Category::where('slug', 'ambient-music')->firstOrFail();
 
         foreach (Category::where('id', '!=', $ambient->id)->get() as $category) {
@@ -579,7 +599,7 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->signIn();
         $moods = Tag::where('slug', 'ambient-music')->whereNull('parent_id')->firstOrFail()->children()->orderBy('id')->get();
 
-        $html = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+        $html = $this->get('/admin/media-contents/create?category=none')->assertOk()->getContent();
 
         // No card of moods under the Description any more.
         $this->assertStringNotContainsString('data-ambient-card', $html);
@@ -694,7 +714,7 @@ Second line, with & ampersand and \"quotes\"."]);
     {
         $this->signIn();
 
-        $create = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+        $create = $this->get('/admin/media-contents/create?category=none')->assertOk()->getContent();
         $select = substr($create, strpos($create, '<select id="category_id"'), 1500);
         $this->assertStringContainsString('>Song</option>', $select);
         $this->assertStringNotContainsString('>Ambient Music</option>', substr($select, 0, strpos($select, '</select>')));
@@ -729,7 +749,7 @@ Second line, with & ampersand and \"quotes\"."]);
         $healthShow = $this->podcast('Healthy Habits', $health);
         $generalShow = $this->podcast('Morning Brief');
 
-        $html = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+        $html = $this->get('/admin/media-contents/create?category=none')->assertOk()->getContent();
         $select = substr($html, $start = strpos($html, '<select id="program_id"'), strpos($html, '</select>', $start) - $start);
 
         $this->assertStringContainsString('<option value="'.$healthShow->id.'" data-category-id="'.$health->id.'"', $select);
@@ -748,7 +768,7 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->get("/admin/media-contents/create?podcast={$podcast->id}")
             ->assertOk()
             ->assertSee('<option value="public" selected>', false);
-        $this->get('/admin/media-contents/create')
+        $this->get('/admin/media-contents/create?category=none')
             ->assertOk()
             ->assertSee('<option value="private" selected>', false);
     }
@@ -757,7 +777,7 @@ Second line, with & ampersand and \"quotes\"."]);
     {
         $this->signIn();
 
-        $this->get('/admin/media-contents/create')
+        $this->get('/admin/media-contents/create?category=none')
             ->assertOk()
             ->assertSee('New media content')
             ->assertDontSee('name="podcast"', false);
@@ -812,8 +832,8 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->assertMatchesRegularExpression('/<select id="category_id".*?<option value="'.$podcast->category_id.'"[^>]* selected>/s', $html);
         $this->assertMatchesRegularExpression('/<select id="program_id".*?<option value="'.$podcast->id.'"[^>]* selected>/s', $html);
         // No Artist field, and no shortcut to make another podcast.
-        $this->assertStringNotContainsString('id="artist_id"', $html);
-        $this->assertStringNotContainsString('name="artist_id"', $html);
+        $this->assertStringNotContainsString('id="artist_search"', $html);
+        $this->assertStringNotContainsString('name="artist_ids[]"', $html);
         $this->assertStringNotContainsString(route('admin.programs.create'), $html);
     }
 
@@ -831,7 +851,7 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->assertStringContainsString('<input type="hidden" name="program_id" value="'.$podcast->id.'">', $html);
         $this->assertMatchesRegularExpression('/<select id="category_id".*?<option value="'.$health->id.'"[^>]* selected>/s', $html);
         $this->assertMatchesRegularExpression('/<select id="program_id".*?<option value="'.$podcast->id.'"[^>]* selected>/s', $html);
-        $this->assertStringNotContainsString('id="artist_id"', $html);
+        $this->assertStringNotContainsString('id="artist_search"', $html);
         $this->assertStringNotContainsString(route('admin.programs.create'), $html);
     }
 
@@ -843,7 +863,7 @@ Second line, with & ampersand and \"quotes\"."]);
 
         $this->assertStringContainsString('<select id="category_id" name="category_id" required>', $html);
         $this->assertStringContainsString('<select id="program_id" name="program_id">', $html);
-        $this->assertStringContainsString('<select id="artist_id" name="artist_id">', $html);
+        $this->assertStringContainsString('id="artist_search"', $html);
     }
 
     public function test_the_edit_form_without_a_podcast_keeps_its_selects_and_artist(): void
@@ -856,7 +876,7 @@ Second line, with & ampersand and \"quotes\"."]);
 
         $this->assertStringContainsString('<select id="category_id" name="category_id" required>', $html);
         $this->assertStringContainsString('<select id="program_id" name="program_id">', $html);
-        $this->assertStringContainsString('<select id="artist_id" name="artist_id">', $html);
+        $this->assertStringContainsString('id="artist_search"', $html);
         $this->assertStringNotContainsString('<input type="hidden" name="program_id"', $html);
     }
 
@@ -877,7 +897,7 @@ Second line, with & ampersand and \"quotes\"."]);
         $this->signIn();
         $podcast = $this->podcast();
         $artist = \Src\Catalog\Models\Artist::create(['name' => 'Dr. Host', 'slug' => 'dr-host']);
-        $episode = $this->episode($podcast, 'Pilot Episode', ['artist_id' => $artist->id]);
+        $episode = $this->episode($podcast, 'Pilot Episode', ['artist_ids' => [$artist->id]]);
 
         // What the locked form posts: the hidden category and podcast, and no artist at all.
         $this->put("/admin/media-contents/{$episode->id}", [
@@ -892,7 +912,7 @@ Second line, with & ampersand and \"quotes\"."]);
 
         $episode->refresh();
         $this->assertSame('Pilot Episode, renamed', $episode->title);
-        $this->assertSame($artist->id, $episode->artist_id);
+        $this->assertSame([$artist->id], $episode->artists->pluck('id')->all());
         $this->assertSame($podcast->id, $episode->program_id);
         $this->assertSame($podcast->category_id, $episode->category_id);
     }

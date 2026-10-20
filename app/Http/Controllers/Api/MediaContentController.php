@@ -15,7 +15,7 @@ class MediaContentController extends Controller
     public function index(Request $request)
     {
         $query = MediaContent::query()
-            ->with(['category', 'artist'])
+            ->with(['category', 'artists'])
             ->where('is_published', true)
             ->where('processing_status', 'ready')
             ->where(fn ($q) => $q->whereNull('published_at')->orWhere('published_at', '<=', now()));
@@ -45,16 +45,16 @@ class MediaContentController extends Controller
         }
 
         if ($artistId = $request->query('artist_id')) {
-            $query->where('artist_id', $artistId);
+            $query->whereHas('artists', fn ($artist) => $artist->where('artists.id', $artistId));
         }
 
-        // Search: the title, or the artist's name.
+        // Search: the title, or the name of any artist credited.
         if ($search = trim((string) $request->query('q'))) {
             // `!` escapes a literal % or _ the same way on MySQL and SQLite.
             $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search).'%';
             $query->where(fn ($q) => $q
                 ->whereRaw("media_contents.title like ? escape '!'", [$like])
-                ->orWhereHas('artist', fn ($artist) => $artist->whereRaw("artists.name like ? escape '!'", [$like])));
+                ->orWhereHas('artists', fn ($artist) => $artist->whereRaw("artists.name like ? escape '!'", [$like])));
         }
 
         // Batch lookup by id, e.g. resolving a locally-stored "recently played" or favorites list.
@@ -94,6 +94,6 @@ class MediaContentController extends Controller
             404,
         );
 
-        return new MediaContentResource($mediaContent->load(['category', 'artist']));
+        return new MediaContentResource($mediaContent->load(['category', 'artists']));
     }
 }

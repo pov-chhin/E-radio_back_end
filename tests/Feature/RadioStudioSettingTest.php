@@ -56,12 +56,13 @@ class RadioStudioSettingTest extends TestCase
         );
         $this->assertStringNotContainsString('Radio Station', $nav);
 
-        // Straight after Radio Channels, before the Catalog section (Podcasts).
+        // Straight after Radio Channels, and both in the Content group, below Podcasts Program.
         $channels = strpos($nav, '<span>Radio Channels</span>');
         $studio = strpos($nav, '<span>Radio Studio</span>');
         $this->assertNotFalse($channels);
         $this->assertGreaterThan($channels, $studio);
-        $this->assertLessThan(strpos($nav, '<span>Podcasts</span>'), $studio);
+        $this->assertGreaterThan(strpos($nav, '<span>Podcasts Program</span>'), $channels);
+        $this->assertGreaterThan(strpos($nav, '<p class="nav-section">Content</p>'), $channels);
         $this->assertStringStartsWith($this->studioLink(self::STUDIO), ltrim(substr($nav, strpos($nav, '</a>', $channels) + 4)));
         // A way out of the panel, so never the page you are on.
         $this->assertDoesNotMatchRegularExpression('/<a href="'.preg_quote(self::STUDIO, '/').'"[^>]*class="active"/', $nav);

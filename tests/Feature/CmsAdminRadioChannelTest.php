@@ -182,6 +182,19 @@ class CmsAdminRadioChannelTest extends TestCase
         $this->assertStringContainsString('no stream URL', session('error'));
     }
 
+    public function test_the_radio_channels_pages_say_content_over_their_title(): void
+    {
+        $channel = RadioSceaperStation::create(['name' => 'Pulse FM', 'stream_url' => 'https://stream.example.com/pulse']);
+
+        // The same label as the sidebar group Radio Channels sits in (it used to say "Network").
+        foreach (['/admin/radio-channels', '/admin/radio-channels/create', "/admin/radio-channels/{$channel->id}", "/admin/radio-channels/{$channel->id}/edit"] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            $this->assertMatchesRegularExpression('/<p class="eyebrow">Content<\/p>/', $html, $url);
+            $this->assertStringNotContainsString('<p class="eyebrow">Network</p>', $html, $url);
+        }
+    }
+
     public function test_show_page_displays_channel_details(): void
     {
         $channel = RadioSceaperStation::create([

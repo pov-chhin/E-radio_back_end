@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Network') }}</p>
+            <p class="eyebrow">{{ __('Content') }}</p>
             <h1>{{ $radioChannel->name }}</h1>
             <p>{{ $radioChannel->description ?: __('Channel details, stream info, and status.') }}</p>
         </div>

@@ -41,6 +41,19 @@ class UserManagementTest extends TestCase
         $this->get('/admin/permissions')->assertOk();
     }
 
+    public function test_the_admin_users_pages_say_access_control_over_their_title(): void
+    {
+        $user = $this->createAdmin();
+
+        // The same label as the sidebar group they sit in (it used to say "Team").
+        foreach (['/admin/users', '/admin/users/create', "/admin/users/{$user->id}/edit"] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            $this->assertMatchesRegularExpression('/<p class="eyebrow">Access control<\/p>/', $html, $url);
+            $this->assertStringNotContainsString('<p class="eyebrow">Team</p>', $html, $url);
+        }
+    }
+
     public function test_the_sidebar_uses_the_e_radio_brand(): void
     {
         config()->set('app.name', 'AMS E-Radio');

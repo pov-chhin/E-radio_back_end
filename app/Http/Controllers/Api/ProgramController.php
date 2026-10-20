@@ -18,7 +18,7 @@ class ProgramController extends Controller
         $query = Program::query()
             ->where('is_published', true)
             ->whereHas('episodes')
-            ->with(['category', 'type', 'latestEpisode.artist'])
+            ->with(['category', 'type', 'latestEpisode.artists'])
             ->withCount('episodes')
             ->orderByDesc(
                 MediaContent::query()->select('published_at')
@@ -59,8 +59,8 @@ class ProgramController extends Controller
         $program->load([
             'category',
             'type',
-            'latestEpisode.artist',
-            'episodes' => fn ($query) => $query->with(['category', 'artist'])->orderByDesc('published_at')->orderByDesc('id'),
+            'latestEpisode.artists',
+            'episodes' => fn ($query) => $query->with(['category', 'artists'])->orderByDesc('published_at')->orderByDesc('id'),
         ])->loadCount('episodes');
 
         return new ProgramResource($program);

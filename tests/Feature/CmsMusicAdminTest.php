@@ -35,15 +35,21 @@ class CmsMusicAdminTest extends TestCase
         return Category::where('slug', $slug)->firstOrFail();
     }
 
+    /** `artist_ids` in the attributes credits those artists on it. */
     private function track(string $title, string $categorySlug, array $attributes = []): MediaContent
     {
-        return MediaContent::create([
+        $artistIds = \Illuminate\Support\Arr::pull($attributes, 'artist_ids', []);
+
+        $track = MediaContent::create([
             'category_id' => $this->category($categorySlug)->id,
             'title' => $title,
             'slug' => str($title)->slug()->toString(),
             'media_type' => 'audio',
             ...$attributes,
         ]);
+        $track->artists()->sync($artistIds);
+
+        return $track;
     }
 
     public function test_music_sits_right_below_programs_in_the_sidebar(): void
@@ -74,20 +80,257 @@ class CmsMusicAdminTest extends TestCase
         $this->assertMatchesRegularExpression('#<button[^>]*value="audio"[^>]*class="[^"]*active[^"]*"[^>]*>\s*Audio\s*</button>#', $html);
     }
 
-    public function test_the_page_and_its_menu_item_are_called_article(): void
+    public function test_the_page_and_its_menu_item_are_called_content(): void
     {
         $this->signIn();
 
         $html = $this->get('/admin/music')->assertOk()->getContent();
 
-        $this->assertMatchesRegularExpression('/<a href="'.preg_quote(route('admin.music.index'), '/').'"[^>]*>\s*<span class="nav-icon[^"]*"><\/span><span>Article<\/span>/', $html);
-        $this->assertStringContainsString('<h1>Article</h1>', $html);
-        $this->assertStringContainsString('<title>Article', $html);
+        $this->assertMatchesRegularExpression('/<a href="'.preg_quote(route('admin.music.index'), '/').'"[^>]*>\s*<span class="nav-icon[^"]*"><\/span><span>Content<\/span>/', $html);
+        $this->assertStringContainsString('<h1>Content</h1>', $html);
+        $this->assertStringContainsString('<title>Content', $html);
         $this->assertStringNotContainsString('<h1>Music</h1>', $html);
         $this->assertStringNotContainsString('<span>Music</span>', $html);
 
         $form = $this->get('/admin/media-contents/create/song')->assertOk();
         $form->assertSee('aria-label="Back to articles"', false);
+    }
+
+    public function test_the_title_box_names_the_kind_of_content_the_new_button_started(): void
+    {
+        $this->signIn();
+
+        foreach ([
+            'song' => 'Title Song', 'news' => 'Title Audio', 'ambient-music' => 'Title Ambient', 'podcast' => 'Title Podcasts Eps',
+        ] as $category => $placeholder) {
+            $this->get("/admin/media-contents/create/{$category}")->assertOk()
+                ->assertSee('id="title" name="title" type="text" class="editor-title-input" placeholder="'.$placeholder.'"', false);
+        }
+
+        // The whole form (no kind named) isn't one kind, so its box lists them.
+        $this->get('/admin/media-contents/create?category=none')->assertOk()
+            ->assertSee('placeholder="Title Song or Title Audio or Title Podcasts Eps or Title Ambient"', false);
+    }
+
+    public function test_the_media_form_has_no_slug_box_and_the_slug_still_comes_from_the_title(): void
+    {
+        $this->signIn();
+        $track = $this->track('Plain Track', 'song');
+        $slug = $track->slug;
+
+        foreach (['/admin/media-contents/create/song', "/admin/media-contents/edit/song/{$track->id}", "/admin/media-contents/{$track->id}/edit"] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $this->assertStringNotContainsString('name="slug"', $html, $url);
+            // A thin line right under the title stands where the Slug row's bottom border was.
+            $this->assertMatchesRegularExpression('/class="editor-title-input"[^>]*required>\s*<hr class="editor-title-rule"/', $html, $url);
+        }
+
+        // A new item posted without one gets its slug from the title; an edit keeps the one it has.
+        $this->post('/admin/media-contents', ['category_id' => $this->category('song')->id, 'title' => 'No Slug Box', 'media_type' => 'audio', 'status' => 'private'])->assertRedirect();
+        $this->assertSame('no-slug-box', MediaContent::where('title', 'No Slug Box')->firstOrFail()->slug);
+
+        $this->put("/admin/media-contents/{$track->id}", ['category_id' => $track->category_id, 'title' => 'Renamed Track', 'media_type' => 'audio', 'status' => 'private'])->assertRedirect();
+        $this->assertSame($slug, $track->fresh()->slug);
+    }
+
+    public function test_the_duration_is_shown_as_minutes_and_seconds_in_a_disabled_box_while_the_seconds_are_still_sent(): void
+    {
+        $this->signIn();
+        $track = $this->track('Plain Track', 'song');
+
+        $track->update(['duration_seconds' => 1165]);
+        $html = $this->get("/admin/media-contents/{$track->id}/edit")->assertOk()->getContent();
+        $this->assertStringContainsString('<input id="duration_seconds" name="duration_seconds" type="hidden" value="1165">', $html);
+        $this->assertStringContainsString('<input type="text" value="19:25" placeholder="0:00" disabled data-duration-display>', $html);
+        $this->assertStringNotContainsString('Duration (seconds)', $html);
+
+        // From an hour up it reads h:mm:ss; with no length the box is empty.
+        $track->update(['duration_seconds' => 3723]);
+        $this->assertStringContainsString('value="1:02:03" placeholder="0:00" disabled', $this->get("/admin/media-contents/{$track->id}/edit")->getContent());
+        $this->assertStringContainsString('<input type="text" value="" placeholder="0:00" disabled', $this->get('/admin/media-contents/create/song')->getContent());
+
+        // The hidden field is what is saved, so an update keeps the length.
+        $track->update(['duration_seconds' => 1165]);
+        $this->put("/admin/media-contents/{$track->id}", ['category_id' => $track->category_id, 'title' => 'Plain Track', 'media_type' => 'audio', 'status' => 'private', 'duration_seconds' => '1165'])->assertRedirect();
+        $this->assertSame(1165, $track->fresh()->duration_seconds);
+    }
+
+    public function test_the_artist_is_a_card_of_its_own_under_details(): void
+    {
+        $this->signIn();
+        $first = \Src\Catalog\Models\Artist::create(['name' => 'Alpha', 'slug' => 'alpha']);
+        $second = \Src\Catalog\Models\Artist::create(['name' => 'Bravo', 'slug' => 'bravo', 'stage_name' => 'B-Boy']);
+        $track = $this->track('Plain Track', 'song', ['artist_ids' => [$second->id]]);
+
+        // Song and Ambient (new and edit) and the whole form: Details first, then a card with only the Artist: a
+        // search box and a tick box for every artist (by stage name where they have one).
+        foreach (['/admin/media-contents/create/song', '/admin/media-contents/create/ambient-music', "/admin/media-contents/edit/song/{$track->id}", "/admin/media-contents/{$track->id}/edit"] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $afterDetails = substr($html, strpos($html, '<h4>Details</h4>'));
+            $nextCard = strpos($afterDetails, 'class="sidebar-box"');
+
+            $this->assertNotFalse($nextCard, "{$url}: a card follows Details");
+            $this->assertStringNotContainsString('artist_ids[]', substr($afterDetails, 0, $nextCard), "{$url}: not inside Details");
+            $card = substr($afterDetails, $nextCard);
+            $this->assertMatchesRegularExpression('/^class="sidebar-box">\s*<label for="artist_search">Artist\s*<input id="artist_search" type="search" placeholder="Search artist…"[^>]*data-artist-search>\s*<\/label>/', $card, $url);
+            $this->assertMatchesRegularExpression('/<input type="checkbox" name="artist_ids\[\]" value="'.$first->id.'" >\s*<span>Alpha<\/span>/', $card, $url);
+            $this->assertMatchesRegularExpression('/name="artist_ids\[\]" value="'.$second->id.'"[^>]*>\s*<span>B-Boy<\/span>/', $card, $url);
+            $this->assertStringContainsString("document.querySelector('[data-artist-search]')", $html, $url);
+            // Five rows show and the rest scroll: a fallback height in the markup, refined by the script from the rows.
+            $this->assertStringContainsString('<div class="tag-tree" style="max-height:164px" data-artist-list>', $html, $url);
+            $this->assertStringContainsString('list.style.maxHeight', $html, $url);
+        }
+
+        // The Podcast form, new and edit, has no Artist card either.
+        $episode = $this->track('Episode One', 'podcast');
+        foreach (['/admin/media-contents/create/podcast', "/admin/media-contents/edit/podcast/{$episode->id}"] as $url) {
+            $this->get($url)->assertOk()->assertDontSee('id="artist_search"', false);
+        }
+
+        // An episode added from a podcast's own page has no Artist card; an unknown podcast is the plain form again.
+        $podcast = Program::create(['category_id' => $this->category('podcast')->id, 'name' => 'Morning Brief', 'slug' => 'morning-brief', 'is_published' => true]);
+        $this->get("/admin/media-contents/create?podcast={$podcast->id}")->assertOk()->assertDontSee('id="artist_search"', false);
+        $this->get('/admin/media-contents/create?podcast=9999')->assertOk()->assertSee('id="artist_search"', false);
+
+        // The item's own artist is ticked on its edit form (and only that one).
+        $edit = $this->get("/admin/media-contents/edit/song/{$track->id}")->getContent();
+        $this->assertMatchesRegularExpression('/name="artist_ids\[\]" value="'.$second->id.'" checked>/', $edit);
+        $this->assertDoesNotMatchRegularExpression('/name="artist_ids\[\]" value="'.$first->id.'" checked/', $edit);
+    }
+
+    public function test_several_artists_can_be_chosen_and_each_is_kept_on_save(): void
+    {
+        $this->signIn();
+        $a = \Src\Catalog\Models\Artist::create(['name' => 'Alpha', 'slug' => 'alpha']);
+        $b = \Src\Catalog\Models\Artist::create(['name' => 'Bravo', 'slug' => 'bravo']);
+        $c = \Src\Catalog\Models\Artist::create(['name' => 'Charlie', 'slug' => 'charlie']);
+        $credited = fn (MediaContent $item) => $item->fresh()->artists->pluck('id')->all();
+        $song = $this->category('song');
+
+        // New: two artists ticked.
+        $this->post('/admin/media-contents', ['category_id' => $song->id, 'title' => 'Duet', 'media_type' => 'audio', 'status' => 'private', 'artist_ids' => [$a->id, $b->id]])->assertRedirect();
+        $duet = MediaContent::where('title', 'Duet')->firstOrFail();
+        $this->assertSame([$a->id, $b->id], $credited($duet));
+        $this->assertSame('Alpha, Bravo', $duet->fresh()->artist_names);
+
+        // Edit: a different pair, then one, then none.
+        $edit = fn (array $extra) => $this->put("/admin/media-contents/{$duet->id}", ['category_id' => $song->id, 'title' => 'Duet', 'media_type' => 'audio', 'status' => 'private', ...$extra])->assertRedirect();
+        $edit(['artist_ids' => [$b->id, $c->id]]);
+        $this->assertSame([$b->id, $c->id], $credited($duet));
+        $edit(['artist_ids' => [$c->id]]);
+        $this->assertSame([$c->id], $credited($duet));
+        $edit([]);
+        $this->assertSame([], $credited($duet));
+
+        // An artist that doesn't exist, or the same one twice, is refused.
+        $this->post('/admin/media-contents', ['category_id' => $song->id, 'title' => 'Bad', 'media_type' => 'audio', 'status' => 'private', 'artist_ids' => [99999]])->assertSessionHasErrors('artist_ids.0');
+        $this->post('/admin/media-contents', ['category_id' => $song->id, 'title' => 'Twice', 'media_type' => 'audio', 'status' => 'private', 'artist_ids' => [$a->id, $a->id]])->assertSessionHasErrors();
+        $this->assertDatabaseMissing('media_contents', ['title' => 'Bad']);
+    }
+
+    public function test_news_health_economy_finance_ambient_and_podcast_leave_their_top_row_out_and_only_economy_finance_has_radio_buttons(): void
+    {
+        $this->signIn();
+
+        // The News form lists all three trees; each one's top row is marked to give way to its own rows, and no other
+        // tree (Song, Podcast, Ambient Music) is.
+        $html = $this->get('/admin/media-contents/create/news')->assertOk()->getContent();
+        $this->assertSame(3, preg_match_all('/<details class="tag-tree-node" open\s+data-category-id="\d+"\s+data-fold-root\s*>/', $html));
+        foreach (['news', 'health', 'economyfinance'] as $slug) {
+            $this->assertMatchesRegularExpression('/<details class="tag-tree-node" open\s+data-category-id="'.$this->category($slug)->id.'"\s+data-fold-root\s*>/', $html, $slug);
+        }
+        $this->assertStringContainsString("hasAttribute('data-fold-root')", $html);
+
+        // The Ambient Music form leaves its tree's top row out too, so it lists only the moods.
+        $ambient = $this->get('/admin/media-contents/create/ambient-music')->assertOk()->getContent();
+        $this->assertSame(1, preg_match_all('/<details class="tag-tree-node" open\s+data-category-id="\d+"\s+data-fold-root\s*>/', $ambient));
+        $this->assertMatchesRegularExpression('/<details class="tag-tree-node" open\s+data-category-id="'.$this->category('ambient-music')->id.'"\s+data-fold-root\s*>/', $ambient);
+
+        // So does the Podcast tree: on the Podcast form, and on a new episode opened from a podcast's own page.
+        $podcastRoot = '/<details class="tag-tree-node" open\s+data-category-id="'.$this->category('podcast')->id.'"\s+data-fold-root\s*>/';
+        $show = Program::create(['category_id' => $this->category('podcast')->id, 'name' => 'Morning Brief', 'slug' => 'morning-brief', 'is_published' => true]);
+        $this->assertMatchesRegularExpression($podcastRoot, $this->get('/admin/media-contents/create/podcast')->assertOk()->getContent());
+        $this->assertMatchesRegularExpression($podcastRoot, $this->get("/admin/media-contents/create?podcast={$show->id}")->assertOk()->getContent());
+
+        $this->assertStringContainsString('<span>Mental Health</span>', $html);
+        $this->assertStringContainsString('<span>Physical Health</span>', $html);
+
+        // Economy/Finance's two rows (International, Local) are radio buttons — one region at a time — and every other
+        // tag, Health's two and News's five included, stays a tick box.
+        $tag = fn (string $name, string $categorySlug) => \Src\Catalog\Models\Tag::where('name', $name)->where('category_id', $this->category($categorySlug)->id)->value('id');
+        foreach (['International', 'Local'] as $name) {
+            $this->assertMatchesRegularExpression('/<input type="radio" name="tags\[\]" value="'.$tag($name, 'economyfinance').'"[^>]*>\s*<span>'.$name.'<\/span>/', $html, $name);
+        }
+        $this->assertSame(2, substr_count($html, '<input type="radio" name="tags[]"'));
+        $this->assertMatchesRegularExpression('/<input type="checkbox" name="tags\[\]" value="'.$tag('Mental Health', 'health').'"/', $html);
+        $this->assertMatchesRegularExpression('/<input type="checkbox" name="tags\[\]" value="'.$tag('Politic', 'news').'"/', $html);
+        // Clicking the picked radio clears it again.
+        $this->assertStringContainsString("[data-tag-tree] input[type=radio]", $html);
+    }
+
+    public function test_the_song_form_hides_the_category_but_still_posts_it(): void
+    {
+        $this->signIn();
+        $song = $this->category('song');
+        $ambient = $this->category('ambient-music');
+        $track = $this->track('Plain Track', 'song');
+        $mood = $this->track('Ambient Track', 'ambient-music');
+        $podcast = $this->category('podcast');
+        $episode = $this->track('Pilot Episode', 'podcast');
+        $show = Program::create(['category_id' => $podcast->id, 'name' => 'Morning Brief', 'slug' => 'morning-brief', 'is_published' => true]);
+
+        // Song, Ambient Music and Podcast fix their category, so the field is out of sight — but it stays in the page
+        // (the scripts read it) and the hidden input still carries the category with the form. An episode opened from a
+        // podcast's own page (new or edit) has its category fixed to the podcast's too.
+        foreach ([
+            ["/admin/media-contents/create?podcast={$show->id}", $podcast],
+            ["/admin/media-contents/{$episode->id}/edit?podcast={$show->id}", $podcast],
+            ['/admin/media-contents/create/song', $song],
+            ["/admin/media-contents/edit/song/{$track->id}", $song],
+            ['/admin/media-contents/create/ambient-music', $ambient],
+            ["/admin/media-contents/edit/ambient-music/{$mood->id}", $ambient],
+            ['/admin/media-contents/create/podcast', $podcast],
+            ["/admin/media-contents/edit/podcast/{$episode->id}", $podcast],
+        ] as [$url, $category]) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $this->assertMatchesRegularExpression('/<label\s+style="display:none"\s*>Category\s*<input type="hidden" name="category_id" value="'.$category->id.'">\s*<select id="category_id"/', $html, $url);
+        }
+
+        // The News form (a real choice of three categories) and the whole form keep it on show.
+        foreach (['/admin/media-contents/create/news', '/admin/media-contents/create?category=none'] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $this->assertDoesNotMatchRegularExpression('/<label\s+style="display:none"\s*>Category/', $html, $url);
+            $this->assertMatchesRegularExpression('/<label\s*>Category/', $html, $url);
+        }
+    }
+
+    public function test_each_podcast_program_option_carries_its_type_tag_for_the_tag_list_to_follow(): void
+    {
+        $this->signIn();
+        $type = \Src\Catalog\Models\Tag::where('name', 'Health')->where('category_id', $this->category('podcast')->id)->firstOrFail();
+        $show = Program::create(['category_id' => $this->category('podcast')->id, 'tag_id' => $type->id, 'name' => 'Healthy Habits', 'slug' => 'healthy-habits', 'is_published' => true]);
+        $plain = Program::create(['category_id' => $this->category('podcast')->id, 'name' => 'No Type Show', 'slug' => 'no-type-show', 'is_published' => true]);
+
+        // The option holds the id of the program's type tag (empty for a program with no type); the script ticks and locks it.
+        $html = $this->get('/admin/media-contents/create/podcast')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<option value="'.$show->id.'" data-category-id="\d+" data-tag-id="'.$type->id.'"/', $html);
+        $this->assertMatchesRegularExpression('/<option value="'.$plain->id.'" data-category-id="\d+" data-tag-id=""/', $html);
+        $this->assertStringContainsString('// Tags follow the Podcast Program', $html);
+        $this->assertStringContainsString("addEventListener('formdata'", $html);
+    }
+
+    public function test_the_bare_create_address_goes_to_the_song_form(): void
+    {
+        $this->signIn();
+        $song = route('admin.media-contents.create', ['category' => 'song']);
+
+        $this->get('/admin/media-contents/create')->assertRedirect($song);
+
+        // Anything that names what it wants is left alone: an episode of a podcast, a category, a category in the path.
+        $podcast = Program::create(['category_id' => $this->category('podcast')->id, 'name' => 'Morning Brief', 'slug' => 'morning-brief', 'is_published' => true]);
+        $this->get("/admin/media-contents/create?podcast={$podcast->id}")->assertOk();
+        $this->get('/admin/media-contents/create?category=news')->assertOk();
+        $this->get('/admin/media-contents/create/news')->assertOk();
     }
 
     public function test_the_media_content_menu_is_hidden_but_its_pages_still_work(): void
@@ -100,7 +343,7 @@ class CmsMusicAdminTest extends TestCase
 
         // Still there by its own address.
         $this->get('/admin/media-contents')->assertOk();
-        $this->get('/admin/media-contents/create')->assertOk();
+        $this->get('/admin/media-contents/create/song')->assertOk();
     }
 
     public function test_the_sidebar_lights_music_on_media_pages_and_programs_on_a_programs_episodes(): void
@@ -108,7 +351,7 @@ class CmsMusicAdminTest extends TestCase
         $this->signIn();
         $lit = fn (string $html, string $route) => (bool) preg_match('/<a href="'.preg_quote(route($route), '/').'" class="active">/', $html);
 
-        $media = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+        $media = $this->get('/admin/media-contents/create?category=none')->assertOk()->getContent();
         $this->assertTrue($lit($media, 'admin.music.index'));
         $this->assertFalse($lit($media, 'admin.programs.index'));
 
@@ -174,7 +417,7 @@ class CmsMusicAdminTest extends TestCase
         }
         $this->assertMatchesRegularExpression('/value="" [^>]*class="active">All</', $html);
         $this->assertMatchesRegularExpression('/value="audio" [^>]*>Audio</', $html);
-        $this->assertMatchesRegularExpression('/value="podcast" [^>]*>Podcasts</', $html);
+        $this->assertMatchesRegularExpression('/value="podcast" [^>]*>Podcast EPS</', $html);
         $this->assertMatchesRegularExpression('/value="ambient" [^>]*>Ambient Music</', $html);
 
         // Song: songs only.
@@ -207,7 +450,7 @@ class CmsMusicAdminTest extends TestCase
             ->assertDontSee('A News Story')
             ->assertDontSee('An Old Ambient Track')
             ->getContent();
-        $this->assertMatchesRegularExpression('/value="podcast" [^>]*class="active">Podcasts</', $podcasts);
+        $this->assertMatchesRegularExpression('/value="podcast" [^>]*class="active">Podcast EPS</', $podcasts);
 
         // Anything that isn't a tab doesn't narrow the list; anything still filed under Ambient Music shows in All.
         foreach (['/admin/music?category=ambient-music', '/admin/music?category=news', '/admin/music?category[]=song'] as $url) {
@@ -275,7 +518,7 @@ class CmsMusicAdminTest extends TestCase
         foreach (['id="program_id"', 'name="program_id"', 'No podcast'] as $gone) {
             $this->assertStringNotContainsString($gone, $form);
         }
-        $this->assertStringContainsString('id="artist_id" name="artist_id"', $form);
+        $this->assertStringContainsString('id="artist_search"', $form);
         $this->assertStringNotContainsString('data-ambient-card', $form);
         $moods = Tag::where('slug', 'ambient-music')->whereNull('parent_id')->firstOrFail()->children()->get();
         foreach ($moods as $mood) {
@@ -378,7 +621,7 @@ class CmsMusicAdminTest extends TestCase
         $this->assertSame('Audio', $cell($all, 'A News Story'));
         $this->assertSame('Audio', $cell($all, 'A Health Tip'));
         $this->assertSame('Audio', $cell($all, 'A Market Note'));
-        $this->assertSame('Podcasts', $cell($all, 'A Podcast Episode'));
+        $this->assertSame('Podcast EPS', $cell($all, 'A Podcast Episode'));
         foreach (['News', 'Health', 'Economy/Finance'] as $name) {
             $this->assertStringNotContainsString('<td class="muted">'.$name.'</td>', $all);
         }
@@ -443,7 +686,7 @@ class CmsMusicAdminTest extends TestCase
         $this->assertMatchesRegularExpression('/<select id="category_id".*?<option value="'.$this->category('news')->id.'"[^>]* selected>/s', $form);
 
         // No Podcast and no Artist field.
-        foreach (['id="program_id"', 'name="program_id"', 'No podcast', 'id="artist_id"', 'name="artist_id"', 'No artist'] as $gone) {
+        foreach (['id="program_id"', 'name="program_id"', 'No podcast', 'name="artist_ids[]"', 'id="artist_search"'] as $gone) {
             $this->assertStringNotContainsString($gone, $form);
         }
         $this->assertStringContainsString('id="program_id"', $this->get('/admin/media-contents/create/podcast')->assertOk()->getContent());
@@ -455,10 +698,10 @@ class CmsMusicAdminTest extends TestCase
         $create = e(route('admin.programs.create'));
 
         // New Podcast (and the plain media form): a compact red button on the Podcast label's row, in a new tab.
-        foreach (['/admin/media-contents/create/podcast', '/admin/media-contents/create'] as $url) {
+        foreach (['/admin/media-contents/create/podcast', '/admin/media-contents/create?category=none'] as $url) {
             $form = $this->get($url)->assertOk()->getContent();
             $this->assertMatchesRegularExpression(
-                '/<label>\s*<span[^>]*>\s*Podcast\s*<a href="'.preg_quote($create, '/').'" target="_blank" rel="noopener" class="primary-button compact"[^>]*>New<\/a>\s*<\/span>\s*<select id="program_id"/s',
+                '/<label>\s*<span[^>]*>\s*Podcast Program\s*<a href="'.preg_quote($create, '/').'" target="_blank" rel="noopener" class="primary-button compact"[^>]*>New<\/a>\s*<\/span>\s*<select id="program_id"/s',
                 $form,
                 $url,
             );
@@ -489,7 +732,7 @@ class CmsMusicAdminTest extends TestCase
 
         // Everywhere else the field can still be cleared: the plain form, an edit, a form opened from a podcast page.
         $track = $this->track('Plain Track', 'song');
-        foreach (['/admin/media-contents/create', "/admin/media-contents/{$track->id}/edit", "/admin/media-contents/create?podcast={$podcast->id}"] as $url) {
+        foreach (['/admin/media-contents/create?category=none', "/admin/media-contents/{$track->id}/edit", "/admin/media-contents/create?podcast={$podcast->id}"] as $url) {
             $other = $this->get($url)->assertOk()->getContent();
             $this->assertStringContainsString('<option value="">No podcast</option>', $select($other), $url);
             $this->assertStringNotContainsString('Select a podcast…', $other, $url);
@@ -528,7 +771,7 @@ class CmsMusicAdminTest extends TestCase
         foreach ([
             'song' => 'New Song Media Content',
             'news' => 'New News Media Content',
-            'podcast' => 'New Podcast Media Content',
+            'podcast' => 'New Podcast EPS Media Content',
             'ambient-music' => 'New Ambient Music Media Content',
         ] as $slug => $expected) {
             [$crumb, $bar, $tab] = $titles($this->get("/admin/media-contents/create/{$slug}")->assertOk()->getContent());
@@ -538,13 +781,14 @@ class CmsMusicAdminTest extends TestCase
         }
 
         // No category yet: as before.
-        $plain = $this->get('/admin/media-contents/create')->assertOk()->getContent();
+        $plain = $this->get('/admin/media-contents/create?category=none')->assertOk()->getContent();
         $this->assertSame(['New Media Content', 'New media content'], array_slice($titles($plain), 0, 2));
 
         // An episode added from a podcast's own page, and editing, are untouched.
         $program = Program::create(['category_id' => $this->category('podcast')->id, 'name' => 'Morning Brief', 'slug' => 'morning-brief', 'is_published' => true]);
         $episode = $titles($this->get("/admin/media-contents/create?podcast={$program->id}")->assertOk()->getContent());
-        $this->assertSame(['New Media Content', 'New episode'], array_slice($episode, 0, 2));
+        $this->assertSame(['New Podcast EPS Content', 'New episode'], array_slice($episode, 0, 2));
+        $this->assertStringStartsWith('New Podcast EPS Content · ', $episode[2]);
         $track = $this->track('Plain Track', 'song');
         // Editing from the Article page names the category like its New button; the plain edit address doesn't.
         // The top bar keeps the item's own title either way.
@@ -553,6 +797,18 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringStartsWith('Edit Song Media Content · ', $edit[2]);
         $plainEdit = $titles($this->get("/admin/media-contents/{$track->id}/edit")->assertOk()->getContent());
         $this->assertSame(['Edit Media Content', 'Plain Track'], array_slice($plainEdit, 0, 2));
+
+        // Podcast reads "Podcast EPS" in these titles (new and edit); the Category select keeps saying "Podcast", and its
+        // option carries the title name for the script that renames the title when the category is changed.
+        $ep = $this->track('Pilot Episode', 'podcast');
+        $podEdit = $titles($this->get("/admin/media-contents/edit/podcast/{$ep->id}")->assertOk()->getContent());
+        $this->assertSame(['Edit Podcast EPS Media Content', 'Pilot Episode'], array_slice($podEdit, 0, 2));
+        $this->assertStringStartsWith('Edit Podcast EPS Media Content · ', $podEdit[2]);
+        // Opened from a podcast's own page, an episode's edit form reads "Edit Podcast EPS Content", its bar keeping its own title.
+        $fromShow = $titles($this->get("/admin/media-contents/{$ep->id}/edit?podcast={$program->id}")->assertOk()->getContent());
+        $this->assertSame(['Edit Podcast EPS Content', 'Pilot Episode'], array_slice($fromShow, 0, 2));
+        $this->assertStringContainsString('data-title-name="Podcast EPS"', $plain);
+        $this->assertMatchesRegularExpression('/data-title-name="Podcast EPS"[^>]*>Podcast<\/option>/', $plain);
     }
 
     public function test_the_new_items_title_carries_a_template_so_the_category_select_can_rename_it(): void
@@ -684,7 +940,7 @@ class CmsMusicAdminTest extends TestCase
         $form = $this->get("/admin/media-contents/edit/song/{$song->id}")->assertOk()->getContent();
         $this->assertTrue($locked($form, $song->category_id));
         $this->assertStringNotContainsString('id="program_id"', $form);
-        $this->assertStringContainsString('id="artist_id" name="artist_id"', $form);
+        $this->assertStringContainsString('id="artist_search"', $form);
         $this->assertStringContainsString('Edit Song Media Content', $form);
 
         // Program (News, Health, Economy/Finance): just those three to pick from, no Podcast, no Artist — like New Program.
@@ -694,7 +950,7 @@ class CmsMusicAdminTest extends TestCase
             $this->assertMatchesRegularExpression('/<select id="category_id"\s+name="category_id" required\s*>/', $form, $slug);
             $this->assertEqualsCanonicalizing(['Select a category…', 'News', 'Health', 'Economy/Finance'], $categoryOptions($form), $slug);
             $this->assertMatchesRegularExpression('/<select id="category_id".*?<option value="'.$item->category_id.'"[^>]* selected>'.preg_quote($name, '/').'</s', $form, $slug);
-            foreach (['id="program_id"', 'name="program_id"', 'id="artist_id"', 'name="artist_id"', 'No podcast', 'No artist'] as $gone) {
+            foreach (['id="program_id"', 'name="program_id"', 'name="artist_ids[]"', 'id="artist_search"', 'No podcast'] as $gone) {
                 $this->assertStringNotContainsString($gone, $form, "{$slug} {$gone}");
             }
             $this->assertStringContainsString("Edit {$name} Media Content", $form, $slug);
@@ -715,7 +971,7 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringNotContainsString('No podcast', $form);
         $this->assertMatchesRegularExpression('/<option value="'.$program->id.'"[^>]* selected>Morning Brief<\/option>/', $form);
         $this->assertStringContainsString(e(route('admin.programs.create')), $form);
-        $this->assertStringContainsString('Edit Podcast Media Content', $form);
+        $this->assertStringContainsString('Edit Podcast EPS Media Content', $form);
         // One filed under Podcast with no podcast yet shows the placeholder.
         $orphan = $this->track('Orphan Episode', 'podcast');
         $this->assertMatchesRegularExpression('/<option value="" disabled hidden selected>Select a podcast…<\/option>/', $this->get("/admin/media-contents/edit/podcast/{$orphan->id}")->getContent());
@@ -724,7 +980,7 @@ class CmsMusicAdminTest extends TestCase
         $whole = $this->get("/admin/media-contents/{$song->id}/edit")->assertOk()->getContent();
         $this->assertMatchesRegularExpression('/<select id="category_id"\s+name="category_id" required\s*>/', $whole);
         $this->assertStringContainsString('id="program_id" name="program_id"', $whole);
-        $this->assertStringContainsString('id="artist_id" name="artist_id"', $whole);
+        $this->assertStringContainsString('id="artist_search"', $whole);
         $this->assertStringContainsString('<option value="">No podcast</option>', $whole);
     }
 
@@ -739,28 +995,34 @@ class CmsMusicAdminTest extends TestCase
             'media_type' => 'audio', 'status' => 'private', ...$extra,
         ];
 
+        $artistsOf = fn (MediaContent $item) => $item->fresh()->artists->pluck('id')->all();
+
         // A news item with a podcast and an artist: its form shows neither, so a save leaves both.
-        $news = $this->track('A News Story', 'news', ['program_id' => $program->id, 'artist_id' => $artist->id]);
+        $news = $this->track('A News Story', 'news', ['program_id' => $program->id, 'artist_ids' => [$artist->id]]);
         $this->put("/admin/media-contents/{$news->id}", $payload($news, ['title' => 'A News Story, edited']))->assertRedirect(route('admin.music.index'));
         $news->refresh();
         $this->assertSame('A News Story, edited', $news->title);
-        $this->assertSame([$program->id, $artist->id], [$news->program_id, $news->artist_id]);
+        $this->assertSame($program->id, $news->program_id);
+        $this->assertSame([$artist->id], $artistsOf($news));
 
         // A song with a podcast: Podcast is off its form (kept), Artist is on it (what is posted wins).
-        $song = $this->track('A Song', 'song', ['program_id' => $program->id, 'artist_id' => $artist->id]);
-        $this->put("/admin/media-contents/{$song->id}", $payload($song, ['artist_id' => $other->id]))->assertRedirect(route('admin.music.index'));
-        $song->refresh();
-        $this->assertSame([$program->id, $other->id], [$song->program_id, $song->artist_id]);
+        $song = $this->track('A Song', 'song', ['program_id' => $program->id, 'artist_ids' => [$artist->id]]);
+        $this->put("/admin/media-contents/{$song->id}", $payload($song, ['artist_ids' => [$other->id]]))->assertRedirect(route('admin.music.index'));
+        $this->assertSame($program->id, $song->fresh()->program_id);
+        $this->assertSame([$other->id], $artistsOf($song));
         $this->put("/admin/media-contents/{$song->id}", $payload($song))->assertRedirect(route('admin.music.index'));
-        $this->assertSame([$program->id, null], [$song->fresh()->program_id, $song->fresh()->artist_id]);
+        $this->assertSame($program->id, $song->fresh()->program_id);
+        $this->assertSame([], $artistsOf($song));
 
-        // A podcast episode's form shows both, so what is posted wins there; and the plain edit form clears as before.
-        $episode = $this->track('Episode One', 'podcast', ['program_id' => $program->id, 'artist_id' => $artist->id]);
+        // A podcast episode's form shows the Podcast but not the Artist, so a save keeps the artist; and the plain edit form clears as before.
+        $episode = $this->track('Episode One', 'podcast', ['program_id' => $program->id, 'artist_ids' => [$artist->id]]);
         $this->put("/admin/media-contents/{$episode->id}", $payload($episode, ['program_id' => $program->id]))->assertRedirect(route('admin.music.index'));
-        $this->assertSame([$program->id, null], [$episode->fresh()->program_id, $episode->fresh()->artist_id]);
-        $plain = $this->track('Plain News', 'news', ['program_id' => $program->id, 'artist_id' => $artist->id]);
+        $this->assertSame($program->id, $episode->fresh()->program_id);
+        $this->assertSame([$artist->id], $artistsOf($episode));
+        $plain = $this->track('Plain News', 'news', ['program_id' => $program->id, 'artist_ids' => [$artist->id]]);
         $this->put("/admin/media-contents/{$plain->id}", $payload($plain, ['from' => null]))->assertRedirect(route('admin.media-contents.index'));
-        $this->assertSame([null, null], [$plain->fresh()->program_id, $plain->fresh()->artist_id]);
+        $this->assertNull($plain->fresh()->program_id);
+        $this->assertSame([], $artistsOf($plain));
     }
 
     public function test_the_description_card_is_set_to_grow_to_the_height_of_the_sidebar(): void
@@ -769,7 +1031,7 @@ class CmsMusicAdminTest extends TestCase
         $track = $this->track('A Song', 'song');
 
         // The same card on the new form and the edit form: the main column is as tall as the sidebar, the card takes
-        // the room left, the editor fills it. (Checked in a real browser: its bottom edge meets the Tags card's.)
+        // the room left, the editor fills it. (Checked in a real browser: its bottom edge meets the Details card's.)
         foreach (['/admin/media-contents/create/song', "/admin/media-contents/edit/song/{$track->id}", "/admin/media-contents/{$track->id}/edit"] as $url) {
             $html = $this->get($url)->assertOk()->getContent();
             $this->assertStringContainsString('<div class="editor-block description-grow">', $html, $url);
@@ -846,7 +1108,7 @@ class CmsMusicAdminTest extends TestCase
         preg_match('/<select id="category_id".*?<\/select>/s', $form, $select);
         $this->assertSame(1, substr_count($select[0], '<option value="'.$podcast->id.'"'));
         // The other categories are still in the list for the page's script, but Podcast is the one selected and it can't change.
-        $this->assertStringContainsString('New Podcast Media Content', $form);
+        $this->assertStringContainsString('New Podcast EPS Media Content', $form);
 
         // The Podcast field is still the one for picking the show (no "No podcast"), with its New button.
         $this->assertStringContainsString('id="program_id" name="program_id"', $form);
@@ -880,7 +1142,7 @@ class CmsMusicAdminTest extends TestCase
             $this->assertMatchesRegularExpression('/<select id="category_id"\s+name="category_id" required\s*>/', $form, $url);
             $this->assertStringNotContainsString('<input type="hidden" name="category_id"', $form);
             $this->assertStringContainsString('id="program_id" name="program_id"', $form, $url);
-            $this->assertStringContainsString('id="artist_id" name="artist_id"', $form, $url);
+            $this->assertStringContainsString('id="artist_search"', $form, $url);
             foreach (['Song', 'News', 'Health', 'Economy/Finance', 'Podcast'] as $name) {
                 $this->assertStringContainsString(">{$name}</option>", $form, "{$url} offers {$name}");
             }
@@ -891,15 +1153,26 @@ class CmsMusicAdminTest extends TestCase
     {
         $this->signIn();
 
-        // At the top of the Tags box (there is no search box), on the new form and the edit form alike; a script
-        // narrows the tree to the pick. Just the two regions: there is no "all" option.
+        // At the top of the tags part of the Details card, under its "Region" caption (there is no search box), on the new form and the edit form
+        // alike; a script narrows the tree to the pick. Just the two regions: there is no "all" option.
         $track = $this->track('Plain Track', 'song');
         foreach (['/admin/media-contents/create/song', "/admin/media-contents/{$track->id}/edit"] as $url) {
             $html = $this->get($url)->assertOk()->getContent();
             $this->assertMatchesRegularExpression(
-                '/<h4>Tags<\/h4>\s*<label class="tag-region"[^>]*>\s*<select data-tag-region[^>]*>\s*<option value="international">International<\/option>\s*<option value="local">Local<\/option>\s*<\/select>/s',
+                '/<span[^>]*>Region<\/span>\s*<label class="tag-region"[^>]*>\s*<select data-tag-region[^>]*>\s*<option value="international">International<\/option>\s*<option value="local">Local<\/option>\s*<\/select>/s',
                 $html,
             );
+            // The tags are in the Details card, under a "Region" caption after its Category, and are no card of their own.
+            $this->assertStringNotContainsString('<h4>Tags</h4>', $html);
+            $afterDetails = substr($html, strpos($html, '<h4>Details</h4>'));
+            $detailsCard = substr($afterDetails, 0, strpos($afterDetails, 'class="sidebar-box"'));
+            $this->assertMatchesRegularExpression('/<select id="category_id".*<span[^>]*>Region<\/span>.*data-tag-tree/s', $detailsCard);
+            // A title between the region dropdown and the tree names what the list starts with (a script fills it in).
+            $this->assertMatchesRegularExpression('/<\/select>\s*<\/label>\s*<span data-tag-tree-title style="display:none;[^"]*"><\/span>\s*<div class="tag-tree" data-tag-tree>/', $html);
+            $this->assertStringContainsString("document.querySelector('[data-tag-tree-title]')", $html);
+            // The caption goes with the region dropdown; the script leaves it out for a tree with no regions (News, Health, Economy/Finance).
+            $this->assertStringContainsString('<span data-tag-caption style="display:block;font-size:9px;font-weight:700;margin:0 0 6px">Region</span>', $html);
+            $this->assertStringContainsString("document.querySelector('[data-tag-caption]')", $html);
             $this->assertStringNotContainsString('All regions', $html);
             $this->assertStringNotContainsString('data-tag-search', $html);
             $this->assertStringNotContainsString('Search tags', $html);
@@ -938,7 +1211,7 @@ class CmsMusicAdminTest extends TestCase
             $this->get($url)->assertOk()->assertSee('href="'.$link('song').'" class="primary-button">New Song ', false);
         }
         $this->get('/admin/music?category=audio')->assertOk()->assertSee('href="'.$link('news').'" class="primary-button">New Audio ', false);
-        $this->get('/admin/music?category=podcast')->assertOk()->assertSee('href="'.$link('podcast').'" class="primary-button">New Podcast ', false);
+        $this->get('/admin/music?category=podcast')->assertOk()->assertSee('href="'.$link('podcast').'" class="primary-button">New Podcast EPS ', false);
 
         // The form it opens starts on that category and returns here.
         $news = $this->category('news');

@@ -1,8 +1,7 @@
 @csrf
 
-{{-- The same look as the media editor: a bar at the top with the save button, a big title with the slug under it,
-     the text in a card, and the settings (Published, type, cover) in a sidebar. The slug follows the title as it
-     is typed (script at the bottom). --}}
+{{-- The same look as the media editor: a bar at the top with the save button, a big title with a line under it,
+     the text in a card, and the settings (Published, type, cover) in a sidebar. --}}
 <style>
     /* As in the media editor: the sidebar is its full height (the page scrolls, not it), and the Description card
        grows to meet the bottom of it, the editor filling the card. */
@@ -17,7 +16,7 @@
 <div class="editor-topbar">
     <a href="{{ route('admin.programs.index') }}" class="icon-button" aria-label="{{ __('Back to podcasts') }}"><i class="fa fa-arrow-left"></i></a>
     <span class="badge {{ $published ? 'green' : 'slate' }}" data-published-badge>{{ $published ? __('Published') : __('Draft') }}</span>
-    <strong class="editor-topbar-title">{{ isset($program) ? $program->name : __('New Podcast') }}</strong>
+    <strong class="editor-topbar-title">{{ isset($program) ? $program->name : __('New Program Podcast') }}</strong>
     <div class="editor-topbar-actions">
         <button type="submit" class="primary-button">{{ isset($program) ? __('Save changes') : __('Create podcast') }}</button>
     </div>
@@ -26,15 +25,13 @@
 <div class="editor-layout">
     <div class="editor-main">
         <div>
-            <input id="name" name="name" type="text" class="editor-title-input" placeholder="{{ __('Podcast title') }}" aria-label="{{ __('Title') }}" value="{{ old('name', $program->name ?? '') }}" required autocomplete="off">
+            <input id="name" name="name" type="text" class="editor-title-input" placeholder="{{ __('Program Podcast title') }}" aria-label="{{ __('Title') }}" value="{{ old('name', $program->name ?? '') }}" required autocomplete="off">
             @error('name') <em class="field-error">{{ $message }}</em> @enderror
         </div>
-        <div>
-            <label class="editor-slug-row">{{ __('Slug') }}
-                <input id="slug" name="slug" type="text" placeholder="{{ __('Made from the title as you type') }}" value="{{ old('slug', $program->slug ?? '') }}" autocomplete="off" spellcheck="false">
-            </label>
-            @error('slug') <em class="field-error">{{ $message }}</em> @enderror
-        </div>
+        {{-- A thin line under the title, where the Slug row's bottom border used to be. The slug has no box: the server
+             makes it from the title when the podcast is created, and an existing one is kept. --}}
+        <hr class="editor-title-rule" style="width:100%;border:0;border-top:1px solid var(--line);margin:-8px 0 0">
+        @error('slug') <em class="field-error">{{ $message }}</em> @enderror
 
         @php
             $description = (string) old('description', $program->description ?? '');
@@ -58,7 +55,7 @@
             <h4>{{ __('Cover image') }}</h4>
             @php $hasCover = isset($program) && $program->cover_image; @endphp
             {{-- The current cover; the script below swaps in the picture just chosen (a file, or an address pasted in). --}}
-            <img src="{{ $hasCover ? $program->cover_image_url : '' }}" alt="{{ __('Cover image preview') }}" data-cover-preview style="display:block;max-width:100%;max-height:220px;width:auto;height:auto;border-radius:9px;margin-bottom:10px" @unless($hasCover) hidden @endunless>
+            <img src="{{ $hasCover ? $program->cover_image_url : '' }}" alt="{{ __('Cover image preview') }}" data-cover-preview style="display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:9px;margin-bottom:10px" @unless($hasCover) hidden @endunless>
             @if($hasCover)
                 <span class="check-row" style="margin:0 0 10px"><input type="checkbox" name="remove_cover_image" value="1"> {{ __('Remove current cover image') }}</span>
             @endif
@@ -70,7 +67,7 @@
             <input name="cover_image_url" type="text" placeholder="https://…" value="{{ old('cover_image_url') }}" data-image-mode-panel="url" data-image-field="cover_image" @unless(old('cover_image_url')) hidden disabled @endunless>
             @error('cover_image') <em class="field-error">{{ $message }}</em> @enderror
             @error('cover_image_url') <em class="field-error">{{ $message }}</em> @enderror
-            <p class="muted" style="font-size:9px;line-height:1.5;margin:10px 0 0">{{ __("Kept whole as WebP, never cropped (scaled down to fit 1280 px). Optional: the newest episode's picture is used without one.") }}</p>
+            <p class="muted" style="font-size:9px;line-height:1.5;margin:10px 0 0">{{ __("Ratio 3:4. Optional: the newest episode's picture is used without one.") }}</p>
         </div>
 
         <div class="sidebar-box">
@@ -83,10 +80,10 @@
 
         <div class="sidebar-box">
             <h4>{{ __('Details') }}</h4>
-            <label>{{ __('Podcast type') }}
+            <label>{{ __('Podcast Category') }}
                 {{-- The tags under Podcast: Health, Economy/Finance, Education, Politic, Civilization. --}}
                 <select id="tag_id" name="tag_id" @required(! isset($program))>
-                    <option value="">{{ isset($program) ? __('— No type —') : __('Select a podcast type…') }}</option>
+                    <option value="">{{ isset($program) ? __('— No type —') : __('Select a podcast category…') }}</option>
                     @foreach($types as $type)
                         <option value="{{ $type->id }}" @selected((int) old('tag_id', $program->tag_id ?? $defaultTagId ?? '') === $type->id)>{{ $type->name }}</option>
                     @endforeach
@@ -144,23 +141,5 @@
             badge.classList.toggle('green', toggle.checked);
             badge.classList.toggle('slate', !toggle.checked);
         });
-    })();
-
-    // The slug follows the title as it is typed, in the form the server would make of it: Latin letters and digits,
-    // words joined by dashes. A Khmer title has no Latin letters to make one of, so it leaves the slug empty and the
-    // server fills it in. Typing in the slug takes it over; emptying it hands it back to the title. A podcast that
-    // already has a slug keeps it, since changing the slug would change the address it is known by.
-    (() => {
-        const title = document.getElementById('name');
-        const slug = document.getElementById('slug');
-        if (!title || !slug) return;
-        // The same steps as the server's Str::slug: underscores and spaces become dashes, "@" becomes "at", other
-        // punctuation drops out ("It's 24/7" is "its-247"), and the dashes are tidied.
-        const slugify = text => text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
-            .replace(/_+/g, '-').replace(/@/g, '-at-').replace(/[^a-z0-9\s-]+/g, '').replace(/[\s-]+/g, '-').replace(/^-+|-+$/g, '');
-        let following = slug.value === '';
-
-        title.addEventListener('input', () => { if (following) slug.value = slugify(title.value); });
-        slug.addEventListener('input', () => { following = slug.value === ''; });
     })();
 </script>

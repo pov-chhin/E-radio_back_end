@@ -290,11 +290,11 @@ class CatalogManagementTest extends TestCase
             'category_id' => $category->id,
             'title' => 'QA Track', 'slug' => 'qa-track', 'media_type' => 'audio',
             'status' => 'private',
-            'artist_id' => $artist->id,
+            'artist_ids' => [$artist->id],
         ])->assertRedirect(route('admin.media-contents.index'));
 
         $mediaContent = MediaContent::where('slug', 'qa-track')->firstOrFail();
-        $this->assertTrue($mediaContent->artist->is($artist));
+        $this->assertTrue($mediaContent->artists->contains($artist));
         $this->assertTrue($mediaContent->author->is(auth('admin')->user()));
     }
 
@@ -329,7 +329,7 @@ class CatalogManagementTest extends TestCase
             'description' => '<p>Some <strong>rich</strong> text.</p>',
         ]);
 
-        $this->get('/admin/media-contents/create')->assertOk()->assertSee('New media content');
+        $this->get('/admin/media-contents/create?category=none')->assertOk()->assertSee('New media content');
         // The textarea holds escaped HTML (the browser decodes it back to source markup for Quill to load).
         $this->get("/admin/media-contents/{$mediaContent->id}/edit")->assertOk()->assertSee('Some &lt;strong&gt;rich&lt;/strong&gt; text.', false);
     }
@@ -351,7 +351,7 @@ class CatalogManagementTest extends TestCase
         $this->assertSame(2, $tree->firstWhere('id', $popular->id)->count);
         $this->assertSame(0, $tree->firstWhere('id', $quiet->id)->count);
 
-        $response = $this->get('/admin/media-contents/create')->assertOk();
+        $response = $this->get('/admin/media-contents/create?category=none')->assertOk();
         $this->assertMatchesRegularExpression('/QA Popular<\/span>\s*<small>2<\/small>/', $response->getContent());
         $this->assertMatchesRegularExpression('/QA Quiet<\/span>\s*<small>0<\/small>/', $response->getContent());
     }

@@ -21,8 +21,14 @@ class MediaContentResource extends JsonResource
             'duration_seconds' => $this->duration_seconds,
             'play_count' => $this->play_count,
             'category' => new CategoryResource($this->whenLoaded('category')),
-            'artist_name' => $this->whenLoaded('artist', fn () => $this->artist?->name),
-            'artist_photo_url' => $this->whenLoaded('artist', fn () => $this->artist?->photoUrl),
+            // Everyone credited: the names joined ("A, B"), the first one's photo, and the full list.
+            'artist_name' => $this->whenLoaded('artists', fn () => $this->artists->pluck('name')->implode(', ') ?: null),
+            'artist_photo_url' => $this->whenLoaded('artists', fn () => $this->artists->first()?->photoUrl),
+            'artists' => $this->whenLoaded('artists', fn () => $this->artists->map(fn ($artist) => [
+                'id' => (string) $artist->id,
+                'name' => $artist->name,
+                'photo_url' => $artist->photoUrl,
+            ])->values()),
             'published_at' => $this->published_at?->toIso8601String(),
         ];
     }

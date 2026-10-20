@@ -38,29 +38,38 @@ class MediaContentController extends Controller
 
     private const AMBIENT_SLUG = 'ambient-music';
 
+    /** The form the bare create address redirects to. */
+    private const DEFAULT_FORM = 'song';
+
     /**
      * The form behind each "New …" button of the Article page, keyed by the category it starts on: the
      * categories the select offers (just one fixes it; null keeps them all), the fields left off, and — for
-     * a podcast episode — `podcast_required`: the Podcast select has no "No podcast" to fall back on.
+     * a podcast episode — `podcast_required`: the Podcast select has no "No podcast" to fall back on. The
+     * `title_placeholder` is what the empty Title box says (translated by the form).
      */
     private const ARTICLE_FORMS = [
-        'song' => ['categories' => ['song'], 'hide' => ['podcast']],
-        'news' => ['categories' => ['news', 'health', 'economyfinance'], 'hide' => ['podcast', 'artist']],
-        'ambient-music' => ['categories' => ['ambient-music'], 'hide' => ['podcast']],
-        'podcast' => ['categories' => ['podcast'], 'hide' => [], 'podcast_required' => true],
+        'song' => ['categories' => ['song'], 'hide' => ['podcast', 'category'], 'title_placeholder' => 'Title Song'],
+        'news' => ['categories' => ['news', 'health', 'economyfinance'], 'hide' => ['podcast', 'artist'], 'title_placeholder' => 'Title Audio'],
+        'ambient-music' => ['categories' => ['ambient-music'], 'hide' => ['podcast', 'category'], 'title_placeholder' => 'Title Ambient'],
+        'podcast' => ['categories' => ['podcast'], 'hide' => ['artist', 'category'], 'podcast_required' => true, 'title_placeholder' => 'Title Podcasts Eps'],
     ];
 
     public function __construct(private readonly ImageVariantProcessor $imageProcessor) {}
 
     public function index(): View
     {
-        $mediaContents = MediaContent::with(['category', 'program', 'artist', 'author'])->latest()->paginate(15);
+        $mediaContents = MediaContent::with(['category', 'program', 'artists', 'author'])->latest()->paginate(15);
 
         return view('cms-admin::media-contents.index', compact('mediaContents'));
     }
 
-    public function create(Request $request, ?string $category = null): View
+    public function create(Request $request, ?string $category = null): View|RedirectResponse
     {
+        // The bare address — no category, no podcast — is the Song form: /create/song.
+        if ($category === null && ! $request->filled('category') && ! $request->filled('podcast')) {
+            return redirect()->route('admin.media-contents.create', [...$request->query(), 'category' => self::DEFAULT_FORM]);
+        }
+
         // The category comes in the path (/create/song); the older ?category=song still works.
         $requested = $category ?? $request->query('category');
 
@@ -95,8 +104,9 @@ class MediaContentController extends Controller
                 ? $podcast->category_id
                 : (($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null),
             'lockedProgramId' => $podcast?->id,
-            'hiddenFields' => [...($articleForm['hide'] ?? []), ...($podcast ? ['artist'] : [])],
+            'hiddenFields' => [...($articleForm['hide'] ?? []), ...($podcast ? ['artist', 'category'] : [])],
             'podcastRequired' => $articleForm['podcast_required'] ?? false,
+            'titlePlaceholder' => $articleForm['title_placeholder'] ?? null,
         ]);
     }
 
@@ -107,6 +117,7 @@ class MediaContentController extends Controller
         $data['author_id'] = $request->user('admin')->id;
 
         $mediaContent = MediaContent::create($data);
+        $mediaContent->artists()->sync($this->artistIdsFor($request));
         $mediaContent->tags()->sync($this->tagIdsFor($request, $mediaContent->category_id));
         $processing = $this->applyStreamInput($request, $mediaContent);
 
@@ -151,7 +162,7 @@ class MediaContentController extends Controller
      */
     private function editForm(Request $request, MediaContent $mediaContent, bool $fromMusic): View
     {
-        $mediaContent->loadMissing('tags', 'artist', 'author', 'category');
+        $mediaContent->loadMissing('tags', 'artists', 'author', 'category');
 
         $articleForm = $fromMusic ? $this->articleFormFor($mediaContent->category->slug) : null;
         $options = $this->formOptions($mediaContent);
@@ -173,8 +184,9 @@ class MediaContentController extends Controller
                 ? $mediaContent->category_id
                 : (($articleForm['categories'] ?? null) && $options['categories']->count() === 1 ? $options['categories']->first()->id : null),
             'lockedProgramId' => $podcast ? ($mediaContent->program_id ?? $podcast->id) : null,
-            'hiddenFields' => [...($articleForm['hide'] ?? []), ...($podcast ? ['artist'] : [])],
+            'hiddenFields' => [...($articleForm['hide'] ?? []), ...($podcast ? ['artist', 'category'] : [])],
             'podcastRequired' => $articleForm['podcast_required'] ?? false,
+            'titlePlaceholder' => $articleForm['title_placeholder'] ?? null,
         ]);
     }
 
@@ -202,19 +214,24 @@ class MediaContentController extends Controller
 
         // The Article page's form leaves some fields off (see ARTICLE_FORMS): a save from it leaves those as they
         // are instead of clearing them, so an item keeps a podcast or an artist the form doesn't show.
+        $keepArtists = false;
         if ($this->fromMusic($request)) {
             $hidden = $this->articleFormFor((string) Category::whereKey($data['category_id'])->value('slug'))['hide'] ?? [];
-            foreach (array_intersect_key(['podcast' => 'program_id', 'artist' => 'artist_id'], array_flip($hidden)) as $column) {
-                unset($data[$column]);
+            if (in_array('podcast', $hidden, true)) {
+                unset($data['program_id']);
             }
+            $keepArtists = in_array('artist', $hidden, true);
         }
 
         // An episode's form from its podcast's page has no Artist field either (see editForm): same rule.
         if ($this->podcastFrom($request)) {
-            unset($data['artist_id']);
+            $keepArtists = true;
         }
 
         $mediaContent->update($data);
+        if (! $keepArtists) {
+            $mediaContent->artists()->sync($this->artistIdsFor($request));
+        }
         $mediaContent->tags()->sync($this->tagIdsFor($request, $mediaContent->category_id, $mediaContent));
         $processing = $this->applyStreamInput($request, $mediaContent);
 
@@ -340,6 +357,12 @@ class MediaContentController extends Controller
             : redirect()->route('admin.media-contents.index'))->with('status', $status);
     }
 
+    /** The artists ticked on the form (validated: each exists, none twice). @return array<int, int> */
+    private function artistIdsFor(Request $request): array
+    {
+        return array_values(array_map('intval', (array) $request->input('artist_ids', [])));
+    }
+
     /**
      * The ticked tags that sit under the category (their `category_id`), or under Ambient Music —
      * whose moods any content can carry — or under no category at all; the form only offers those,
@@ -406,7 +429,6 @@ class MediaContentController extends Controller
                 ? $request->input('slug')
                 : ($mediaContent?->slug ?? $this->uniqueSlug((string) $request->input('title'), 'media_contents', 'media')),
             'program_id' => $request->filled('program_id') ? (int) $request->input('program_id') : null,
-            'artist_id' => $request->filled('artist_id') ? (int) $request->input('artist_id') : null,
             'duration_seconds' => $request->filled('duration_seconds') ? (int) $request->input('duration_seconds') : null,
         ]);
 
@@ -415,7 +437,8 @@ class MediaContentController extends Controller
             'program_id' => ['nullable', 'integer', 'exists:programs,id'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'alpha_dash', Rule::unique('media_contents', 'slug')->ignore($mediaContent)],
-            'artist_id' => ['nullable', 'integer', 'exists:artists,id'],
+            'artist_ids' => ['nullable', 'array'],
+            'artist_ids.*' => ['integer', 'distinct', 'exists:artists,id'],
             'description' => ['nullable', 'string'],
             'media_type' => ['required', Rule::in(['audio', 'video', 'article'])],
             'stream' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,mp4,webm,mov', 'max:102400'],
@@ -438,7 +461,7 @@ class MediaContentController extends Controller
             'tags.*' => ['integer', 'exists:tags,id'],
         ]);
 
-        unset($data['tags'], $data['status'], $data['published_at']);
+        unset($data['tags'], $data['artist_ids'], $data['status'], $data['published_at']);
 
         $thumbnailReplaced = $request->hasFile('thumbnail') || $request->filled('thumbnail_url');
 

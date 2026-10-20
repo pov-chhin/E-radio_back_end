@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Team') }}</p>
+            <p class="eyebrow">{{ __('Access control') }}</p>
             <h1>{{ __('Edit User') }}</h1>
             <p>{{ __("Update :name's account, language, and roles.", ['name' => $user->name]) }}</p>
         </div>

@@ -1,6 +1,6 @@
 @extends('cms-admin::layout')
 
-@section('title', 'Overview')
+@section('title', 'Dashboard')
 
 @push('head')
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -163,7 +163,7 @@
                                             @else
                                                 <span class="dash-avatar tone-{{ $loop->iteration <= 3 ? 'primary' : 'slate' }}">{{ $loop->iteration }}</span>
                                             @endif
-                                            <div class="dash-cell-copy"><b title="{{ $track->title }}">{{ \Illuminate\Support\Str::limit($track->title, 25) }}</b><small>{{ $track->artist?->stage_name ?: ($track->artist?->name ?? __('Unknown artist')) }}</small></div>
+                                            <div class="dash-cell-copy"><b title="{{ $track->title }}">{{ \Illuminate\Support\Str::limit($track->title, 25) }}</b><small>{{ $track->artist_names ?: __('Unknown artist') }}</small></div>
                                         </div>
                                     </td>
                                     <td class="right">

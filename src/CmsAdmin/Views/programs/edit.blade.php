@@ -49,8 +49,8 @@
                                 @endif
                                 <span class="media-title-copy">
                                     <b>{{ $episode->title }}</b>
-                                    @if($episode->artist)
-                                        <small class="muted">{{ $episode->artist->stage_name ?: $episode->artist->name }}</small>
+                                    @if($episode->artists->isNotEmpty())
+                                        <small class="muted">{{ $episode->artist_names }}</small>
                                     @endif
                                 </span>
                             </div>

@@ -5,7 +5,7 @@ namespace Src\Catalog\Models;
 use App\Support\MediaStorage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Artist extends Model
 {
@@ -22,9 +22,9 @@ class Artist extends Model
         ];
     }
 
-    public function mediaContents(): HasMany
+    public function mediaContents(): BelongsToMany
     {
-        return $this->hasMany(MediaContent::class);
+        return $this->belongsToMany(MediaContent::class);
     }
 
     /** `photo`/`cover` store a path on the disk named in `photo_disk`/`cover_disk` (null = local public) or, for older rows, a plain external URL — resolve either to something an <img> can use. */

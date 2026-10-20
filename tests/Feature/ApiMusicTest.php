@@ -34,9 +34,8 @@ class ApiMusicTest extends TestCase
 
     private function song(string $title, ?Artist $artist, int $plays = 0, array $overrides = []): MediaContent
     {
-        return MediaContent::create([
+        $song = MediaContent::create([
             'category_id' => $this->song->id,
-            'artist_id' => $artist?->id,
             'title' => $title,
             'slug' => str($title)->slug()->toString(),
             'media_type' => 'audio',
@@ -46,6 +45,12 @@ class ApiMusicTest extends TestCase
             'play_count' => $plays,
             ...$overrides,
         ]);
+
+        if ($artist) {
+            $song->artists()->attach($artist);
+        }
+
+        return $song;
     }
 
     public function test_artists_are_listed_most_played_first(): void
@@ -130,6 +135,33 @@ class ApiMusicTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.title', 'By Nuth');
+    }
+
+    public function test_an_item_with_several_artists_lists_all_of_them_and_is_found_through_each(): void
+    {
+        $nuth = $this->artist('Nuth', ['photo' => 'https://example.com/nuth.png']);
+        $neo = $this->artist('NEO');
+        $this->song('Duet', $nuth)->artists()->attach($neo);
+        $this->song('Solo By Neo', $neo);
+
+        $duet = collect($this->getJson('/api/media-contents')->assertOk()->json('data'))->keyBy('title')['Duet'];
+
+        // Names joined (A to Z), the first one's photo, and the whole list.
+        $this->assertSame('NEO, Nuth', $duet['artist_name']);
+        $this->assertSame(['NEO', 'Nuth'], array_column($duet['artists'], 'name'));
+        $this->assertSame([null, 'https://example.com/nuth.png'], array_column($duet['artists'], 'photo_url'));
+        $this->assertNull($duet['artist_photo_url'], 'the first artist (NEO) has no photo');
+
+        // The artist filter and the search both match any of the artists, and an item is listed once.
+        foreach ([$nuth, $neo] as $artist) {
+            $this->assertContains('Duet', array_column($this->getJson('/api/media-contents?artist_id='.$artist->id)->assertOk()->json('data'), 'title'));
+        }
+        $this->assertSame(['Duet', 'Solo By Neo'], collect($this->getJson('/api/media-contents?q=neo')->json('data'))->pluck('title')->sort()->values()->all());
+        $this->assertCount(1, $this->getJson('/api/media-contents?artist_id='.$nuth->id)->json('data'));
+
+        // One item's page credits both too.
+        $id = MediaContent::where('title', 'Duet')->value('id');
+        $this->getJson("/api/media-contents/{$id}")->assertOk()->assertJsonPath('data.artist_name', 'NEO, Nuth')->assertJsonCount(2, 'data.artists');
     }
 
     public function test_media_contents_carry_the_artists_name_and_photo(): void

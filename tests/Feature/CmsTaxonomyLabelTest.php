@@ -34,14 +34,26 @@ class CmsTaxonomyLabelTest extends TestCase
         return preg_match('/<p class="eyebrow">([^<]*)<\/p>/', $html, $m) ? $m[1] : null;
     }
 
-    public function test_the_sidebar_group_is_taxonomy(): void
+    public function test_the_sidebar_has_a_content_group_and_a_taxonomy_group(): void
     {
         $html = $this->get('/admin/podcasts')->assertOk()->getContent();
         $nav = substr($html, $start = strpos($html, 'main-nav'), strpos($html, '</nav>', $start) - $start);
 
-        // One heading, over Podcasts, Article, Categories, Tags and Artists.
-        $this->assertSame(1, substr_count($nav, 'class="nav-section"'));
-        $this->assertMatchesRegularExpression('/<p class="nav-section">Taxonomy<\/p>\s*<a href="[^"]*\/admin\/podcasts"/', $nav);
+        // The first group of the menu is called "Overviews" (it used to be "Workspace"), and its item "Dashboard".
+        $this->assertStringContainsString('<p>Overviews</p>', $nav);
+        $this->assertStringNotContainsString('Workspace', $nav);
+        $this->assertMatchesRegularExpression('/<span class="nav-icon[^"]*"><\/span><span>Dashboard<\/span>/', $nav);
+        $this->assertStringNotContainsString('<span>Overview</span>', $nav);
+
+        // Dashboard is the only item under "Overviews": Radio Channels and Radio Studio are in "Content" (see
+        // RadioStudioSettingTest, which signs in with the radio permission).
+        $this->assertLessThan(strpos($nav, '<p class="nav-section">Content</p>'), strpos($nav, '<span>Dashboard</span>'));
+
+        // Two headings: "Content" over Podcasts Program and Content, then "Taxonomy" over Categories, Tags and Artists.
+        $this->assertSame(2, substr_count($nav, 'class="nav-section"'));
+        $this->assertMatchesRegularExpression('/<p class="nav-section">Content<\/p>\s*<a href="[^"]*\/admin\/podcasts"/', $nav);
+        $this->assertMatchesRegularExpression('/<p class="nav-section">Taxonomy<\/p>\s*<a href="[^"]*\/admin\/categories"/', $nav);
+        $this->assertLessThan(strpos($nav, '<p class="nav-section">Taxonomy</p>'), strpos($nav, '<span>Content</span>'), 'the Content item is in the Content group');
         $this->assertStringNotContainsString('Catalog', $nav);
     }
 
@@ -52,18 +64,22 @@ class CmsTaxonomyLabelTest extends TestCase
         $artist = Artist::create(['name' => 'Some Artist', 'slug' => 'some-artist', 'status' => 'active']);
         $program = Program::create(['category_id' => Category::where('slug', 'podcast')->value('id'), 'name' => 'Morning Brief', 'slug' => 'morning-brief', 'is_published' => true]);
 
+        // The pages of the Content group (Podcasts Program, Content) say "Content" over their title, like the sidebar
+        // group they sit in; Categories, Tags and Artists say "Taxonomy".
         foreach ([
-            '/admin/music', '/admin/music?category=podcast',
-            '/admin/media-contents',
-            '/admin/podcasts', '/admin/podcasts/create',
-            '/admin/categories', '/admin/categories/create', "/admin/categories/{$category->id}/edit",
-            '/admin/tags', '/admin/tags/create', "/admin/tags/{$tag->id}/edit",
-            '/admin/artists', '/admin/artists/create', "/admin/artists/{$artist->id}/edit",
-        ] as $url) {
-            $html = $this->get($url)->assertOk()->getContent();
+            'Content' => ['/admin/music', '/admin/music?category=podcast', '/admin/media-contents', '/admin/podcasts', '/admin/podcasts/create'],
+            'Taxonomy' => [
+                '/admin/categories', '/admin/categories/create', "/admin/categories/{$category->id}/edit",
+                '/admin/tags', '/admin/tags/create', "/admin/tags/{$tag->id}/edit",
+                '/admin/artists', '/admin/artists/create', "/admin/artists/{$artist->id}/edit",
+            ],
+        ] as $heading => $urls) {
+            foreach ($urls as $url) {
+                $html = $this->get($url)->assertOk()->getContent();
 
-            $this->assertSame('Taxonomy', $this->eyebrow($html), $url);
-            $this->assertStringNotContainsString('Catalog', substr($html, strpos($html, '<body')), $url);
+                $this->assertSame($heading, $this->eyebrow($html), $url);
+                $this->assertStringNotContainsString('Catalog', substr($html, strpos($html, '<body')), $url);
+            }
         }
     }
 
@@ -83,10 +99,10 @@ class CmsTaxonomyLabelTest extends TestCase
         $this->assertStringContainsString('<p class="nav-section">Taxonomy</p>', $html);
         $this->assertStringNotContainsString('Catalog', substr($html, strpos($html, '<body')));
 
-        // The New Podcast page keeps its heading (and its "create the show first" hint).
+        // The New Program Podcast page keeps its heading (and its "create the show first" hint).
         $new = $this->get('/admin/podcasts/create')->assertOk()->getContent();
-        $this->assertSame('Taxonomy', $this->eyebrow($new));
-        $this->assertStringContainsString('<h1>New Podcast</h1>', $new);
+        $this->assertSame('Content', $this->eyebrow($new));
+        $this->assertStringContainsString('<h1>New Program Podcast</h1>', $new);
     }
 
     public function test_no_view_still_uses_the_catalog_label(): void
@@ -112,7 +128,9 @@ class CmsTaxonomyLabelTest extends TestCase
 
         $html = $this->get('/admin/podcasts')->assertOk()->getContent();
 
-        $this->assertSame('ចំណាត់ថ្នាក់', $this->eyebrow($html));
+        // The Podcasts page says "Content" over its title; the sidebar's other group, "Taxonomy", is translated too.
+        $this->assertSame('មាតិកា', $this->eyebrow($html));
+        $this->assertStringContainsString('<p class="nav-section">មាតិកា</p>', $html);
         $this->assertStringContainsString('<p class="nav-section">ចំណាត់ថ្នាក់</p>', $html);
         $this->assertStringNotContainsString('កាតាឡុក', $html);
     }

@@ -5,7 +5,7 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <p class="eyebrow">{{ __('Taxonomy') }}</p>
+            <p class="eyebrow">{{ __('Content') }}</p>
             <h1>{{ __('Media Content') }}</h1>
             <p>{{ __('Songs, episodes, articles, and everything else listeners can play or read.') }}</p>
         </div>
@@ -41,8 +41,8 @@
                                 @endif
                                 <span class="media-title-copy">
                                     <b>{{ $mediaContent->title }}</b>
-                                    @if($mediaContent->artist || $mediaContent->author)
-                                        <small class="muted">{{ collect([$mediaContent->artist?->stage_name ?: $mediaContent->artist?->name, $mediaContent->author?->name])->filter()->implode(' · ') }}</small>
+                                    @if($mediaContent->artists->isNotEmpty() || $mediaContent->author)
+                                        <small class="muted">{{ collect([$mediaContent->artist_names, $mediaContent->author?->name])->filter()->implode(' · ') }}</small>
                                     @endif
                                 </span>
                             </div>
