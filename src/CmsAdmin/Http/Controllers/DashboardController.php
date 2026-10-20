@@ -40,6 +40,8 @@ class DashboardController extends Controller
             'scraperSetting' => RadioScraperSetting::first(),
             'recentChannels' => $overview['recentChannels'],
             'recentPodcasts' => $overview['recentPodcasts'],
+            // `??`: a dashboard cached a minute ago, before this list existed, has no such key.
+            'recentAudio' => $overview['recentAudio'] ?? collect(),
             'topMusic' => $overview['topMusic'],
             'onlineUsers' => $online['users'],
             'countries' => $overview['countries'],
@@ -61,6 +63,12 @@ class DashboardController extends Controller
                 ->withCount('mediaContents')
                 ->withSum('mediaContents', 'play_count')
                 ->latest()
+                ->take(8)
+                ->get(),
+            // The Audio group of the Content page: News, Health and Economy/Finance.
+            'recentAudio' => MediaContent::with('category')
+                ->whereIn('category_id', Category::whereIn('slug', ['news', 'health', 'economyfinance'])->select('id'))
+                ->latest()->latest('id')
                 ->take(8)
                 ->get(),
             'topMusic' => MediaContent::with('artists')

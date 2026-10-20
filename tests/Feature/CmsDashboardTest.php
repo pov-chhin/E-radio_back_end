@@ -163,6 +163,36 @@ class CmsDashboardTest extends TestCase
             ->assertDontSee('Recent admin users');
     }
 
+    public function test_it_shows_an_audio_card_below_the_recent_podcasts(): void
+    {
+        $this->actingAs($this->createAdmin(['view-media-content']), 'admin');
+        $audio = fn (string $slug, string $title, array $extra = []) => MediaContent::create([
+            'category_id' => Category::where('slug', $slug)->firstOrFail()->id,
+            'title' => $title, 'slug' => str($title)->slug()->toString(), 'media_type' => 'audio', ...$extra,
+        ]);
+        $audio('news', 'Market Update', ['is_published' => true, 'play_count' => 7]);
+        $audio('health', 'Sleep Well');
+        $audio('song', 'Just A Song');
+
+        $response = $this->get('/admin')->assertOk();
+        $html = $response->getContent();
+
+        // Under the podcasts card: News, Health and Economy/Finance items, newest first, with their status and plays.
+        $response->assertSeeInOrder(['Recent podcasts', 'Recent audio', 'Sleep Well', 'Draft', 'Market Update', 'Published', '<b class="dash-num">7</b>'], false);
+        $card = substr($html, $start = strpos($html, 'Recent audio'), strpos($html, '</section>', $start) - $start);
+        $this->assertStringContainsString('<small>News</small>', $card);
+        $this->assertStringContainsString('<small>Health</small>', $card);
+        $this->assertStringNotContainsString('Just A Song', $card);
+        $this->assertStringContainsString('href="'.e(route('admin.music.index', ['category' => 'audio'])).'"', $card);
+    }
+
+    public function test_the_audio_card_says_so_when_there_is_no_audio_yet(): void
+    {
+        $this->actingAs($this->createAdmin([]), 'admin');
+
+        $this->get('/admin')->assertOk()->assertSee('Recent audio')->assertSee('No audio yet.');
+    }
+
     public function test_it_shows_the_top_5_most_played_songs_below_recent_radio_channels(): void
     {
         $this->actingAs($this->createAdmin([]), 'admin');

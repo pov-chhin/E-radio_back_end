@@ -274,6 +274,49 @@
             </div>
         </section>
 
+        <section class="dash-card dash-block">
+            <header class="dash-card-head">
+                <div><h3>{{ __('Recent audio') }}</h3><p>{{ __('Newest News, Health and Economy/Finance content') }}</p></div>
+                @if($adminUser->hasPermission('view-media-content'))
+                    <a class="dash-btn dash-btn-sm" href="{{ route('admin.music.index', ['category' => 'audio']) }}"><i class="fa fa-newspaper-o"></i> {{ __('View all') }}</a>
+                @endif
+            </header>
+            <div class="dash-table-wrap">
+                <table class="dash-table">
+                    <thead>
+                        <tr><th>{{ __('Audio') }}</th><th class="dash-hide-sm">{{ __('Added') }}</th><th>{{ __('Status') }}</th><th class="right dash-hide-sm">{{ __('Plays') }}</th></tr>
+                    </thead>
+                    <tbody>
+                        @forelse($recentAudio as $audio)
+                            @php
+                                $addedAt = $audio->created_at->copy()->setTimezone($adminZone);
+                                $state = $audio->status; // public, scheduled or private
+                            @endphp
+                            <tr>
+                                <td>
+                                    <div class="dash-cell">
+                                        @if($audio->thumbnail_url)
+                                            <img class="dash-avatar" src="{{ $audio->thumbnail_url }}" alt="">
+                                        @else
+                                            <span class="dash-avatar tone-{{ $toneFor($audio->title) }}"><i class="fa fa-newspaper-o"></i></span>
+                                        @endif
+                                        <div class="dash-cell-copy"><b>{{ $audio->title }}</b><small>{{ $audio->category->name }}</small></div>
+                                    </div>
+                                </td>
+                                <td class="dash-hide-sm">
+                                    <div class="dash-cell-copy"><small>{{ $addedAt->translatedFormat('h:i A') }}</small><b>{{ $addedAt->translatedFormat('F j, Y') }}</b></div>
+                                </td>
+                                <td><span class="dash-badge {{ $state === 'public' ? 'tone-success' : 'tone-warning' }}">{{ __(['public' => 'Published', 'scheduled' => 'Scheduled', 'private' => 'Draft'][$state]) }}</span></td>
+                                <td class="right dash-hide-sm"><b class="dash-num">{{ number_format($audio->play_count) }}</b></td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="dash-empty">{{ __('No audio yet.') }}</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         @if($quickActions->isNotEmpty())
             <section class="dash-card dash-block">
                 <header class="dash-card-head">
