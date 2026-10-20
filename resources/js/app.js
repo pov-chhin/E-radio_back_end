@@ -24,9 +24,26 @@ const setStreamSource = (audioEl, url, onFatalError = () => {}) => {
         audioEl.src = url;
         return;
     }
-    const hls = new Hls();
+    // The radio origin keeps only a very small live window (three segments). The
+    // hls.js default starts three target durations behind the edge, which can
+    // select a segment that the origin has already deleted and return 404.
+    const hls = new Hls({
+        liveSyncDurationCount: 1,
+        liveMaxLatencyDurationCount: 2,
+    });
+    let networkRecoveryAttempts = 0;
+    hls.on(Hls.Events.FRAG_BUFFERED, () => { networkRecoveryAttempts = 0; });
     hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
+
+        // Reload the current live edge after an expired segment or another
+        // fatal network failure. A successful fragment resets the allowance.
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRecoveryAttempts < 3) {
+            networkRecoveryAttempts += 1;
+            hls.startLoad(-1);
+            return;
+        }
+
         releaseStream(audioEl);
         onFatalError();
     });
