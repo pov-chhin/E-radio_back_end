@@ -73,7 +73,9 @@ class YoutubeAudioFetcher
         }
 
         $proxyArguments = $this->proxyArguments();
+        $proxyOffset = count($command);
         array_push($command, ...$proxyArguments);
+        $proxyUnreachable = false;
 
         [$cookies, $temporaryCookies] = $this->cookiesFile();
 
@@ -113,12 +115,23 @@ class YoutubeAudioFetcher
 
                 $this->discard($base);
 
+                // A dead proxy (wrong host, nothing listening, bad login) must not stop every download: YouTube may
+                // still answer this server directly, so go around the proxy once, at once, and say so if that fails too.
+                if ($proxyArguments !== [] && self::isProxyFailure($process->getErrorOutput())) {
+                    array_splice($command, $proxyOffset, count($proxyArguments));
+                    $proxyArguments = [];
+                    $proxyUnreachable = true;
+                    $attempt--;
+
+                    continue;
+                }
+
                 if ($attempt >= $attempts || ! self::isTransient($process->getErrorOutput())) {
                     throw new RuntimeException($this->failureMessage(
                         $process,
                         signedIn: $cookies !== null || filled(config('services.yt_dlp.cookies_from_browser')),
                         proxied: $proxyArguments !== [],
-                    ));
+                    ).($proxyUnreachable ? ' The proxy in YT_DLP_PROXY could not be reached, so YouTube was tried directly: fix or clear YT_DLP_PROXY.' : ''));
                 }
 
                 // YouTube sometimes refuses a request for no lasting reason (several in a row make it likelier).
@@ -241,6 +254,12 @@ class YoutubeAudioFetcher
     public static function isTransient(string $errorOutput): bool
     {
         return (bool) preg_match('/HTTP Error (403|429|5\d\d)|timed out|connection (reset|aborted|refused)|temporary failure|remote end closed|incomplete read/i', $errorOutput);
+    }
+
+    /** Whether yt-dlp could not get through its proxy at all (refused, unresolvable, rejected login), as opposed to YouTube refusing. */
+    public static function isProxyFailure(string $errorOutput): bool
+    {
+        return (bool) preg_match('/unable to connect to proxy|proxyerror|tunnel connection failed|socks\w* (proxy )?(error|failed)/i', $errorOutput);
     }
 
     private function discard(string $base): void

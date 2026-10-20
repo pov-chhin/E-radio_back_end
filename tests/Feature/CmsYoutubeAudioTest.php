@@ -415,6 +415,92 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertStringNotContainsString('pa55', $text);
     }
 
+    /**
+     * A stand-in for the yt-dlp binary: it logs whether it was given --proxy, fails like a dead proxy when it was,
+     * and otherwise either "downloads" a file or answers with YouTube's bot check.
+     *
+     * @return array{0: string, 1: string} [binary to configure, log of the calls]
+     */
+    private function fakeYtDlp(bool $directWorks): array
+    {
+        $script = tempnam(sys_get_temp_dir(), 'fake_ytdlp_');
+        $log = $script.'.log';
+        $php = PHP_BINARY;
+        $wrapper = $script.(PHP_OS_FAMILY === 'Windows' ? '.bat' : '.sh');
+        $this->temporaryFiles = [...$this->temporaryFiles, $script, $log, $wrapper];
+
+        file_put_contents($script, str_replace('__DIRECT_WORKS__', $directWorks ? 'true' : 'false', <<<'PHP'
+<?php
+$proxied = in_array('--proxy', $argv, true);
+file_put_contents(__FILE__.'.log', ($proxied ? 'proxy' : 'direct')."\n", FILE_APPEND);
+if ($proxied) {
+    fwrite(STDERR, "ERROR: [youtube] abc: Unable to download API page: ('Unable to connect to proxy', NewConnectionError(\"HTTPSConnection(host='proxy.example.com', port=3128): Failed to establish a new connection: [Errno 111] Connection refused\"))\n");
+    exit(1);
+}
+if (! __DIRECT_WORKS__) {
+    fwrite(STDERR, "ERROR: [youtube] abc: Sign in to confirm you're not a bot\n");
+    exit(1);
+}
+// Windows' cmd mangles some arguments of a .bat wrapper (the "-o" path loses its drive), so find the name instead.
+preg_match('/yt_audio_[0-9a-f-]{36}/', implode(' ', $argv), $name);
+file_put_contents(sys_get_temp_dir().DIRECTORY_SEPARATOR.$name[0].'.m4a', 'audio');
+PHP));
+
+        file_put_contents($wrapper, PHP_OS_FAMILY === 'Windows'
+            ? "@echo off\r\n\"{$php}\" \"{$script}\" %*\r\n"
+            : "#!/bin/sh\nexec '{$php}' '{$script}' \"\$@\"\n");
+        chmod($wrapper, 0755);
+
+        return [$wrapper, $log];
+    }
+
+    public function test_an_unreachable_proxy_is_skipped_and_youtube_is_tried_directly(): void
+    {
+        [$binary, $log] = $this->fakeYtDlp(directWorks: true);
+        config([
+            'services.yt_dlp.binary' => $binary,
+            'services.yt_dlp.proxy' => 'http://proxy.example.com:3128',
+            'services.yt_dlp.cookies' => null,
+            'services.yt_dlp.cookies_from_browser' => null,
+        ]);
+
+        $file = (new YoutubeAudioFetcher)->download(self::LINK);
+        $this->temporaryFiles[] = $file;
+
+        $this->assertFileExists($file);
+        $this->assertSame("proxy\ndirect\n", str_replace("\r\n", "\n", file_get_contents($log)));
+    }
+
+    public function test_when_the_direct_try_fails_too_the_admin_is_told_the_proxy_could_not_be_reached(): void
+    {
+        [$binary, $log] = $this->fakeYtDlp(directWorks: false);
+        config([
+            'services.yt_dlp.binary' => $binary,
+            'services.yt_dlp.proxy' => 'http://proxy.example.com:3128',
+            'services.yt_dlp.cookies' => null,
+            'services.yt_dlp.cookies_from_browser' => null,
+        ]);
+
+        try {
+            (new YoutubeAudioFetcher)->download(self::LINK);
+            $this->fail('The download should have failed.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('asks this server to sign in', $exception->getMessage());
+            $this->assertStringContainsString('could not be reached, so YouTube was tried directly', $exception->getMessage());
+        }
+
+        $this->assertSame("proxy\ndirect\n", str_replace("\r\n", "\n", file_get_contents($log)));
+    }
+
+    public function test_only_a_proxy_that_cannot_be_reached_is_skipped_not_a_youtube_refusal(): void
+    {
+        $this->assertTrue(YoutubeAudioFetcher::isProxyFailure("ERROR: [youtube] abc: Unable to download API page: ('Unable to connect to proxy', NewConnectionError(...Connection refused))"));
+        $this->assertTrue(YoutubeAudioFetcher::isProxyFailure('ERROR: Unable to download webpage: ProxyError(...Tunnel connection failed: 407 Proxy Authentication Required)'));
+        $this->assertFalse(YoutubeAudioFetcher::isProxyFailure('ERROR: unable to download video data: HTTP Error 403: Forbidden'));
+        $this->assertFalse(YoutubeAudioFetcher::isProxyFailure("ERROR: [youtube] abc: Sign in to confirm you're not a bot"));
+        $this->assertFalse(YoutubeAudioFetcher::isProxyFailure(''));
+    }
+
     public function test_the_old_stream_stays_until_the_new_file_is_ready_and_is_then_deleted(): void
     {
         Storage::disk('public')->put('media-contents/streams/old.opus', 'old');
