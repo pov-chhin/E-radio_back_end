@@ -357,7 +357,19 @@ class YoutubeAudioFetcher
             return 'YouTube gave no audio for this link (live streams cannot be fetched).';
         }
 
-        return 'YouTube audio could not be fetched: '.$this->withoutProxySecrets($error ?? ($lines[array_key_last($lines)] ?? 'no reason given'));
+        // A bare "HTTP Error 403: Forbidden" says nothing on its own; the warnings just before it usually name the cause
+        // (a format that needs a PO token, a client that was skipped, …).
+        $warnings = collect($lines)
+            ->filter(fn (string $line) => str_starts_with($line, 'WARNING:'))
+            ->map(fn (string $line) => trim(substr($line, 8)))
+            ->unique()
+            ->take(-3)
+            ->implode(' | ');
+        $details = $error !== null && $warnings !== ''
+            ? ' yt-dlp also warned: '.Str::limit($warnings, 600)
+            : '';
+
+        return 'YouTube audio could not be fetched: '.$this->withoutProxySecrets($error ?? ($lines[array_key_last($lines)] ?? 'no reason given')).$this->withoutProxySecrets($details);
     }
 
     private static function isHost(string $host, string $domain): bool

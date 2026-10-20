@@ -378,6 +378,18 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertStringNotContainsString('github.com', $message);
     }
 
+    public function test_a_bare_download_refusal_carries_the_warnings_that_explain_it(): void
+    {
+        $process = new Process([PHP_BINARY, '-r', 'fwrite(STDERR, "WARNING: [youtube] abc: web client https formats require a GVS PO Token which was not provided\nERROR: unable to download video data: HTTP Error 403: Forbidden\n"); exit(1);']);
+        $process->run();
+
+        $fetcher = new YoutubeAudioFetcher;
+        $message = (new \ReflectionMethod($fetcher, 'failureMessage'))->invoke($fetcher, $process);
+
+        $this->assertStringStartsWith('YouTube audio could not be fetched: unable to download video data: HTTP Error 403: Forbidden', $message);
+        $this->assertStringContainsString('yt-dlp also warned: [youtube] abc: web client https formats require a GVS PO Token', $message);
+    }
+
     public function test_a_configured_proxy_is_passed_to_yt_dlp_and_nothing_is_added_without_one(): void
     {
         $fetcher = new YoutubeAudioFetcher;
