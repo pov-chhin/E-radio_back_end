@@ -57,10 +57,13 @@ class CmsAdminRadioChannelTest extends TestCase
         $this->assertStringContainsString("emptyTable: 'No channels yet. Sync from Radio Browser or add one manually.'", $html);
         $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'channel-filters', dateKey: 'added', searchLabel: 'Search' });", $html);
 
-        // The strip: Status, Source, and the day it was Added (From / To), with Clear.
+        // The strip: Status and Source, with Clear. No date boxes (the Added column is still there to sort by).
         $this->assertMatchesRegularExpression('/<div class="table-filters" id="channel-filters"[^>]*>\s*<label class="filter-field"><span>Status<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="status">\s*<option value="">All statuses<\/option>\s*<option value="published">Published<\/option>\s*<option value="hidden">Hidden<\/option>\s*<option value="draft">Draft<\/option>/', $html);
         $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Source<\/span>\s*<span class="filter-control"><i class="fa fa-globe" aria-hidden="true"><\/i>\s*<select data-filter="source">\s*<option value="">All sources<\/option>\s*<option value="radio-browser">Radio Browser<\/option>\s*<option value="manual">Added manually<\/option>/', $html);
-        $this->assertMatchesRegularExpression('/<input type="date" data-filter="from">.*<input type="date" data-filter="to">.*data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/s', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('type="date"', $html);
+        $this->assertStringNotContainsString('data-filter="from"', $html);
+        $this->assertStringContainsString('<th>Added</th>', $html);
 
         // Each row carries what the filters read: its status, where it came from and the day it was added.
         $this->assertStringContainsString('<tr data-status="published" data-source="radio-browser" data-added="'.$day.'">', $html);

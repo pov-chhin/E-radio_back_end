@@ -31,7 +31,7 @@
     </div>
 
     <div class="data-table-wrap">
-        {{-- Narrow the rows below by Podcast Category, Status and the day they were Added (From / To, both ends included), on top of the search box. The strip and its script are shared with the Content list. --}}
+        {{-- Narrow the rows below by Podcast Category and Status, on top of the search box (no date boxes: the shared script also takes from / to ones). The strip and its script are shared with the Content list. --}}
         @unless($programs->isEmpty())
             <div class="table-filters" id="program-filters" role="group" aria-label="{{ __('Filter the list') }}">
                 <label class="filter-field"><span>{{ __('Podcast Category') }}</span>
@@ -52,12 +52,6 @@
                             <option value="draft">{{ __('Draft') }}</option>
                         </select>
                     </span>
-                </label>
-                <label class="filter-field"><span>{{ __('Added from') }}</span>
-                    <span class="filter-control"><i class="fa fa-calendar-o" aria-hidden="true"></i><input type="date" data-filter="from"></span>
-                </label>
-                <label class="filter-field"><span>{{ __('Added to') }}</span>
-                    <span class="filter-control"><i class="fa fa-calendar-o" aria-hidden="true"></i><input type="date" data-filter="to"></span>
                 </label>
                 <button type="button" class="secondary-button compact filter-clear" data-filter-clear title="{{ __('Clear filters') }}" aria-label="{{ __('Clear filters') }}" hidden><i class="fa fa-times" aria-hidden="true"></i></button>
             </div>

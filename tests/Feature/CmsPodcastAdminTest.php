@@ -119,10 +119,12 @@ class CmsPodcastAdminTest extends TestCase
         $this->assertStringContainsString("emptyTable: 'No podcasts yet.'", $html);
         $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'program-filters', dateKey: 'added', searchLabel: 'Search' });", $html);
 
-        // The strip: Podcast Category (the types the rows have, once each), Status, and the day it was Added (From / To), with Clear.
+        // The strip: Podcast Category (the types the rows have, once each) and Status, with Clear. No date boxes (the Added column is still there).
         $this->assertMatchesRegularExpression('/<div class="table-filters" id="program-filters"[^>]*>\s*<label class="filter-field"><span>Podcast Category<\/span>\s*<span class="filter-control"><i class="fa fa-folder-o" aria-hidden="true"><\/i>\s*<select data-filter="category">\s*<option value="">All categories<\/option>\s*<option value="Health">Health<\/option>\s*<option value="Politic">Politic<\/option>\s*<\/select>/', $html);
         $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Status<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="status">\s*<option value="">All statuses<\/option>\s*<option value="published">Published<\/option>\s*<option value="draft">Draft<\/option>/', $html);
-        $this->assertMatchesRegularExpression('/<input type="date" data-filter="from">.*<input type="date" data-filter="to">.*data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/s', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('type="date"', $html);
+        $this->assertStringContainsString('<th>Added</th>', $html);
 
         // Each row carries what the filters read: its type, status and the day it was added.
         $this->assertStringContainsString('<tr data-category="Health" data-status="published" data-added="'.$day.'">', $html);
