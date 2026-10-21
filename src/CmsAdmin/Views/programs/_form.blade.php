@@ -55,7 +55,7 @@
             <h4>{{ __('Cover image') }}</h4>
             @php $hasCover = isset($program) && $program->cover_image; @endphp
             {{-- The current cover; the script below swaps in the picture just chosen (a file, or an address pasted in). --}}
-            <img src="{{ $hasCover ? $program->cover_image_url : '' }}" alt="{{ __('Cover image preview') }}" data-cover-preview style="display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:9px;margin-bottom:10px" @unless($hasCover) hidden @endunless>
+            <img src="{{ $hasCover ? $program->cover_image_url : '' }}" alt="{{ __('Cover image preview') }}" data-cover-preview style="display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:9px;margin-bottom:10px" @unless($hasCover) hidden @endunless>
             @if($hasCover)
                 <span class="check-row" style="margin:0 0 10px"><input type="checkbox" name="remove_cover_image" value="1"> {{ __('Remove current cover image') }}</span>
             @endif
@@ -67,7 +67,7 @@
             <input name="cover_image_url" type="text" placeholder="https://…" value="{{ old('cover_image_url') }}" data-image-mode-panel="url" data-image-field="cover_image" @unless(old('cover_image_url')) hidden disabled @endunless>
             @error('cover_image') <em class="field-error">{{ $message }}</em> @enderror
             @error('cover_image_url') <em class="field-error">{{ $message }}</em> @enderror
-            <p class="muted" style="font-size:11px;line-height:1.5;margin:10px 0 0">{{ __("Ratio 3:4. Optional: the newest episode's picture is used without one.") }}</p>
+            <p class="muted" style="font-size:11px;line-height:1.5;margin:10px 0 0">{{ __("Ratio 4:3. Optional: the newest episode's picture is used without one.") }}</p>
         </div>
 
         <div class="sidebar-box">

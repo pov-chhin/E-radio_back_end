@@ -246,9 +246,9 @@ class CmsPodcastAdminTest extends TestCase
             $this->assertStringContainsString('name="is_published"', $sidebar, $url);
             $this->assertMatchesRegularExpression('/<label>Podcast Category\s*<select id="tag_id"/', $sidebar, $url);
             $this->assertStringContainsString('name="cover_image"', $sidebar, $url);
-            // The cover's preview is shown at 3:4, and the note under it says so (no "scaled down" wording any more).
-            $this->assertStringContainsString('data-cover-preview style="display:block;width:100%;aspect-ratio:3/4;object-fit:cover;', $sidebar, $url);
-            $this->assertStringContainsString(e("Ratio 3:4. Optional: the newest episode's picture is used without one."), $sidebar, $url);
+            // The cover's preview is shown at 4:3, and the note under it says so (no "scaled down" wording any more).
+            $this->assertStringContainsString('data-cover-preview style="display:block;width:100%;aspect-ratio:4/3;object-fit:cover;', $sidebar, $url);
+            $this->assertStringContainsString(e("Ratio 4:3. Optional: the newest episode's picture is used without one."), $sidebar, $url);
             $this->assertStringNotContainsString('scaled down', $sidebar, $url);
             // The sidebar's order, like the media editor's: the picture first, then Status, then Category.
             $cards = [strpos($sidebar, '<h4>Cover image</h4>'), strpos($sidebar, '<h4>Status</h4>'), strpos($sidebar, '<h4>Category</h4>')];
