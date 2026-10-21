@@ -56,6 +56,8 @@
                                 <span class="badge amber">{{ __('Processing') }}</span>
                             @elseif($mediaContent->processing_status === 'failed')
                                 <span class="badge slate" title="{{ $mediaContent->processing_error }}">{{ __('Failed') }}</span>
+                            @elseif(! $mediaContent->stream_url)
+                                <span class="badge slate">{{ __('No audio') }}</span>
                             @else
                                 <span class="badge green">{{ __('Ready') }}</span>
                             @endif

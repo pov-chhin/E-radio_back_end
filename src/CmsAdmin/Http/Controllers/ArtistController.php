@@ -7,19 +7,18 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Src\CmsAdmin\Http\Controllers\Concerns\GeneratesUniqueSlug;
 use Src\CmsAdmin\Http\Controllers\Concerns\ResolvesUploadedMedia;
 use Src\Catalog\Models\Artist;
 use Src\Catalog\Services\ImageVariantProcessor;
 
 class ArtistController extends Controller
 {
-    use ResolvesUploadedMedia;
+    use GeneratesUniqueSlug, ResolvesUploadedMedia;
 
     public const STATUSES = ['active', 'inactive'];
 
     public const REGIONS = ['international', 'local'];
-
-    public const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 
     /** [field => [width, height]] — the exact variant every photo/URL for that slot gets cropped and converted to. */
     private const IMAGE_SPECS = [
@@ -73,11 +72,19 @@ class ArtistController extends Controller
 
     private function formOptions(): array
     {
-        return ['regions' => self::REGIONS, 'socialPlatforms' => self::SOCIAL_PLATFORMS];
+        return ['regions' => self::REGIONS];
     }
 
     private function validateArtist(Request $request, ?Artist $artist = null): array
     {
+        // The slug, stage name, social links and Active switch are no longer on the form. A slug that is not posted comes from the
+        // name (an existing one is kept); the others are only changed when posted, so an edit leaves what they hold alone.
+        $request->merge([
+            'slug' => $request->filled('slug')
+                ? $request->input('slug')
+                : ($artist?->slug ?? $this->uniqueSlug((string) $request->input('name'), 'artists', 'artist')),
+        ]);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'alpha_dash', Rule::unique('artists', 'slug')->ignore($artist)],
@@ -100,8 +107,8 @@ class ArtistController extends Controller
             'photo_url' => __('profile URL'),
         ]);
 
-        $data['verified'] = $request->boolean('verified');
-        $data['social_links'] = array_filter($request->input('social_links', []), fn ($url) => filled($url));
+        $data['verified'] = $request->has('verified') ? $request->boolean('verified') : ($artist?->verified ?? false);
+        $data['social_links'] = array_filter($request->input('social_links', $artist?->social_links ?? []), fn ($url) => filled($url));
 
         foreach (self::IMAGE_SPECS as $field => [$width, $height]) {
             $data = [...$data, ...$this->resolveStoredImage($this->imageProcessor, $request, $field, $artist, $width, $height)];

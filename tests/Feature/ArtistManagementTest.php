@@ -112,18 +112,17 @@ class ArtistManagementTest extends TestCase
         $this->assertNull($artist->photo);
     }
 
-    public function test_the_verified_switch_is_worded_active_on_the_form_and_in_the_list(): void
+    public function test_the_verified_flag_is_worded_active_in_the_list_and_has_no_switch_on_the_form(): void
     {
         $on = Artist::create(['name' => 'Switched On', 'slug' => 'switched-on', 'status' => 'active', 'verified' => true]);
-        $off = Artist::create(['name' => 'Switched Off', 'slug' => 'switched-off', 'status' => 'active', 'verified' => false]);
+        Artist::create(['name' => 'Switched Off', 'slug' => 'switched-off', 'status' => 'active', 'verified' => false]);
 
-        // The form: the same switch (still the artist's `verified`), now called Active.
+        // The form no longer has the switch (the flag is still the artist's `verified`).
         foreach (['/admin/artists/create', "/admin/artists/{$on->id}/edit"] as $url) {
             $form = $this->get($url)->assertOk()->getContent();
-            $this->assertMatchesRegularExpression('/<span><b>Active<\/b><small>Shows an active badge on the artist(?:\'|&#039;)s profile\.<\/small><\/span>\s*<span class="switch"><input type="checkbox" name="verified"/', $form, $url);
+            $this->assertStringNotContainsString('name="verified"', $form, $url);
+            $this->assertStringNotContainsString('Shows an active badge', $form, $url);
         }
-        $this->assertMatchesRegularExpression('/name="verified" value="1" checked/', $this->get("/admin/artists/{$on->id}/edit")->getContent());
-        $this->assertDoesNotMatchRegularExpression('/name="verified" value="1" checked/', $this->get("/admin/artists/{$off->id}/edit")->getContent());
 
         // The list: an Active column, "Active" with the tick for a switched-on artist and "Inactive" for the rest.
         $list = $this->get('/admin/artists')->assertOk()->getContent();
@@ -137,20 +136,76 @@ class ArtistManagementTest extends TestCase
             $this->assertStringNotContainsString('Unverified', $page);
         }
 
-        // Saving it works as it did.
+        // A request that sends the flag still saves it; an edit from the form (which does not) leaves it as it was.
         $this->post('/admin/artists', ['name' => 'New One', 'slug' => 'new-one', 'status' => 'active', 'verified' => '1'])->assertSessionHasNoErrors();
         $this->assertTrue(Artist::where('slug', 'new-one')->firstOrFail()->verified);
-        $this->put("/admin/artists/{$on->id}", ['name' => 'Switched On', 'slug' => 'switched-on', 'status' => 'active'])->assertSessionHasNoErrors();
+        $this->put("/admin/artists/{$on->id}", ['name' => 'Switched On', 'status' => 'active'])->assertSessionHasNoErrors();
+        $this->assertTrue($on->fresh()->verified);
+        $this->put("/admin/artists/{$on->id}", ['name' => 'Switched On', 'status' => 'active', 'verified' => '0'])->assertSessionHasNoErrors();
         $this->assertFalse($on->fresh()->verified);
     }
 
-    public function test_active_is_translated_into_khmer_on_the_form_and_in_the_list(): void
+    public function test_the_form_has_no_slug_stage_name_social_links_cover_or_active_switch(): void
+    {
+        $artist = Artist::create([
+            'name' => 'Full Name', 'slug' => 'full-name', 'stage_name' => 'Stage Name', 'verified' => true,
+            'social_links' => ['facebook' => 'https://facebook.com/full'], 'cover' => 'artists/cover.webp',
+        ]);
+
+        foreach (['/admin/artists/create', "/admin/artists/{$artist->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+            foreach (['id="slug"', 'name="slug"', 'name="stage_name"', 'social_links', 'name="verified"', 'Social links', 'name="cover"', 'name="cover_url"', 'remove_cover'] as $gone) {
+                $this->assertStringNotContainsString($gone, $form, "{$url}: {$gone}");
+            }
+            foreach (['name="name"', 'name="region"', 'name="bio"', 'name="photo"'] as $kept) {
+                $this->assertStringContainsString($kept, $form, "{$url}: {$kept}");
+            }
+        }
+
+        // Saving what the form posts leaves the hidden fields as they were.
+        $this->put("/admin/artists/{$artist->id}", ['name' => 'Renamed', 'region' => 'local', 'bio' => 'New bio.'])->assertSessionHasNoErrors();
+        $artist->refresh();
+        $this->assertSame('Renamed', $artist->name);
+        $this->assertSame('full-name', $artist->slug);
+        $this->assertSame('Stage Name', $artist->stage_name);
+        $this->assertTrue($artist->verified);
+        $this->assertSame(['facebook' => 'https://facebook.com/full'], $artist->social_links);
+        $this->assertSame('artists/cover.webp', $artist->cover);
+    }
+
+    public function test_the_bio_is_written_in_the_same_rich_text_editor_as_a_description(): void
+    {
+        $artist = Artist::create(['name' => 'Old Bio', 'slug' => 'old-bio', 'bio' => "First line\nSecond & last line"]);
+
+        foreach (['/admin/artists/create', "/admin/artists/{$artist->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+            $this->assertMatchesRegularExpression('/<div class="editor-block"[^>]*>\s*<h4>Bio<\/h4>\s*<div class="rich-editor" data-rich-text><\/div>\s*<textarea id="bio" name="bio" data-rich-text-source hidden>/', $form, $url);
+        }
+
+        // A bio written as plain text before the editor: each line is a paragraph in it, and what was typed stays text.
+        $this->get("/admin/artists/{$artist->id}/edit")->assertSee(e('<p>First line</p><p>Second &amp; last line</p>'), false);
+
+        // The editor posts HTML; it is saved as it came.
+        $this->put("/admin/artists/{$artist->id}", ['name' => 'Old Bio', 'bio' => '<p>Sings <strong>folk</strong>.</p>'])->assertSessionHasNoErrors();
+        $this->assertSame('<p>Sings <strong>folk</strong>.</p>', $artist->fresh()->bio);
+        $this->get("/admin/artists/{$artist->id}/edit")->assertSee(e('<p>Sings <strong>folk</strong>.</p>'), false);
+    }
+
+    public function test_a_new_artist_gets_its_slug_from_the_name(): void
+    {
+        $this->post('/admin/artists', ['name' => 'Preap Sovath'])->assertSessionHasNoErrors()->assertRedirect(route('admin.artists.index'));
+        $this->post('/admin/artists', ['name' => 'Preap Sovath'])->assertSessionHasNoErrors();
+        // A name with no Latin letters has nothing to slug, so it falls back.
+        $this->post('/admin/artists', ['name' => 'ព្រាប សុវត្ថិ'])->assertSessionHasNoErrors();
+
+        $this->assertSame(['preap-sovath', 'preap-sovath-2'], Artist::where('name', 'Preap Sovath')->orderBy('id')->pluck('slug')->all());
+        $this->assertSame(1, Artist::where('slug', 'like', 'artist%')->count());
+    }
+
+    public function test_active_is_translated_into_khmer_in_the_list(): void
     {
         Artist::create(['name' => 'Switched On', 'slug' => 'switched-on', 'status' => 'active', 'verified' => true]);
         $this->put('/admin/locale', ['locale' => 'km'])->assertRedirect();
-
-        $form = $this->get('/admin/artists/create')->assertOk()->getContent();
-        $this->assertStringContainsString('<span><b>សកម្ម</b><small>បង្ហាញសញ្ញាសកម្មនៅលើប្រវត្តិរូបសិល្បករ។</small></span>', $form);
 
         $list = $this->get('/admin/artists')->assertOk()->getContent();
         $this->assertStringContainsString('<th>សកម្ម</th>', $list);
@@ -164,8 +219,8 @@ class ArtistManagementTest extends TestCase
         foreach (['/admin/artists/create', "/admin/artists/{$artist->id}/edit"] as $url) {
             $form = $this->get($url)->assertOk()->getContent();
 
-            // "Profile — cropped to WebP, 300×300" and "Cover — …": the first label of the two image fields.
-            $this->assertMatchesRegularExpression('/<label>Profile <small[^>]*>— cropped to WebP, 300×300<\/small>/', $form, $url);
+            // "Profile — cropped to WebP, 300×300": the label of the picture field.
+            $this->assertMatchesRegularExpression('/<label(?: class="full")?>Profile <small[^>]*>— cropped to WebP, 300×300<\/small>/', $form, $url);
             $this->assertStringNotContainsString('<label>Photo', $form, $url);
             // Only the label changed: the field is still the artist's `photo`.
             $this->assertStringContainsString('data-image-field="photo"', $form, $url);
@@ -196,7 +251,7 @@ class ArtistManagementTest extends TestCase
 
         $form = $this->get('/admin/artists/create')->assertOk()->getContent();
 
-        $this->assertMatchesRegularExpression('/<label>រូបតំណាង <small/', $form);
+        $this->assertMatchesRegularExpression('/<label(?: class="full")?>រូបតំណាង <small/', $form);
         $this->assertStringNotContainsString('<label>Profile', $form);
         // "Bio" keeps its own Khmer word (ប្រវត្តិរូប), so the two labels on the form are different words.
         $this->assertSame('រូបតំណាង', trans('Profile', [], 'km'));

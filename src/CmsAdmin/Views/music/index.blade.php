@@ -133,6 +133,8 @@
                                         <button type="submit" class="secondary-button compact" style="margin-left:6px">{{ __('Retry') }}</button>
                                     </form>
                                 @endif
+                            @elseif(! $mediaContent->stream_url)
+                                <span class="badge slate">{{ __('No audio') }}</span>
                             @else
                                 <span class="badge green">{{ __('Ready') }}</span>
                             @endif

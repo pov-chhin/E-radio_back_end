@@ -354,7 +354,8 @@ class CmsMusicAdminTest extends TestCase
         // A new podcast's tag list waits, greyed out, until a Podcast Program is picked: the script checks for the placeholder
         // that only a form needing a podcast has, and the dropdown carries the hint its tooltip gives.
         $podcast = $this->get('/admin/media-contents/create/podcast')->assertOk()->getContent();
-        $this->assertStringContainsString('<div class="tag-dropdown" data-tag-dropdown data-waiting="Pick a podcast first.">', $podcast);
+        $this->assertMatchesRegularExpression('/<div class="tag-dropdown" data-tag-dropdown data-waiting="Pick a podcast first."\s+data-always-hidden\s*>/', $podcast);
+        $this->assertStringContainsString("box.hasAttribute('data-always-hidden')", $podcast);
         $this->assertStringContainsString('<option value="" disabled hidden selected>Select a podcast…</option>', $podcast);
         $this->assertStringContainsString("program.querySelector('option[value=\"\"][disabled]')", $podcast);
         $this->assertStringContainsString('toggle.disabled = waiting;', $podcast);
@@ -647,17 +648,17 @@ class CmsMusicAdminTest extends TestCase
         $this->track('A News Story', 'news');
         $this->track('A Health Talk', 'health', ['is_published' => true, 'published_at' => $future]);
 
-        // On All the category filter lists the groups (Audio stands for News and Health), once each; each row carries its category,
-        // status and local day for the script to filter by.
+        // On All the category filter lists the categories (News and Health by name: Audio is a tab, not a category), once each; each
+        // row carries its category, status and local day for the script to filter by.
         $html = $this->get('/admin/music')->assertOk()->getContent();
-        $this->assertMatchesRegularExpression('/<div class="table-filters" id="article-filters"[^>]*>\s*<label class="filter-field"><span>Category<\/span>\s*<span class="filter-control"><i class="fa fa-folder-o" aria-hidden="true"><\/i>\s*<select data-filter="category">\s*<option value="">All categories<\/option>\s*<option value="Audio">Audio<\/option>\s*<option value="Song">Song<\/option>\s*<\/select>/s', $html);
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="article-filters"[^>]*>\s*<label class="filter-field"><span>Category<\/span>\s*<span class="filter-control"><i class="fa fa-folder-o" aria-hidden="true"><\/i>\s*<select data-filter="category">\s*<option value="">All categories<\/option>\s*<option value="Health">Health<\/option>\s*<option value="News">News<\/option>\s*<option value="Song">Song<\/option>\s*<\/select>/s', $html);
         $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Status<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="status">\s*<option value="">All statuses<\/option>\s*<option value="public">Public<\/option>\s*<option value="scheduled">Scheduled<\/option>\s*<option value="private">Private<\/option>/', $html);
         $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
         $this->assertStringNotContainsString('type="date"', $html);
         $this->assertStringContainsString('<th>Published</th>', $html);
         $this->assertStringContainsString('<tr data-category="Song" data-status="public" data-published="'.$day($past).'" data-region="none">', $html);
-        $this->assertStringContainsString('<tr data-category="Audio" data-status="private" data-published="" data-region="none">', $html);
-        $this->assertStringContainsString('<tr data-category="Audio" data-status="scheduled" data-published="'.$day($future).'" data-region="none">', $html);
+        $this->assertStringContainsString('<tr data-category="News" data-status="private" data-published="" data-region="none">', $html);
+        $this->assertStringContainsString('<tr data-category="Health" data-status="scheduled" data-published="'.$day($future).'" data-region="none">', $html);
         $this->assertStringContainsString('jQuery.fn.dataTable.ext.search.push(', $html);
         // One row, in the table's order: the script moves DataTables' search box (the Title column) to the front of the filter
         // strip and its "per page" to the end.
@@ -763,7 +764,7 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringContainsString("jQuery('#article-table').DataTable(", $all);
     }
 
-    public function test_all_names_each_rows_group_while_a_tab_shows_its_category(): void
+    public function test_all_shows_news_health_and_economy_by_name_not_as_audio(): void
     {
         $this->signIn();
         $this->track('A Song', 'song');
@@ -774,23 +775,34 @@ class CmsMusicAdminTest extends TestCase
         $this->track('A Podcast Episode', 'podcast');
         $cell = fn (string $html, string $title) => preg_match('/'.preg_quote($title, '/').'<\/b>.*?<td class="muted" data-label="Category">([^<]*)<\/td>/s', $html, $m) ? trim($m[1]) : null;
 
-        // All: Song, Audio (for News, Health and Economy/Finance), Podcasts, Ambient Music.
+        // All: Song, Podcasts and Ambient Music by their group; News, Health and Economy/Finance by their own name, never as "Audio".
         $all = $this->get('/admin/music')->assertOk()->getContent();
         $this->assertSame('Song', $cell($all, 'A Song'));
         $this->assertSame('Ambient Music', $cell($all, 'An Old Ambient Track'));
-        $this->assertSame('Audio', $cell($all, 'A News Story'));
-        $this->assertSame('Audio', $cell($all, 'A Health Tip'));
-        $this->assertSame('Audio', $cell($all, 'A Market Note'));
+        $this->assertSame('News', $cell($all, 'A News Story'));
+        $this->assertSame('Health', $cell($all, 'A Health Tip'));
+        $this->assertSame('Economy/Finance', $cell($all, 'A Market Note'));
         $this->assertSame('Podcast Episode', $cell($all, 'A Podcast Episode'));
-        foreach (['News', 'Health', 'Economy/Finance'] as $name) {
-            $this->assertStringNotContainsString('<td class="muted">'.$name.'</td>', $all);
-        }
+        $this->assertStringNotContainsString('data-category="Audio"', $all);
 
         // On the Program tab the category says which of the three it is.
         $program = $this->get('/admin/music?category=audio')->assertOk()->getContent();
         $this->assertSame('News', $cell($program, 'A News Story'));
         $this->assertSame('Health', $cell($program, 'A Health Tip'));
         $this->assertSame('Economy/Finance', $cell($program, 'A Market Note'));
+    }
+
+    public function test_the_audio_column_says_no_audio_for_an_item_with_no_file(): void
+    {
+        $this->signIn();
+        $this->track('A News Draft', 'news');
+        $this->track('A News Story', 'news', ['stream' => 'https://cdn.example.com/story.opus']);
+        $cell = fn (string $html, string $title) => preg_match('/'.preg_quote($title, '/').'<\/b>.*?<td data-label="Audio">\s*<span class="badge ([a-z]+)">([^<]*)<\/span>/s', $html, $m) ? [$m[1], $m[2]] : null;
+
+        $html = $this->get('/admin/music')->assertOk()->getContent();
+
+        $this->assertSame(['slate', 'No audio'], $cell($html, 'A News Draft'));
+        $this->assertSame(['green', 'Ready'], $cell($html, 'A News Story'));
     }
 
     /** One entry of the "New" menu: a link to the form it starts, with its icon and name (marked while its tab is on show). */

@@ -285,7 +285,8 @@
                 {{-- Names what the list below starts with (Genre, under International); the script fills it in and shows it. --}}
                 <span data-tag-tree-title style="display:none;font-size:11px;font-weight:700;margin:0 0 6px"></span>
                 {{-- The list is a dropdown: the button names what is ticked and opens the list under it (the script). The boxes are the same ones as ever. --}}
-                <div class="tag-dropdown" data-tag-dropdown data-waiting="{{ __('Pick a podcast first.') }}">
+                {{-- A podcast episode's form keeps the list out of sight: its tag is the podcast's type, which follows the Podcast Program picked (the script) and is still sent. --}}
+                <div class="tag-dropdown" data-tag-dropdown data-waiting="{{ __('Pick a podcast first.') }}" @if($podcastRequired || $lockedProgramId) data-always-hidden @endif>
                     <button type="button" class="tag-dropdown-toggle" aria-haspopup="true" aria-expanded="false" data-tag-dropdown-toggle>
                         {{-- Reads "Select Genre" (the title over the list names the rows), or "Select…" where the list has no title. --}}
                         <span data-tag-dropdown-label data-placeholder="{{ __('Select…') }}" data-named="{{ __('Select :name') }}">{{ __('Select…') }}</span>
@@ -599,7 +600,7 @@
 
         const refresh = () => {
             const gone = tree.style.display === 'none';
-            box.style.display = gone ? 'none' : '';
+            box.style.display = (gone || box.hasAttribute('data-always-hidden')) ? 'none' : '';
             if (gone) close(false);
 
             // A new podcast has no tag to pick until its Podcast Program is picked: the button waits, greyed out. (Only a

@@ -54,9 +54,9 @@ class MusicController extends Controller
             ->latest()
             ->get();
 
-        // Category slug => the tab it belongs to: "All" names each row's group (Audio for News / Health /
-        // Economy/Finance) instead of its category.
-        $groupLabels = $tabs->flatMap(fn (array $tab) => collect($tab['categories'])->mapWithKeys(fn (string $slug) => [$slug => $tab['label']]));
+        // Category slug => the tab it belongs to: "All" names each row's group (Podcast Episode, Ambient Music) instead of
+        // its category. News / Health / Economy/Finance keep their own names: "Audio" is a tab, not a category.
+        $groupLabels = $tabs->except('audio')->flatMap(fn (array $tab) => collect($tab['categories'])->mapWithKeys(fn (string $slug) => [$slug => $tab['label']]));
 
         $regions = $this->regionsOf($mediaContents);
 
