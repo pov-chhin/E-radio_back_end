@@ -136,7 +136,7 @@
                     @endif
                     <div class="tag-view-toggle" style="align-self:flex-start">
                         <button type="button" class="{{ old('stream_url') ? '' : 'active' }}" data-image-mode-tab="upload" data-image-field="stream">{{ __('Upload') }}</button>
-                        <button type="button" class="{{ old('stream_url') ? 'active' : '' }}" data-image-mode-tab="url" data-image-field="stream">{{ __('Paste URL') }}</button>
+                        <button type="button" class="{{ old('stream_url') ? 'active' : '' }}" data-image-mode-tab="url" data-image-field="stream" disabled>{{ __('Paste URL') }}</button>
                     </div>
                     <input id="stream" name="stream" type="file" accept="audio/*,video/*" data-image-mode-panel="upload" data-image-field="stream" @if(old('stream_url')) hidden disabled @endif>
                     <input name="stream_url" type="text" placeholder="https://…" value="{{ old('stream_url') }}" data-image-mode-panel="url" data-image-field="stream" @unless(old('stream_url')) hidden disabled @endunless>
