@@ -54,13 +54,9 @@ class MusicController extends Controller
             ->latest()
             ->get();
 
-        // Category slug => the tab it belongs to: "All" names each row's group (Podcast Episode, Ambient Music) instead of
-        // its category. News / Health / Economy/Finance keep their own names: "Audio" is a tab, not a category.
-        $groupLabels = $tabs->except('audio')->flatMap(fn (array $tab) => collect($tab['categories'])->mapWithKeys(fn (string $slug) => [$slug => $tab['label']]));
-
         $regions = $this->regionsOf($mediaContents);
 
-        return view('cms-admin::music.index', compact('mediaContents', 'tabs', 'activeTab', 'groupLabels', 'regions'));
+        return view('cms-admin::music.index', compact('mediaContents', 'tabs', 'activeTab', 'regions'));
     }
 
     /**

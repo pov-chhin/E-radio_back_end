@@ -33,9 +33,8 @@
     </div>
 
     @php
-        // "All" names each row's group (Song, Audio, Podcasts, Ambient Music) rather than News / Health / Economy/Finance; a tab shows
-        // the category itself. The Category column and its filter say the same.
-        $categoryLabel = fn ($item) => $activeTab ? $item->category->name : ($groupLabels[$item->category->slug] ?? $item->category->name);
+        // The Category column and its filter name the category itself (Song, Podcast, News, Health, ...), on All and on a tab alike.
+        $categoryLabel = fn ($item) => $item->category->name;
         $filterCategories = $mediaContents->map($categoryLabel)->unique()->sort()->values();
     @endphp
     <div class="data-table-wrap">

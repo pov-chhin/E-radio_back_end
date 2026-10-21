@@ -764,7 +764,7 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringContainsString("jQuery('#article-table').DataTable(", $all);
     }
 
-    public function test_all_shows_news_health_and_economy_by_name_not_as_audio(): void
+    public function test_all_shows_each_rows_own_category_not_a_group_name(): void
     {
         $this->signIn();
         $this->track('A Song', 'song');
@@ -775,15 +775,16 @@ class CmsMusicAdminTest extends TestCase
         $this->track('A Podcast Episode', 'podcast');
         $cell = fn (string $html, string $title) => preg_match('/'.preg_quote($title, '/').'<\/b>.*?<td class="muted" data-label="Category">([^<]*)<\/td>/s', $html, $m) ? trim($m[1]) : null;
 
-        // All: Song, Podcasts and Ambient Music by their group; News, Health and Economy/Finance by their own name, never as "Audio".
+        // All: every row by its own category name — never "Audio" (a tab) or "Podcast Episode" (the Podcast category's tab label).
         $all = $this->get('/admin/music')->assertOk()->getContent();
         $this->assertSame('Song', $cell($all, 'A Song'));
         $this->assertSame('Ambient Music', $cell($all, 'An Old Ambient Track'));
         $this->assertSame('News', $cell($all, 'A News Story'));
         $this->assertSame('Health', $cell($all, 'A Health Tip'));
         $this->assertSame('Economy/Finance', $cell($all, 'A Market Note'));
-        $this->assertSame('Podcast Episode', $cell($all, 'A Podcast Episode'));
+        $this->assertSame('Podcast', $cell($all, 'A Podcast Episode'));
         $this->assertStringNotContainsString('data-category="Audio"', $all);
+        $this->assertStringNotContainsString('data-category="Podcast Episode"', $all);
 
         // On the Program tab the category says which of the three it is.
         $program = $this->get('/admin/music?category=audio')->assertOk()->getContent();
