@@ -41,6 +41,45 @@ class UserManagementTest extends TestCase
         $this->get('/admin/permissions')->assertOk();
     }
 
+    public function test_the_admin_user_list_is_a_datatable_with_a_strip_of_filters(): void
+    {
+        $author = Role::create(['name' => 'Author', 'slug' => 'author']);
+        $editor = $this->createAdmin();
+        $editor->forceFill(['name' => 'Eddie', 'is_active' => false])->save();
+        $editor->roles()->sync([$author->id]);
+        $this->createAdmin()->forceFill(['name' => 'No Role Person'])->save();
+
+        $html = $this->get('/admin/users')->assertOk()->getContent();
+
+        // Every user is on the page (no server paging): the table searches, sorts, filters and pages them.
+        $this->assertStringContainsString('<table class="data-table" id="user-table">', $html);
+        $this->assertStringNotContainsString('pagination', $html);
+        $this->assertStringContainsString("jQuery('#user-table').DataTable(", $html);
+        $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
+        $this->assertStringContainsString("emptyTable: 'No admin users yet.'", $html);
+        $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'user-filters', searchLabel: 'Search' });", $html);
+
+        // The strip: Role (the ones the users have, and "No role" while someone has none) and Status, with Clear. No date boxes.
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="user-filters"[^>]*>\s*<label class="filter-field"><span>Role<\/span>\s*<span class="filter-control"><i class="fa fa-id-badge" aria-hidden="true"><\/i>\s*<select data-filter="role">\s*<option value="">All roles<\/option>\s*<option value="Author">Author<\/option>\s*<option value="Test Admin">Test Admin<\/option>\s*<option value="none">No role<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Status<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="status">\s*<option value="">All statuses<\/option>\s*<option value="active">Active<\/option>\s*<option value="inactive">Inactive<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('data-filter="from"', $html);
+
+        // Each row lists its roles joined by | (any of them matches the filter), or "none", and its status.
+        $this->assertStringContainsString('<tr data-role="Author" data-status="inactive">', $html);
+        $this->assertStringContainsString('<tr data-role="Test Admin" data-status="active">', $html);
+        $this->assertStringContainsString('<tr data-role="none" data-status="active">', $html);
+        $author->users()->attach($this->admin->id);
+        $both = $this->get('/admin/users')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<tr data-role="(Author\|Test Admin|Test Admin\|Author)" data-status="active">/', $both);
+
+        // Responsive: the value cells name their column for the card layout on phones, and the shared styles are in.
+        foreach (['Email', 'Roles', 'Status'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $html, $label);
+        }
+        $this->assertStringContainsString('@media (max-width: 760px)', $html);
+    }
+
     public function test_the_admin_users_pages_say_access_control_over_their_title(): void
     {
         $user = $this->createAdmin();

@@ -8,23 +8,69 @@
             <p class="eyebrow">{{ __('Content') }}</p>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px">
                 <h1>{{ __('Content') }}</h1>
-                {{-- One tab per group (Song; Audio = News / Health / Economy/Finance; Podcasts); each submits the GET form with its key. --}}
-                <form method="GET" action="{{ route('admin.music.index') }}" aria-label="{{ __('Filter by category') }}">
+                {{-- One tab per group (Song; Audio = News / Health / Economy/Finance; Podcasts); each submits the GET form with its key.
+                     The tab bar is hidden for now (the filters below narrow the list); the tabs and their ?category= addresses still work. --}}
+                <form method="GET" action="{{ route('admin.music.index') }}" aria-label="{{ __('Filter by category') }}" hidden>
                     <div class="tag-view-toggle">
-                        <button type="submit" name="category" value="" style="padding:7px 14px;font-size:10px" @class(['active' => ! $activeTab])>{{ __('All') }}</button>
+                        <button type="submit" name="category" value="" style="padding:7px 14px;font-size:13px" @class(['active' => ! $activeTab])>{{ __('All') }}</button>
                         @foreach($tabs as $tab)
-                            <button type="submit" name="category" value="{{ $tab['key'] }}" style="padding:7px 14px;font-size:10px" @class(['active' => $activeTab && $activeTab['key'] === $tab['key']])>{{ $tab['label'] }}</button>
+                            <button type="submit" name="category" value="{{ $tab['key'] }}" style="padding:7px 14px;font-size:13px" @class(['active' => $activeTab && $activeTab['key'] === $tab['key']])>{{ $tab['label'] }}</button>
                         @endforeach
                     </div>
                 </form>
             </div>
             <p>{{ __('Songs, Audio (News, Health and Economy/Finance) and Podcasts.') }}</p>
         </div>
-        {{-- One straight link that follows the tab: "New Audio" on the Audio tab (it opens on News; the form's category list picks Health or Economy/Finance); All starts a Song. --}}
-        <a href="{{ route('admin.media-contents.create', ['category' => $newTab['new']]) }}" class="primary-button">{{ __('New :name', ['name' => $newTab['new_name']]) }} <i class="fa fa-plus" aria-hidden="true"></i></a>
+        {{-- "New" opens a menu with one entry per tab, each with its icon: Song, Audio (it opens on News; the form's category list picks Health or Economy/Finance), Podcast Episode and Ambient Music. The tab on show is marked. --}}
+        <div class="dropdown-anchor">
+            <button type="button" class="primary-button" aria-haspopup="true" aria-expanded="false" data-dropdown-toggle>{{ __('New') }} <i class="fa fa-plus" aria-hidden="true"></i></button>
+            <div class="dropdown-menu dropdown-right new-menu" data-dropdown>
+                @foreach($tabs as $tab)
+                    <a href="{{ route('admin.media-contents.create', ['category' => $tab['new']]) }}" @class(['active' => $activeTab && $activeTab['key'] === $tab['key']])><i class="fa {{ $tab['icon'] }}" aria-hidden="true"></i>{{ $tab['label'] }}</a>
+                @endforeach
+            </div>
+        </div>
     </div>
 
+    @php
+        // "All" names each row's group (Song, Audio, Podcasts, Ambient Music) rather than News / Health / Economy/Finance; a tab shows
+        // the category itself. The Category column and its filter say the same.
+        $categoryLabel = fn ($item) => $activeTab ? $item->category->name : ($groupLabels[$item->category->slug] ?? $item->category->name);
+        $filterCategories = $mediaContents->map($categoryLabel)->unique()->sort()->values();
+    @endphp
     <div class="data-table-wrap">
+        {{-- Narrow the rows below by Category, Status and the day they were Published (From / To, both ends included). The script does it, on top of the search box, as soon as a box is changed. --}}
+        @unless($mediaContents->isEmpty())
+            <div class="table-filters" id="article-filters" role="group" aria-label="{{ __('Filter the list') }}">
+                <label class="filter-field"><span>{{ __('Category') }}</span>
+                    <span class="filter-control"><i class="fa fa-folder-o" aria-hidden="true"></i>
+                        <select data-filter="category">
+                            <option value="">{{ __('All categories') }}</option>
+                            @foreach($filterCategories as $name)
+                                <option value="{{ $name }}">{{ $name }}</option>
+                            @endforeach
+                        </select>
+                    </span>
+                </label>
+                <label class="filter-field"><span>{{ __('Status') }}</span>
+                    <span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"></i>
+                        <select data-filter="status">
+                            <option value="">{{ __('All statuses') }}</option>
+                            <option value="public">{{ __('Public') }}</option>
+                            <option value="scheduled">{{ __('Scheduled') }}</option>
+                            <option value="private">{{ __('Private') }}</option>
+                        </select>
+                    </span>
+                </label>
+                <label class="filter-field"><span>{{ __('Published from') }}</span>
+                    <span class="filter-control"><i class="fa fa-calendar-o" aria-hidden="true"></i><input type="date" data-filter="from"></span>
+                </label>
+                <label class="filter-field"><span>{{ __('Published to') }}</span>
+                    <span class="filter-control"><i class="fa fa-calendar-o" aria-hidden="true"></i><input type="date" data-filter="to"></span>
+                </label>
+                <button type="button" class="secondary-button compact filter-clear" data-filter-clear title="{{ __('Clear filters') }}" aria-label="{{ __('Clear filters') }}" hidden><i class="fa fa-times" aria-hidden="true"></i></button>
+            </div>
+        @endunless
         <table class="data-table" id="article-table">
             <thead>
                 <tr>
@@ -53,7 +99,7 @@
                         }
                         $people = collect([$mediaContent->artist_names, $mediaContent->author?->name])->filter()->implode(' · ');
                     @endphp
-                    <tr>
+                    <tr data-category="{{ $categoryLabel($mediaContent) }}" data-status="{{ $mediaContent->status }}" data-published="{{ $mediaContent->published_at_local?->format('Y-m-d') }}">
                         {{-- The table sorts and searches the full title (and names), not the shortened text on show. --}}
                         <td data-order="{{ $mediaContent->title }}" data-search="{{ trim($mediaContent->title.' '.$people) }}">
                             <div class="media-title-cell">
@@ -70,10 +116,9 @@
                                 </span>
                             </div>
                         </td>
-                        {{-- "All" names the group (Song, Audio, Podcasts, Ambient Music) rather than News / Health / Economy/Finance; a tab shows the category itself. --}}
-                        <td class="muted">{{ $activeTab ? $mediaContent->category->name : ($groupLabels[$mediaContent->category->slug] ?? $mediaContent->category->name) }}</td>
-                        <td class="muted" data-order="{{ (int) $mediaContent->stream_size }}">{{ $mediaContent->stream_size_label }}</td>
-                        <td>
+                        <td class="muted" data-label="{{ __('Category') }}">{{ $categoryLabel($mediaContent) }}</td>
+                        <td class="muted" data-label="{{ __('File size') }}" data-order="{{ (int) $mediaContent->stream_size }}">{{ $mediaContent->stream_size_label }}</td>
+                        <td data-label="{{ __('Audio') }}">
                             @if(in_array($mediaContent->processing_status, ['processing', 'failed'], true))
                                 @php $audioFailed = $mediaContent->processing_status === 'failed'; @endphp
                                 {{-- Processing and Failed rows keep themselves current: the page asks the server how the audio is doing until it is Ready or Failed (the script in the layout). --}}
@@ -88,9 +133,9 @@
                                 <span class="badge green">{{ __('Ready') }}</span>
                             @endif
                         </td>
-                        <td data-order="{{ (int) $mediaContent->play_count }}">{{ number_format($mediaContent->play_count) }}</td>
-                        <td data-order="{{ (int) $mediaContent->favorite_count }}">{{ number_format($mediaContent->favorite_count) }}</td>
-                        <td>
+                        <td data-label="{{ __('Views') }}" data-order="{{ (int) $mediaContent->play_count }}">{{ number_format($mediaContent->play_count) }}</td>
+                        <td data-label="{{ __('Favorites') }}" data-order="{{ (int) $mediaContent->favorite_count }}">{{ number_format($mediaContent->favorite_count) }}</td>
+                        <td data-label="{{ __('Status') }}">
                             @if($mediaContent->status === 'public')
                                 <span class="badge green">{{ __('Public') }}</span>
                             @elseif($mediaContent->status === 'scheduled')
@@ -99,7 +144,7 @@
                                 <span class="badge slate">{{ __('Private') }}</span>
                             @endif
                         </td>
-                        <td class="muted" data-order="{{ $mediaContent->published_at?->timestamp ?? 0 }}">
+                        <td class="muted" data-label="{{ __('Published') }}" data-order="{{ $mediaContent->published_at?->timestamp ?? 0 }}">
                             @if($mediaContent->published_at)
                                 <time datetime="{{ $mediaContent->published_at->toIso8601String() }}" title="{{ $mediaContent->published_at_local->toDayDateTimeString() }}">
                                     {{ $mediaContent->published_at_local->translatedFormat('M j, Y') }}<br>
@@ -130,34 +175,20 @@
     </div>
 
     {{-- DataTables: search, click-to-sort headers and paging over the rows above, on every tab — an empty one
-         too, which says so through `emptyTable`. Loaded from the same CDN as the icon font. --}}
+         too, which says so through `emptyTable`. The strip's styles and script are shared with the other filtered lists. --}}
+    @include('cms-admin::partials.filtered-table', ['tableId' => 'article-table'])
     <style>
-        #article-table_wrapper .dt-layout-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; padding: 12px 18px; }
-        #article-table_wrapper .dt-layout-row.dt-layout-table { display: block; padding: 0; }
-        #article-table_wrapper .dt-layout-cell { display: flex; align-items: center; gap: 8px; }
-        #article-table_wrapper .dt-layout-table .dt-layout-cell { display: block; }
-        #article-table_wrapper label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 11px; font-weight: 600; color: #747785; }
-        #article-table_wrapper .dt-search input, #article-table_wrapper .dt-length select { height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; font-size: 12px; }
-        #article-table_wrapper .dt-search input { min-width: 220px; }
-        #article-table_wrapper .dt-info { font-size: 11px; color: #8b8fa3; }
-        #article-table_wrapper .dt-paging { display: flex; gap: 4px; }
-        #article-table_wrapper .dt-paging-button { min-width: 30px; height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 11px; font-weight: 700; color: #3d3f4d; cursor: pointer; }
-        #article-table_wrapper .dt-paging-button.current { background: var(--pink); border-color: var(--pink); color: #fff; }
-        #article-table_wrapper .dt-paging-button.disabled { opacity: .4; cursor: default; }
-        #article-table th.dt-orderable-asc, #article-table th.dt-orderable-desc { cursor: pointer; }
-        #article-table th .dt-column-header { display: inline-flex; align-items: center; gap: 6px; }
-        #article-table th .dt-column-order::after { content: '\2195'; opacity: .35; font-size: 10px; }
-        #article-table th.dt-ordering-asc .dt-column-order::after { content: '\25B2'; opacity: 1; }
-        #article-table th.dt-ordering-desc .dt-column-order::after { content: '\25BC'; opacity: 1; }
-        #article-table th.dt-orderable-none .dt-column-order { display: none; }
-        /* DataTables' own "nothing here" cell: centred across the table, like the empty row it replaces. */
-        #article-table td.dt-empty { text-align: center; padding: 54px 18px; color: var(--muted); }
+        /* This page's own sizes (the type scale is 15 / 13 / 11px; the page's big title is left as it is) and its heading. */
+        .page-heading > div > p:last-child { font-size: 15px; }
+        .page-heading .eyebrow { font-size: 11px; }
+        .new-menu a { font-size: 15px; }
+        .media-title-copy b { font-size: 15px; }
+        .media-title-copy small, #article-table td time small { font-size: 11px; }
+        @media (max-width: 760px) { .page-heading .primary-button { align-self: flex-start; } }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net/2.1.8/dataTables.min.js"></script>
     <script>
         if (window.jQuery && jQuery.fn.DataTable) {
-            jQuery('#article-table').DataTable({
+            const table = jQuery('#article-table').DataTable({
                 order: [],                                   // keep the newest-first order until a header is clicked
                 pageLength: 10,
                 lengthMenu: [10, 25, 50, 100],
@@ -173,6 +204,8 @@
                     infoFiltered: @js(__('(filtered from _MAX_)')),
                 },
             });
+
+            attachTableFilters(table, { filtersId: 'article-filters', dateKey: 'published', searchLabel: @js(__('Search')) });
         }
     </script>
 @endsection

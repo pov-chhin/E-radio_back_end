@@ -356,6 +356,39 @@ class CatalogManagementTest extends TestCase
         $this->assertMatchesRegularExpression('/QA Quiet<\/span>\s*<small>0<\/small>/', $response->getContent());
     }
 
+    public function test_the_category_list_is_a_datatable_with_a_strip_of_filters(): void
+    {
+        $html = $this->get('/admin/categories')->assertOk()->getContent();
+
+        // Every category is on the page (no server paging): the table searches, sorts, filters and pages them.
+        $this->assertStringContainsString('<table class="data-table" id="category-table">', $html);
+        $this->assertStringNotContainsString('pagination', $html);
+        $this->assertStringContainsString("jQuery('#category-table').DataTable(", $html);
+        $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
+        $this->assertStringContainsString("emptyTable: 'No categories yet.'", $html);
+        $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'category-filters', searchLabel: 'Search' });", $html);
+
+        // The strip: Podcasts and Media content (with / none), and Clear. No date boxes.
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="category-filters"[^>]*>\s*<label class="filter-field"><span>Podcasts<\/span>\s*<span class="filter-control"><i class="fa fa-podcast" aria-hidden="true"><\/i>\s*<select data-filter="podcasts">\s*<option value="">All<\/option>\s*<option value="with">With podcasts<\/option>\s*<option value="none">No podcasts<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Media content<\/span>\s*<span class="filter-control"><i class="fa fa-music" aria-hidden="true"><\/i>\s*<select data-filter="content">\s*<option value="">All<\/option>\s*<option value="with">With media content<\/option>\s*<option value="none">No media content<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('data-filter="from"', $html);
+
+        // Each row says whether the category has podcasts and media content; the counts sort as numbers.
+        $category = Category::create(['name' => 'QA Category', 'slug' => 'qa-category']);
+        Program::create(['category_id' => $category->id, 'name' => 'QA Show', 'slug' => 'qa-show']);
+        $withShow = $this->get('/admin/categories')->assertOk()->getContent();
+        $this->assertStringContainsString('<tr data-podcasts="with" data-content="none">', $withShow);
+        $this->assertStringContainsString('<tr data-podcasts="none" data-content="none">', $withShow);
+        $this->assertStringContainsString('data-order="1"', $withShow);
+
+        // Responsive: the value cells name their column for the card layout on phones, and the shared styles are in.
+        foreach (['Slug', 'Podcasts', 'Media content'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $withShow, $label);
+        }
+        $this->assertStringContainsString('@media (max-width: 760px)', $withShow);
+    }
+
     public function test_admin_without_the_permission_is_forbidden(): void
     {
         $this->actingAs($this->createAdmin([]), 'admin')

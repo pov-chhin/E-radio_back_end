@@ -17,7 +17,7 @@
 @endphp
 
 <div style="margin-bottom:24px">
-    <label style="display:block;font-size:9px;font-weight:700;margin-bottom:10px">{{ __('Permissions') }}</label>
+    <label style="display:block;font-size:11px;font-weight:700;margin-bottom:10px">{{ __('Permissions') }}</label>
 
     @if($matrixRows->isNotEmpty())
         <div class="data-table-wrap">
@@ -49,7 +49,7 @@
     @endif
 
     @if($otherPermissions->isNotEmpty())
-        <label style="display:block;font-size:9px;font-weight:700;margin:20px 0 10px">{{ __('Other') }}</label>
+        <label style="display:block;font-size:11px;font-weight:700;margin:20px 0 10px">{{ __('Other') }}</label>
         <div class="checkbox-grid">
             @foreach($otherPermissions as $permission)
                 <label>

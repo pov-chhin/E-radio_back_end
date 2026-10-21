@@ -64,6 +64,29 @@ class CmsDashboardTest extends TestCase
             ->assertSeeInOrder(['All users online', '2']);
     }
 
+    public function test_the_top_bar_counts_everyone_online_beside_the_bell_on_every_page(): void
+    {
+        $admin = $this->createAdmin([]);
+        $customer = Customer::create(['first_name' => 'Jane', 'last_name' => 'Doe', 'email' => 'jane@example.com', 'password' => Hash::make('password')]);
+        $idleCustomer = Customer::create(['first_name' => 'Old', 'last_name' => 'Timer', 'email' => 'old@example.com', 'password' => Hash::make('password')]);
+        $customer->createToken('app')->accessToken->forceFill(['last_used_at' => now()->subMinute()])->save();
+        $idleCustomer->createToken('app')->accessToken->forceFill(['last_used_at' => now()->subHours(2)])->save();
+        DB::table('sessions')->insert([
+            'id' => 'qa-session', 'user_id' => $admin->id, 'ip_address' => '127.0.0.1', 'user_agent' => 'phpunit',
+            'payload' => base64_encode('irrelevant'), 'last_activity' => now()->subMinute()->timestamp,
+        ]);
+        $this->actingAs($admin, 'admin');
+
+        // The same number as the dashboard's "All users online" card (a session and a token in the last five minutes, the
+        // idle token not counted), in the top bar of any page, just before the bell; it links to that card.
+        foreach (['/admin', '/admin/profile', '/admin/notifications'] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $this->assertStringContainsString('<a href="'.route('admin.dashboard').'" class="online-count" title="All users online" aria-label="All users online: 2"><span class="online-dot" aria-hidden="true"></span><b>2</b><span class="online-label">Online</span></a>', $html, $url);
+            $this->assertLessThan(strpos($html, 'class="icon-button notification"'), strpos($html, 'class="online-count"'), "{$url}: before the bell");
+        }
+        $this->get('/admin')->assertSeeInOrder(['All users online', '2']);
+    }
+
     public function test_users_online_lists_recently_active_people_with_their_email(): void
     {
         $admin = $this->createAdmin([]);

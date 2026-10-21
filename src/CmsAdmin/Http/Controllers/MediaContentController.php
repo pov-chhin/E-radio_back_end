@@ -50,8 +50,8 @@ class MediaContentController extends Controller
     private const ARTICLE_FORMS = [
         'song' => ['categories' => ['song'], 'hide' => ['podcast', 'category'], 'title_placeholder' => 'Title Song'],
         'news' => ['categories' => ['news', 'health', 'economyfinance'], 'hide' => ['podcast', 'artist'], 'title_placeholder' => 'Title Audio'],
-        'ambient-music' => ['categories' => ['ambient-music'], 'hide' => ['podcast', 'category'], 'title_placeholder' => 'Title Ambient'],
-        'podcast' => ['categories' => ['podcast'], 'hide' => ['artist', 'category'], 'podcast_required' => true, 'title_placeholder' => 'Title Podcasts Eps'],
+        'ambient-music' => ['categories' => ['ambient-music'], 'hide' => ['podcast', 'artist', 'category'], 'title_placeholder' => 'Title Ambient'],
+        'podcast' => ['categories' => ['podcast'], 'hide' => ['artist', 'category'], 'podcast_required' => true, 'title_placeholder' => 'Title Podcasts Episode'],
     ];
 
     public function __construct(private readonly ImageVariantProcessor $imageProcessor) {}

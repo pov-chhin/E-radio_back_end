@@ -17,6 +17,8 @@ class ArtistController extends Controller
 
     public const STATUSES = ['active', 'inactive'];
 
+    public const REGIONS = ['international', 'local'];
+
     public const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 
     /** [field => [width, height]] — the exact variant every photo/URL for that slot gets cropped and converted to. */
@@ -29,7 +31,9 @@ class ArtistController extends Controller
 
     public function index(): View
     {
-        $artists = Artist::orderBy('name')->paginate(15);
+        // Every artist: the page's DataTable searches, sorts, filters and pages them in the browser. A–Z by the name the list shows
+        // (the stage name where there is one), the same as the Name column sorts.
+        $artists = Artist::orderByRaw("COALESCE(NULLIF(stage_name, ''), name)")->get();
 
         return view('cms-admin::artists.index', compact('artists'));
     }
@@ -69,7 +73,7 @@ class ArtistController extends Controller
 
     private function formOptions(): array
     {
-        return ['statuses' => self::STATUSES, 'socialPlatforms' => self::SOCIAL_PLATFORMS];
+        return ['regions' => self::REGIONS, 'socialPlatforms' => self::SOCIAL_PLATFORMS];
     }
 
     private function validateArtist(Request $request, ?Artist $artist = null): array
@@ -85,7 +89,9 @@ class ArtistController extends Controller
             'remove_photo' => ['nullable', 'boolean'],
             'remove_cover' => ['nullable', 'boolean'],
             'bio' => ['nullable', 'string'],
-            'status' => ['required', Rule::in(self::STATUSES)],
+            'region' => ['nullable', Rule::in(self::REGIONS)],
+            // No longer on the form: a new artist gets the column's default (active) and an edit leaves it as it is.
+            'status' => ['sometimes', Rule::in(self::STATUSES)],
             'social_links' => ['nullable', 'array'],
             'social_links.*' => ['nullable', 'string', 'max:2048', 'url'],
         ], [], [

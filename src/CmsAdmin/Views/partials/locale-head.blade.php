@@ -1,9 +1,12 @@
 {{-- Goes in every layout's <head>: Khmer needs a font that has its glyphs. Khmer OS Battambang is the one set: it is on
      the Khmer computers that have the Khmer OS fonts, and Noto Sans Khmer (loaded here) stands in on the ones that
      don't while the system fonts cover the first moments. --}}
+{{-- The CMS's text font is Inter (the font stack in app.css names it first), from Google Fonts: until it was loaded here, every
+     computer without Inter installed fell back to its system font. --}}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 @if(app()->getLocale() === 'km')
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;500;700&display=swap">
     {{-- The dashboard and the map tooltips set their own font (Nunito, which has no Khmer), and the description
          editor sets Helvetica on itself, so each of those is named here too. --}}
@@ -26,8 +29,8 @@
         html[lang="km"] .data-table th,
         html[lang="km"] .form-grid label,
         html[lang="km"] .sidebar-box label,
-        html[lang="km"] .profile-section { font-size: 12px; }
-        html[lang="km"] .eyebrow { font-size: 12px !important; }
+        html[lang="km"] .profile-section { font-size: 13px; }
+        html[lang="km"] .eyebrow { font-size: 13px !important; }
         html[lang="km"] .badge,
         html[lang="km"] [data-dropdown] .dropdown-label,
         html[lang="km"] .form-grid label em,

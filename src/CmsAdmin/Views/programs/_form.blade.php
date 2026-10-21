@@ -67,7 +67,7 @@
             <input name="cover_image_url" type="text" placeholder="https://…" value="{{ old('cover_image_url') }}" data-image-mode-panel="url" data-image-field="cover_image" @unless(old('cover_image_url')) hidden disabled @endunless>
             @error('cover_image') <em class="field-error">{{ $message }}</em> @enderror
             @error('cover_image_url') <em class="field-error">{{ $message }}</em> @enderror
-            <p class="muted" style="font-size:9px;line-height:1.5;margin:10px 0 0">{{ __("Ratio 3:4. Optional: the newest episode's picture is used without one.") }}</p>
+            <p class="muted" style="font-size:11px;line-height:1.5;margin:10px 0 0">{{ __("Ratio 3:4. Optional: the newest episode's picture is used without one.") }}</p>
         </div>
 
         <div class="sidebar-box">
@@ -79,11 +79,11 @@
         </div>
 
         <div class="sidebar-box">
-            <h4>{{ __('Details') }}</h4>
+            <h4>{{ __('Category') }}</h4>
             <label>{{ __('Podcast Category') }}
                 {{-- The tags under Podcast: Health, Economy/Finance, Education, Politic, Civilization. --}}
                 <select id="tag_id" name="tag_id" @required(! isset($program))>
-                    <option value="">{{ isset($program) ? __('— No type —') : __('Select a podcast category…') }}</option>
+                    <option value="">{{ __('Select a podcast category…') }}</option>
                     @foreach($types as $type)
                         <option value="{{ $type->id }}" @selected((int) old('tag_id', $program->tag_id ?? $defaultTagId ?? '') === $type->id)>{{ $type->name }}</option>
                     @endforeach
@@ -94,6 +94,7 @@
     </aside>
 </div>
 
+@include('cms-admin::partials.dropdown-tools')
 <script>
     // Shows the cover as it will be: the file just chosen, or the address just pasted (once it loads as a picture),
     // following the Upload / Paste URL tab; with neither it shows the current cover again, or nothing.
@@ -142,4 +143,12 @@
             badge.classList.toggle('slate', !toggle.checked);
         });
     })();
+
+    // The Podcast Category is a dropdown that picks one, under a search box. The <select> stays in the form and does the work
+    // (the form posts it); the script hides it and sets it when one is picked.
+    selectDropdown(document.getElementById('tag_id'), {
+        searchPlaceholder: @json(__('Search…')),
+        searchLabel: @json(__('Search podcast category')),
+        emptyText: @json(__('No matching categories.')),
+    });
 </script>

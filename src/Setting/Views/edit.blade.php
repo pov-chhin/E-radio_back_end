@@ -55,7 +55,7 @@
                                    style="text-transform:uppercase">
                             @error('country') <em>{{ $message }}</em> @enderror
                         </label>
-                        <p class="muted" style="align-self:end;font-size:9px;margin:0 0 9px">{{ __('Two-letter ISO country code, e.g. KH, US, FR.') }}</p>
+                        <p class="muted" style="align-self:end;font-size:11px;margin:0 0 9px">{{ __('Two-letter ISO country code, e.g. KH, US, FR.') }}</p>
                     </div>
                 </div>
 

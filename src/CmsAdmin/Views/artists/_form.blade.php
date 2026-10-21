@@ -46,13 +46,14 @@
         <input id="stage_name" name="stage_name" type="text" value="{{ old('stage_name', $artist->stage_name ?? '') }}">
         @error('stage_name') <em>{{ $message }}</em> @enderror
     </label>
-    <label>{{ __('Status') }}
-        <select id="status" name="status" required>
-            @foreach($statuses as $value)
-                <option value="{{ $value }}" @selected(old('status', $artist->status ?? 'active') === $value)>{{ __(ucfirst($value)) }}</option>
+    <label>{{ __('Region') }}
+        <select id="region" name="region">
+            <option value="">{{ __('Select :name', ['name' => __('Region')]) }}</option>
+            @foreach($regions as $value)
+                <option value="{{ $value }}" @selected(old('region', $artist->region ?? '') === $value)>{{ __(ucfirst($value)) }}</option>
             @endforeach
         </select>
-        @error('status') <em>{{ $message }}</em> @enderror
+        @error('region') <em>{{ $message }}</em> @enderror
     </label>
     <label class="full">{{ __('Bio') }}
         <textarea id="bio" name="bio">{{ old('bio', $artist->bio ?? '') }}</textarea>
@@ -61,7 +62,7 @@
 </div>
 
 <div style="margin-bottom:24px">
-    <label style="display:block;font-size:9px;font-weight:700;margin-bottom:10px">{{ __('Social links') }}</label>
+    <label style="display:block;font-size:11px;font-weight:700;margin-bottom:10px">{{ __('Social links') }}</label>
     @php $socialLinks = old('social_links', $artist->social_links ?? []); @endphp
     <div class="form-grid">
         @foreach($socialPlatforms as $platform)

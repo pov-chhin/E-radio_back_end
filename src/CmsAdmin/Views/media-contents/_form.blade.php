@@ -72,7 +72,7 @@
 
 <div class="editor-layout">
     <div class="editor-main">
-        <input id="title" name="title" type="text" class="editor-title-input" placeholder="{{ ($podcast ?? null) ? __('Episode title') : __($titlePlaceholder ?? 'Title Song or Title Audio or Title Podcasts Eps or Title Ambient') }}" value="{{ old('title', $mediaContent->title ?? '') }}" required>
+        <input id="title" name="title" type="text" class="editor-title-input" placeholder="{{ ($podcast ?? null) ? __('Episode title') : __($titlePlaceholder ?? 'Title Song or Title Audio or Title Podcasts Episode or Title Ambient') }}" value="{{ old('title', $mediaContent->title ?? '') }}" required>
         {{-- A thin line under the title, where the Slug row's bottom border used to be. --}}
         <hr class="editor-title-rule" style="width:100%;border:0;border-top:1px solid var(--line);margin:-8px 0 0">
         @error('title') <em>{{ $message }}</em> @enderror
@@ -204,12 +204,12 @@
                 @error('published_at') <em>{{ $message }}</em> @enderror
             </label>
             @if(isset($mediaContent) && $mediaContent->status === 'public')
-                <p class="muted" style="font-size:9px;margin:8px 0 0">{{ __('Public :time', ['time' => $mediaContent->published_at->diffForHumans()]) }}</p>
+                <p class="muted" style="font-size:11px;margin:8px 0 0">{{ __('Public :time', ['time' => $mediaContent->published_at->diffForHumans()]) }}</p>
             @endif
         </div>
 
         <div class="sidebar-box">
-            <h4>{{ __('Details') }}</h4>
+            <h4>{{ __('Category') }}</h4>
             @php
                 $lockedCategoryId = $lockedCategoryId ?? null;
                 $hiddenFields = $hiddenFields ?? [];
@@ -236,7 +236,7 @@
                         {{ __('Podcast Program') }}
                         {{-- A new podcast is made on its own page, in a new tab so this form isn't lost; reload here to pick it. --}}
                         @if(! $lockedProgramId && auth('admin')->user()?->hasPermission('create-programs'))
-                            <a href="{{ route('admin.programs.create') }}" target="_blank" rel="noopener" class="primary-button compact" style="height:24px;padding:0 11px;font-size:9px;box-shadow:none" title="{{ __('Create a new podcast (opens in a new tab)') }}">{{ __('New') }}</a>
+                            <a href="{{ route('admin.programs.create') }}" target="_blank" rel="noopener" class="primary-button compact" style="height:24px;padding:0 11px;font-size:11px;box-shadow:none" title="{{ __('Create a new podcast (opens in a new tab)') }}">{{ __('New') }}</a>
                         @endif
                     </span>
                     {{-- An episode edited from its podcast's page keeps that podcast; a disabled select posts nothing, so a hidden field carries it. --}}
@@ -254,10 +254,23 @@
                     </select>
                     @error('program_id') <em>{{ $message }}</em> @enderror
                 </label>
+                {{-- The select above stays in the form and does the work; the script hides it and shows this dropdown in its place: one podcast at a time, under a search box. A locked podcast (an episode edited from its podcast's page) keeps the plain select. --}}
+                @unless($lockedProgramId)
+                    <div class="tag-dropdown" data-program-dropdown style="margin-bottom:12px" hidden>
+                        <button type="button" class="tag-dropdown-toggle" aria-haspopup="true" aria-expanded="false" data-program-toggle><span data-program-label></span></button>
+                        <div class="tag-dropdown-panel" data-program-panel hidden>
+                            <div class="tag-dropdown-search">
+                                <input type="search" placeholder="{{ __('Search…') }}" aria-label="{{ __('Search podcast') }}" autocomplete="off" data-program-search>
+                            </div>
+                            <div class="tag-tree" style="max-height:164px" data-program-list></div>
+                            <p class="muted" style="margin:0;padding:4px 14px 12px;font-size:13px" data-program-empty hidden>{{ __('No matching podcasts.') }}</p>
+                        </div>
+                    </div>
+                @endunless
             @endunless
             {{-- Tags are part of this card, under the Category: the tree follows the Category picked above. --}}
             {{-- Names the International / Local select below; the script leaves it out when the tree on show has no regions (News, Health). --}}
-            <span data-tag-caption style="display:block;font-size:9px;font-weight:700;margin:0 0 6px">{{ __('Region') }}</span>
+            <span data-tag-caption style="display:block;font-size:11px;font-weight:700;margin:0 0 6px">{{ __('Region') }}</span>
             @php $selectedTags = collect(old('tags', isset($mediaContent) ? $mediaContent->tags->pluck('id')->all() : [])); @endphp
             @if($tagTree->isEmpty())
                 <p class="muted">{!! __('No tags yet — :link.', ['link' => '<a href="'.e(route('admin.tags.create')).'">'.e(__('create one')).'</a>']) !!}</p>
@@ -270,50 +283,73 @@
                     </select>
                 </label>
                 {{-- Names what the list below starts with (Genre, under International); the script fills it in and shows it. --}}
-                <span data-tag-tree-title style="display:none;font-size:9px;font-weight:700;margin:0 0 6px"></span>
-                <div class="tag-tree" data-tag-tree>
-                    {{-- The top row of News, Health, Economy/Finance, Ambient Music and Podcast is left out, so each lists only its own rows; Economy/Finance's two (International, Local) are radio buttons. --}}
-                    @include('cms-admin::partials.tag-tree', [
-                        'nodes' => $tagTree,
-                        'selectedTags' => $selectedTags,
-                        'foldRoots' => $categories->whereIn('slug', ['news', 'health', 'economyfinance', 'ambient-music', 'podcast'])->pluck('id')->map(fn ($id) => (int) $id)->all(),
-                        'radioRoots' => $categories->where('slug', 'economyfinance')->pluck('id')->map(fn ($id) => (int) $id)->all(),
-                    ])
+                <span data-tag-tree-title style="display:none;font-size:11px;font-weight:700;margin:0 0 6px"></span>
+                {{-- The list is a dropdown: the button names what is ticked and opens the list under it (the script). The boxes are the same ones as ever. --}}
+                <div class="tag-dropdown" data-tag-dropdown data-waiting="{{ __('Pick a podcast first.') }}">
+                    <button type="button" class="tag-dropdown-toggle" aria-haspopup="true" aria-expanded="false" data-tag-dropdown-toggle>
+                        {{-- Reads "Select Genre" (the title over the list names the rows), or "Select…" where the list has no title. --}}
+                        <span data-tag-dropdown-label data-placeholder="{{ __('Select…') }}" data-named="{{ __('Select :name') }}">{{ __('Select…') }}</span>
+                    </button>
+                    <div class="tag-dropdown-panel" data-tag-dropdown-panel hidden>
+                        {{-- Narrows the list to the names that contain what is typed (the script); it is not sent with the form. --}}
+                        <div class="tag-dropdown-search">
+                            <input type="search" placeholder="{{ __('Search…') }}" aria-label="{{ __('Search tags') }}" autocomplete="off" data-tag-search>
+                        </div>
+                        <div class="tag-tree" data-tag-tree>
+                            {{-- The top row of News, Health, Economy/Finance, Ambient Music and Podcast is left out, so each lists only its own rows; Economy/Finance's two (International, Local) and Health's two (Mental Health, Physical Health) are radio buttons: one at a time. --}}
+                            @include('cms-admin::partials.tag-tree', [
+                                'nodes' => $tagTree,
+                                'selectedTags' => $selectedTags,
+                                'foldRoots' => $categories->whereIn('slug', ['news', 'health', 'economyfinance', 'ambient-music', 'podcast'])->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                                'radioRoots' => $categories->whereIn('slug', ['economyfinance', 'health'])->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                            ])
+                        </div>
+                        <p class="muted" style="margin:0;padding:4px 14px 12px;font-size:13px" data-tag-search-empty hidden>{{ __('No matching tags.') }}</p>
+                    </div>
                 </div>
-                <p class="muted" style="margin:0;font-size:10px" data-tag-category-hint hidden>{{ __('Choose a category to pick its tags.') }}</p>
+                <p class="muted" style="margin:0;font-size:13px" data-tag-category-hint hidden>{{ __('Choose a category to pick its tags.') }}</p>
             @endif
         </div>
 
-        {{-- The Artist has a card of its own, under Details (the News form leaves it out). --}}
+        {{-- The Artist has a card of its own, under Category (the News form leaves it out). --}}
         @unless(in_array('artist', $hiddenFields, true))
             @php $selectedArtists = collect(old('artist_ids', isset($mediaContent) ? $mediaContent->artists->pluck('id')->all() : []))->map(fn ($id) => (int) $id); @endphp
             <div class="sidebar-box">
-                <label for="artist_search">{{ __('Artist') }}
-                    {{-- Narrows the list below to the names that contain what is typed (the script); it is not sent with the form. --}}
-                    <input id="artist_search" type="search" placeholder="{{ __('Search artist…') }}" aria-label="{{ __('Search artist') }}" autocomplete="off" data-artist-search>
-                </label>
-                {{-- Any number of artists can be ticked. --}}
-                @if($artists->isEmpty())
-                    <p class="muted" style="margin:0">{!! __('No artists yet — :link.', ['link' => '<a href="'.e(route('admin.artists.create')).'">'.e(__('create one')).'</a>']) !!}</p>
-                @else
-                    {{-- Five artists show; more scroll (the script sets the height from the real rows; this is the fallback). --}}
-                    <div class="tag-tree" style="max-height:164px" data-artist-list>
-                        @foreach($artists as $artist)
-                            <label class="tag-tree-leaf" data-artist-row>
-                                <input type="checkbox" name="artist_ids[]" value="{{ $artist->id }}" @checked($selectedArtists->contains($artist->id))>
-                                <span>{{ $artist->stage_name ?: $artist->name }}</span>
-                            </label>
-                        @endforeach
-                        <p class="muted" style="margin:6px 8px;font-size:10px" data-artist-empty hidden>{{ __('No matching artists.') }}</p>
+                {{-- A caption over a dropdown, as Region and Genre have. The button names the artists ticked ("Select Artist" while none is) and opens the list under a search box (the script). Any number of artists can be ticked. --}}
+                <span style="display:block;font-size:11px;font-weight:700;margin:0 0 6px">{{ __('Artist') }}</span>
+                <div class="tag-dropdown" data-artist-dropdown>
+                    <button type="button" class="tag-dropdown-toggle" aria-haspopup="true" aria-expanded="false" data-artist-toggle>
+                        <span data-artist-label data-named="{{ __('Select :name') }}" data-name="{{ __('Artist') }}">{{ __('Select :name', ['name' => __('Artist')]) }}</span>
+                    </button>
+                    <div class="tag-dropdown-panel" data-artist-panel hidden>
+                        {{-- Narrows the list to the names that contain what is typed (the script); it is not sent with the form. --}}
+                        <div class="tag-dropdown-search">
+                            <input id="artist_search" type="search" placeholder="{{ __('Search artist…') }}" aria-label="{{ __('Search artist') }}" autocomplete="off" data-artist-search>
+                        </div>
+                        @if($artists->isEmpty())
+                            <p class="muted" style="margin:0;padding:8px 14px 12px;font-size:13px">{!! __('No artists yet — :link.', ['link' => '<a href="'.e(route('admin.artists.create')).'">'.e(__('create one')).'</a>']) !!}</p>
+                        @else
+                            {{-- Five artists show; more scroll (the script sets the height from the real rows; this is the fallback). --}}
+                            <div class="tag-tree" style="max-height:164px" data-artist-list>
+                                @foreach($artists as $artist)
+                                    <label class="tag-tree-leaf" data-artist-row data-region="{{ $artist->region }}">
+                                        <input type="checkbox" name="artist_ids[]" value="{{ $artist->id }}" @checked($selectedArtists->contains($artist->id))>
+                                        <span>{{ $artist->stage_name ?: $artist->name }}</span>
+                                    </label>
+                                @endforeach
+                                <p class="muted" style="margin:6px 8px;font-size:13px" data-artist-empty hidden>{{ __('No matching artists.') }}</p>
+                            </div>
+                        @endif
                     </div>
-                @endif
-                @error('artist_ids') <em style="color:var(--pink);font-size:8px;font-style:normal">{{ $message }}</em> @enderror
-                @error('artist_ids.*') <em style="color:var(--pink);font-size:8px;font-style:normal">{{ $message }}</em> @enderror
+                </div>
+                @error('artist_ids') <em style="color:var(--pink);font-size:11px;font-style:normal">{{ $message }}</em> @enderror
+                @error('artist_ids.*') <em style="color:var(--pink);font-size:11px;font-style:normal">{{ $message }}</em> @enderror
             </div>
         @endunless
     </aside>
 </div>
 
+@include('cms-admin::partials.dropdown-tools')
 <script>
     // Programs follow the Category: only the programs filed under the picked category are offered, and
     // switching category drops a program that no longer fits. A saved item keeps the program it already
@@ -470,7 +506,7 @@
     // Tags follow the Podcast Program: a program has a type (a tag under Podcast). While a program with a type is
     // picked — and its tag is in the list on show — the list is locked: only that tag is ticked and nothing can be
     // changed by hand. A disabled box is not sent with a form, so the ticked ones are added to what is sent. Picking
-    // "No podcast", or a program with no type, unlocks the list and gives back the ticks it had before. A new item
+    // Picking no podcast, or a program with no type, unlocks the list and gives back the ticks it had before. A new item
     // starts with the tag of the program it starts on; an item being edited keeps the tags it has (locked) until its
     // program is changed.
     (() => {
@@ -509,7 +545,7 @@
         follow(isNew);
     })();
 
-    // The radio buttons in the tag list (Economy/Finance's International and Local) pick one at a time; clicking the
+    // The radio buttons in the tag list (Economy/Finance's International and Local, Health's Mental and Physical) pick one at a time; clicking the
     // one that is picked clears it again, so an item can have neither.
     (() => {
         const radios = [...document.querySelectorAll('[data-tag-tree] input[type=radio]')];
@@ -521,43 +557,212 @@
         }));
     })();
 
-    // Artist: the list shows five artists and scrolls beyond that; the search box narrows it to the names that
-    // contain what is typed. A ticked artist stays in the list whatever is typed, so what is chosen is always on
-    // show; Enter doesn't send the form.
+    // dropdownShell (the opening and closing the tag, podcast and artist dropdowns share) comes from partials/dropdown-tools.
+
+    // The tag list is a dropdown: its button names what is ticked ("Select Genre" while nothing is) and opens the list
+    // under it, with a search box on top that narrows the rows to the names that contain what is typed (a row stays
+    // when it or a row under or above it matches; a ticked row is hidden by a search but stays ticked and named on the
+    // button). The boxes are untouched, so the scripts above and the form work on them as before. Only the rows on
+    // show count (a row folded away or in a hidden branch doesn't), and the whole dropdown goes when the list does
+    // (no category picked yet).
     (() => {
-        const search = document.querySelector('[data-artist-search]');
-        const list = document.querySelector('[data-artist-list]');
-        const rows = [...document.querySelectorAll('[data-artist-row]')];
-        if (!search || !list || !rows.length) return;
-        const empty = document.querySelector('[data-artist-empty]');
+        const box = document.querySelector('[data-tag-dropdown]');
+        const tree = document.querySelector('[data-tag-tree]');
+        if (!box || !tree) return;
+        const toggle = box.querySelector('[data-tag-dropdown-toggle]');
+        const panel = box.querySelector('[data-tag-dropdown-panel]');
+        const label = box.querySelector('[data-tag-dropdown-label]');
+        const heading = document.querySelector('[data-tag-tree-title]');
+        const search = box.querySelector('[data-tag-search]');
+        const empty = box.querySelector('[data-tag-search-empty]');
+        const rows = [...tree.querySelectorAll('.tag-tree-leaf, details.tag-tree-node')];
+        const isNode = row => row.matches('details');
+        const nameOf = row => (isNode(row) ? row.querySelector(':scope > summary span') : row.querySelector(':scope > span'))?.textContent.toLowerCase() ?? '';
+        const outOfSight = '[data-filtered], [style*="display: none"]';
 
-        // Tall enough for exactly five rows (measured, so it follows the font), box padding and border included.
-        // Measured again once the page, fonts included, has loaded; a reading too small to be five rows (the styles
-        // are not there yet) is ignored and the fallback height in the markup stays.
-        const fifth = rows[4];
-        const fit = () => {
-            const box = getComputedStyle(list);
-            const height = fifth.getBoundingClientRect().bottom - list.getBoundingClientRect().top
-                + parseFloat(box.paddingBottom) + parseFloat(box.borderBottomWidth);
-            if (height >= 100) list.style.maxHeight = `${Math.ceil(height)}px`;
+        // Rows are marked rather than given a style, which the scripts above set on the same rows.
+        const filter = () => {
+            const needle = search.value.trim().toLowerCase();
+            rows.forEach(row => {
+                let show = !needle || nameOf(row).includes(needle)
+                    || (isNode(row) && rows.some(other => row.contains(other) && nameOf(other).includes(needle)));
+                for (let up = row.parentElement.closest('details.tag-tree-node'); !show && up; up = up.parentElement.closest('details.tag-tree-node')) {
+                    show = nameOf(up).includes(needle);
+                }
+                row.toggleAttribute('data-filtered', !show);
+            });
+            const shown = [...tree.querySelectorAll('input[name="tags[]"]')].filter(input => !input.closest(outOfSight)).length;
+            empty.hidden = !needle || shown > 0;
         };
-        if (fifth) {
-            fit();
-            window.addEventListener('load', fit);
-        }
 
-        search.addEventListener('input', () => {
-            list.scrollTop = 0;
+        const close = dropdownShell(box, { toggle, panel, search, onReset: filter });
+
+        const refresh = () => {
+            const gone = tree.style.display === 'none';
+            box.style.display = gone ? 'none' : '';
+            if (gone) close(false);
+
+            // A new podcast has no tag to pick until its Podcast Program is picked: the button waits, greyed out. (Only a
+            // form that needs a podcast has the placeholder option; elsewhere "no podcast" is a choice and tags go on.)
+            const program = document.getElementById('program_id');
+            const waiting = !!program && !program.disabled && program.value === '' && !!program.querySelector('option[value=""][disabled]');
+            toggle.disabled = waiting;
+            if (waiting) close(false);
+
+            const names = [...tree.querySelectorAll('input[name="tags[]"]:checked')]
+                .filter(input => !input.closest('[style*="display: none"]'))
+                .map(input => input.closest('label').querySelector('span').textContent.trim());
+            const name = heading?.textContent.trim();
+            const none = name ? label.dataset.named.replace(':name', name) : label.dataset.placeholder;
+            label.textContent = names.length ? names.join(', ') : none;
+            toggle.title = waiting ? box.dataset.waiting : names.join(', ');
+        };
+
+        search.addEventListener('input', () => { tree.scrollTop = 0; filter(); });
+
+        document.getElementById('program_id')?.addEventListener('change', refresh);
+        tree.addEventListener('change', refresh);
+        tree.addEventListener('click', refresh); // clicking the picked radio clears it without a change event
+        // The other scripts show, hide, lock and clear rows by their style and disabled state.
+        new MutationObserver(refresh).observe(tree, { subtree: true, attributes: true, attributeFilter: ['style', 'disabled'] });
+        // The title over the list is filled in (and changed with the region) by the region script.
+        if (heading) new MutationObserver(refresh).observe(heading, { childList: true, characterData: true, subtree: true });
+        refresh();
+    })();
+
+    // Podcast Program: a dropdown that picks one podcast, under a search box that narrows the list to the names that
+    // contain what is typed. The <select> stays in the form and does the work (the scripts above read it and the form
+    // sends it): this hides it, lists its options and, when one is picked, sets it and tells it so (a change event).
+    // The options the Category script hides or disables are not listed, and the button names the one picked (the
+    // placeholder of a new podcast, until one is). Picking closes the list.
+    (() => {
+        const box = document.querySelector('[data-program-dropdown]');
+        const select = document.getElementById('program_id');
+        if (!box || !select) return;
+        const toggle = box.querySelector('[data-program-toggle]');
+        const panel = box.querySelector('[data-program-panel]');
+        const label = box.querySelector('[data-program-label]');
+        const search = box.querySelector('[data-program-search]');
+        const list = box.querySelector('[data-program-list]');
+        const empty = box.querySelector('[data-program-empty]');
+
+        // The placeholder of a new podcast (empty and disabled) is not something to pick.
+        const rows = [...select.options].filter(option => option.value !== '' || !option.disabled).map(option => {
+            const row = document.createElement('label');
+            row.className = 'tag-tree-leaf';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            const name = document.createElement('span');
+            name.textContent = option.textContent.trim();
+            row.append(input, name);
+            list.append(row);
+            return { option, row, input };
+        });
+
+        const filter = () => {
             const needle = search.value.trim().toLowerCase();
             let shown = 0;
+            rows.forEach(({ option, row }) => {
+                const show = !option.hidden && !option.disabled && (!needle || row.textContent.toLowerCase().includes(needle));
+                row.style.display = show ? '' : 'none';
+                if (show) shown++;
+            });
+            empty.hidden = shown > 0;
+        };
+
+        const refresh = () => {
+            rows.forEach(({ option, input }) => { input.checked = option.selected; });
+            label.textContent = select.selectedOptions[0]?.textContent.trim() ?? '';
+            filter();
+        };
+
+        const close = dropdownShell(box, { toggle, panel, search, onReset: filter });
+        rows.forEach(({ option, input }) => input.addEventListener('click', () => {
+            if (select.value !== option.value) {
+                select.value = option.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            refresh();
+            close(true);
+        }));
+        search.addEventListener('input', () => { list.scrollTop = 0; filter(); });
+
+        select.addEventListener('change', refresh);
+        // The Category script hides and disables the podcasts of other categories, and may clear the one picked.
+        new MutationObserver(refresh).observe(select, { subtree: true, attributes: true, attributeFilter: ['hidden', 'disabled'] });
+        select.style.display = 'none';
+        select.setAttribute('aria-hidden', 'true');
+        select.tabIndex = -1;
+        select.closest('label').style.marginBottom = '6px';
+        box.hidden = false;
+        refresh();
+    })();
+
+    // Artist: a dropdown like the tag list. Its button names the artists ticked ("Select Artist" while none is) and
+    // opens a list that shows five artists and scrolls beyond that, under a search box that narrows it to the names
+    // that contain what is typed. The list follows the Region picked above (International / Local) while that
+    // dropdown is on show: an artist of the other region is left out; one with no region yet is listed under both.
+    // A ticked artist stays in the list whatever is typed or picked, so what is chosen is always on show.
+    (() => {
+        const box = document.querySelector('[data-artist-dropdown]');
+        if (!box) return;
+        const toggle = box.querySelector('[data-artist-toggle]');
+        const panel = box.querySelector('[data-artist-panel]');
+        const label = box.querySelector('[data-artist-label]');
+        const search = box.querySelector('[data-artist-search]');
+        const list = box.querySelector('[data-artist-list]');
+        const rows = [...box.querySelectorAll('[data-artist-row]')];
+        const empty = box.querySelector('[data-artist-empty]');
+        // The Region dropdown above (the tag list's); it is left out when the tree on show has no regions (News, Health).
+        const region = document.querySelector('[data-tag-region]');
+        const regionOnShow = () => region && region.closest('label').style.display !== 'none';
+
+        // Tall enough for exactly five rows (measured, so it follows the font), box padding and border included.
+        // Measured each time the panel opens (a closed one has no layout); a reading too small to be five rows (the
+        // styles are not there yet) is ignored and the fallback height in the markup stays.
+        const fit = () => {
+            const fifth = rows.filter(row => row.style.display !== 'none')[4];
+            if (!list || !fifth) return;
+            const style = getComputedStyle(list);
+            const height = fifth.getBoundingClientRect().bottom - list.getBoundingClientRect().top
+                + parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth);
+            if (height >= 100) list.style.maxHeight = `${Math.ceil(height)}px`;
+        };
+
+        const filter = () => {
+            if (!list) return;
+            const needle = search.value.trim().toLowerCase();
+            const picked = regionOnShow() ? region.value : '';
+            let shown = 0;
             rows.forEach(row => {
-                const show = !needle || row.textContent.toLowerCase().includes(needle) || row.querySelector('input').checked;
+                const inRegion = !picked || !row.dataset.region || row.dataset.region === picked;
+                const named = !needle || row.textContent.toLowerCase().includes(needle);
+                const show = row.querySelector('input').checked || (inRegion && named);
                 row.style.display = show ? '' : 'none';
                 if (show) shown++;
             });
             if (empty) empty.hidden = shown > 0;
+        };
+
+        const refresh = () => {
+            const names = rows
+                .filter(row => row.querySelector('input').checked)
+                .map(row => row.querySelector('span').textContent.trim());
+            label.textContent = names.length ? names.join(', ') : label.dataset.named.replace(':name', label.dataset.name);
+            toggle.title = names.join(', ');
+        };
+
+        dropdownShell(box, { toggle, panel, search, onOpen: fit, onReset: filter });
+        search.addEventListener('input', () => {
+            if (list) list.scrollTop = 0;
+            filter();
         });
-        search.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
+        list?.addEventListener('change', refresh);
+        // The region script has already set the dropdown (and its visibility) when the category changes: it runs first.
+        region?.addEventListener('change', filter);
+        document.getElementById('category_id')?.addEventListener('change', filter);
+        refresh();
+        filter();
     })();
 
     // The title names the category picked — "New Song Media Content", "Edit Song Media Content" — in the page

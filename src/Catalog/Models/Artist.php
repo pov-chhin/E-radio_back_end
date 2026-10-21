@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Artist extends Model
 {
     protected $fillable = [
-        'name', 'slug', 'stage_name', 'photo', 'photo_disk', 'cover', 'cover_disk', 'bio',
+        'name', 'slug', 'stage_name', 'region', 'photo', 'photo_disk', 'cover', 'cover_disk', 'bio',
         'verified', 'social_links', 'status',
     ];
 

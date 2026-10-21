@@ -57,6 +57,47 @@ class ArtistManagementTest extends TestCase
         $this->get('/admin/artists')->assertOk()->assertSee('Sokun Nisa');
     }
 
+    public function test_the_artist_list_is_a_datatable_with_a_strip_of_filters(): void
+    {
+        Artist::create(['name' => 'Far Star', 'slug' => 'far-star', 'region' => 'international', 'verified' => true]);
+        Artist::create(['name' => 'Near Star', 'slug' => 'near-star', 'region' => 'local']);
+        Artist::create(['name' => 'Nowhere', 'slug' => 'nowhere', 'stage_name' => 'No Region Yet']);
+
+        $html = $this->get('/admin/artists')->assertOk()->getContent();
+
+        // Every artist is on the page (no server paging): the table searches, sorts, filters and pages them.
+        $this->assertStringContainsString('<table class="data-table" id="artist-table">', $html);
+        $this->assertStringNotContainsString('pagination', $html);
+        $this->assertStringContainsString("jQuery('#artist-table').DataTable(", $html);
+        $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
+        $this->assertStringContainsString("emptyTable: 'No artists yet.'", $html);
+        $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'artist-filters', searchLabel: 'Search' });", $html);
+
+        // The strip: Active and Region, with Clear. No date boxes.
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="artist-filters"[^>]*>\s*<label class="filter-field"><span>Active<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="active">\s*<option value="">All<\/option>\s*<option value="active">Active<\/option>\s*<option value="inactive">Inactive<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Region<\/span>\s*<span class="filter-control"><i class="fa fa-globe" aria-hidden="true"><\/i>\s*<select data-filter="region">\s*<option value="">All regions<\/option>\s*<option value="international">International<\/option>\s*<option value="local">Local<\/option>\s*<option value="none">Not set<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('data-filter="from"', $html);
+
+        // Each row carries what the filters read; the name sorts by what is shown (the stage name where there is one).
+        $this->assertStringContainsString('<tr data-active="active" data-region="international">', $html);
+        $this->assertStringContainsString('<tr data-active="inactive" data-region="local">', $html);
+        $this->assertStringContainsString('<tr data-active="inactive" data-region="none">', $html);
+        $this->assertStringContainsString('data-order="No Region Yet"', $html);
+
+        // Responsive: the value cells name their column for the card layout on phones, and the shared styles are in.
+        foreach (['Active', 'Region'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $html, $label);
+        }
+        $this->assertStringContainsString('@media (max-width: 760px)', $html);
+
+        // Nothing to filter with no artists, but the table still says so itself.
+        Artist::query()->delete();
+        $empty = $this->get('/admin/artists')->assertOk()->getContent();
+        $this->assertStringNotContainsString('id="artist-filters"', $empty);
+        $this->assertStringContainsString("jQuery('#artist-table').DataTable(", $empty);
+    }
+
     public function test_it_creates_an_artist_with_minimal_fields(): void
     {
         $this->post('/admin/artists', [
@@ -263,6 +304,50 @@ class ArtistManagementTest extends TestCase
         ])->assertSessionHasErrors('status');
 
         $this->assertDatabaseMissing('artists', ['slug' => 'bad-status']);
+    }
+
+    public function test_the_form_offers_a_region_where_it_used_to_offer_a_status(): void
+    {
+        $artist = Artist::create(['name' => 'Sokun Nisa', 'slug' => 'sokun-nisa', 'region' => 'local']);
+
+        foreach (['/admin/artists/create', "/admin/artists/{$artist->id}/edit"] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $this->assertMatchesRegularExpression('/<label>Region\s*<select id="region" name="region">\s*<option value="">Select Region<\/option>\s*<option value="international"[^>]*>International<\/option>\s*<option value="local"[^>]*>Local<\/option>/', $html, $url);
+            $this->assertStringNotContainsString('id="status"', $html, $url);
+        }
+
+        // An artist's own region is the one picked on its edit form.
+        $this->get("/admin/artists/{$artist->id}/edit")->assertSee('<option value="local" selected>Local</option>', false);
+    }
+
+    public function test_the_region_is_saved_and_the_status_is_left_alone(): void
+    {
+        // A new artist gets the region it was given and the column's default status, though the form sends none.
+        $this->post('/admin/artists', ['name' => 'Far Away', 'slug' => 'far-away', 'region' => 'international'])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.artists.index'));
+        $created = Artist::where('slug', 'far-away')->firstOrFail();
+        $this->assertSame('international', $created->region);
+        $this->assertSame('active', $created->fresh()->status);
+
+        // An edit changes the region and keeps a status set some other way.
+        $artist = Artist::create(['name' => 'Nearby', 'slug' => 'nearby', 'status' => 'inactive']);
+        $this->assertNull($artist->fresh()->region);
+        $this->put("/admin/artists/{$artist->id}", ['name' => 'Nearby', 'slug' => 'nearby', 'region' => 'local'])->assertSessionHasNoErrors();
+        $this->assertSame('local', $artist->fresh()->region);
+        $this->assertSame('inactive', $artist->fresh()->status);
+
+        // Leaving it unpicked is fine (the artists that exist have none), and the list says which each one has.
+        $this->put("/admin/artists/{$artist->id}", ['name' => 'Nearby', 'slug' => 'nearby', 'region' => ''])->assertSessionHasNoErrors();
+        $this->assertNull($artist->fresh()->region);
+        $this->get('/admin/artists')->assertOk()->assertSee('<th>Region</th>', false)->assertSee('International');
+    }
+
+    public function test_it_rejects_an_unknown_region(): void
+    {
+        $this->post('/admin/artists', ['name' => 'Nowhere', 'slug' => 'nowhere', 'region' => 'moon'])->assertSessionHasErrors('region');
+
+        $this->assertDatabaseMissing('artists', ['slug' => 'nowhere']);
     }
 
     public function test_it_rejects_a_duplicate_slug(): void

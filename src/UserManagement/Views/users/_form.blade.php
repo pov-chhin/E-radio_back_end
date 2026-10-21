@@ -19,7 +19,7 @@
     <label>{{ __('Password') }}
         <input id="password" name="password" type="password" autocomplete="new-password" @required(! $editing)>
         @if($editing)
-            <span class="muted" style="font-size:9px;font-weight:500">{{ __('Leave blank to keep the current password.') }}</span>
+            <span class="muted" style="font-size:11px;font-weight:500">{{ __('Leave blank to keep the current password.') }}</span>
         @endif
         @error('password') <em>{{ $message }}</em> @enderror
     </label>
@@ -35,7 +35,7 @@
 </div>
 
 <div style="margin-bottom:24px">
-    <label style="display:block;font-size:9px;font-weight:700;margin-bottom:10px">{{ __('Roles') }}</label>
+    <label style="display:block;font-size:11px;font-weight:700;margin-bottom:10px">{{ __('Roles') }}</label>
     <div class="checkbox-grid">
         @forelse($roles as $role)
             <label>
@@ -47,7 +47,7 @@
         @endforelse
     </div>
     @if($ownAccount)
-        <p class="muted" style="font-size:10px;margin:10px 0 0">{{ __("You can't change your own roles.") }}</p>
+        <p class="muted" style="font-size:13px;margin:10px 0 0">{{ __("You can't change your own roles.") }}</p>
     @endif
 </div>
 

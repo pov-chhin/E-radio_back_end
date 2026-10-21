@@ -70,7 +70,7 @@
         </div>
 
         <p class="profile-section" id="change-password">{{ __('Change password') }}</p>
-        <p class="muted" style="font-size:10px;margin:-6px 0 14px">{{ __('Leave the password fields blank to keep your current password.') }}</p>
+        <p class="muted" style="font-size:13px;margin:-6px 0 14px">{{ __('Leave the password fields blank to keep your current password.') }}</p>
 
         <div class="form-grid" style="margin-bottom:24px">
             <label class="full">{{ __('Current password') }}

@@ -97,6 +97,42 @@ class CustomerListTest extends TestCase
             ->assertDontSee('<img', false);
     }
 
+    public function test_the_customer_list_is_a_datatable_with_a_strip_of_filters(): void
+    {
+        $this->actingAs($this->createAdmin(['view-customers']), 'admin');
+        $jane = $this->customer();
+        Bookmark::create(['user_id' => $jane->id, 'bookmarkable_type' => 'station', 'bookmarkable_id' => 1]);
+        $this->customer(['first_name' => 'Sam', 'last_name' => 'Roe', 'username' => null, 'email' => 'sam@example.com']);
+
+        $html = $this->get('/admin/customers')->assertOk()->getContent();
+
+        // Every customer is on the page (no server paging): the table searches, sorts, filters and pages them.
+        $this->assertStringContainsString('<table class="data-table" id="customer-table">', $html);
+        $this->assertStringNotContainsString('pagination', $html);
+        $this->assertStringContainsString("jQuery('#customer-table').DataTable(", $html);
+        $this->assertStringContainsString("emptyTable: 'No customers yet.'", $html);
+        $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'customer-filters', searchLabel: 'Search' });", $html);
+
+        // The strip: Bookmarks and Username (with / none), and Clear. No date boxes.
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="customer-filters"[^>]*>\s*<label class="filter-field"><span>Bookmarks<\/span>\s*<span class="filter-control"><i class="fa fa-bookmark-o" aria-hidden="true"><\/i>\s*<select data-filter="bookmarks">\s*<option value="">All<\/option>\s*<option value="with">With bookmarks<\/option>\s*<option value="none">No bookmarks<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Username<\/span>\s*<span class="filter-control"><i class="fa fa-at" aria-hidden="true"><\/i>\s*<select data-filter="username">\s*<option value="">All<\/option>\s*<option value="with">With username<\/option>\s*<option value="none">No username<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('data-filter="from"', $html);
+
+        // Each row says whether the customer has bookmarks and a username; the count and the join date sort as numbers.
+        $this->assertStringContainsString('<tr data-bookmarks="with" data-username="with">', $html);
+        $this->assertStringContainsString('<tr data-bookmarks="none" data-username="none">', $html);
+        $this->assertMatchesRegularExpression('/data-label="Bookmarks" data-order="1"/', $html);
+        $this->assertMatchesRegularExpression('/data-label="Joined" data-order="\d{9,}"/', $html);
+        $this->assertStringContainsString('data-order="Jane Doe"', $html);
+
+        // Responsive: the value cells name their column for the card layout on phones, and the shared styles are in.
+        foreach (['Username', 'Email', 'Joined', 'Bookmarks'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $html, $label);
+        }
+        $this->assertStringContainsString('@media (max-width: 760px)', $html);
+    }
+
     public function test_it_requires_the_view_customers_permission(): void
     {
         $this->actingAs($this->createAdmin([]), 'admin');

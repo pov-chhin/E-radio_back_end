@@ -40,6 +40,47 @@ class CmsAdminRadioChannelTest extends TestCase
         $this->get('/admin/radio-channels')->assertOk()->assertSee('Pulse FM');
     }
 
+    public function test_the_channel_list_is_a_datatable_with_a_strip_of_filters(): void
+    {
+        $scraped = RadioSceaperStation::create(['name' => 'Scraped FM', 'stream_url' => 'https://stream.example.com/scraped', 'is_published' => true, 'radio_browser_uuid' => 'abc-123']);
+        RadioSceaperStation::create(['name' => 'Manual FM', 'stream_url' => 'https://stream.example.com/manual']);
+        RadioSceaperStation::create(['name' => 'Draft FM']);
+        $day = $scraped->fresh()->created_at->copy()->setTimezone(config('app.admin_timezone'))->format('Y-m-d');
+
+        $html = $this->get('/admin/radio-channels')->assertOk()->getContent();
+
+        // Every channel is on the page (no server paging): the table searches, sorts, filters and pages them.
+        $this->assertStringContainsString('<table class="data-table" id="channel-table">', $html);
+        $this->assertStringNotContainsString('pagination', $html);
+        $this->assertStringContainsString("jQuery('#channel-table').DataTable(", $html);
+        $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
+        $this->assertStringContainsString("emptyTable: 'No channels yet. Sync from Radio Browser or add one manually.'", $html);
+        $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'channel-filters', dateKey: 'added', searchLabel: 'Search' });", $html);
+
+        // The strip: Status, Source, and the day it was Added (From / To), with Clear.
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="channel-filters"[^>]*>\s*<label class="filter-field"><span>Status<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="status">\s*<option value="">All statuses<\/option>\s*<option value="published">Published<\/option>\s*<option value="hidden">Hidden<\/option>\s*<option value="draft">Draft<\/option>/', $html);
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Source<\/span>\s*<span class="filter-control"><i class="fa fa-globe" aria-hidden="true"><\/i>\s*<select data-filter="source">\s*<option value="">All sources<\/option>\s*<option value="radio-browser">Radio Browser<\/option>\s*<option value="manual">Added manually<\/option>/', $html);
+        $this->assertMatchesRegularExpression('/<input type="date" data-filter="from">.*<input type="date" data-filter="to">.*data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/s', $html);
+
+        // Each row carries what the filters read: its status, where it came from and the day it was added.
+        $this->assertStringContainsString('<tr data-status="published" data-source="radio-browser" data-added="'.$day.'">', $html);
+        $this->assertStringContainsString('<tr data-status="hidden" data-source="manual" data-added="'.$day.'">', $html);
+        $this->assertStringContainsString('<tr data-status="draft" data-source="manual" data-added="'.$day.'">', $html);
+
+        // Responsive: every value cell names its column for the card layout on phones, and the shared styles are in.
+        foreach (['Stream URL', 'Status', 'Added'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $html, $label);
+        }
+        $this->assertStringContainsString('#channel-table { min-width: 1000px; }', $html);
+        $this->assertStringContainsString('@media (max-width: 760px)', $html);
+
+        // With no channels there is nothing to filter, but the table still says so itself.
+        RadioSceaperStation::query()->delete();
+        $empty = $this->get('/admin/radio-channels')->assertOk()->getContent();
+        $this->assertStringNotContainsString('id="channel-filters"', $empty);
+        $this->assertStringContainsString("jQuery('#channel-table').DataTable(", $empty);
+    }
+
     public function test_the_cover_guidance_uses_a_four_by_three_ratio(): void
     {
         $this->get('/admin/radio-channels/create')

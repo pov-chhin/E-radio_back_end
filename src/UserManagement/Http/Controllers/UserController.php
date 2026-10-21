@@ -18,7 +18,8 @@ class UserController extends Controller
 {
     public function index(): View
     {
-        $users = User::with('roles')->latest()->paginate(15);
+        // Every admin user: the page's DataTable searches, sorts, filters and pages them in the browser.
+        $users = User::with('roles')->latest()->get();
 
         return view('user-management::users.index', compact('users'));
     }

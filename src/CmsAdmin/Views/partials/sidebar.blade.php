@@ -64,7 +64,7 @@
                 {{-- An address outside this panel: opens in a new tab and is never the current page. --}}
                 <a href="{{ $item['url'] }}" target="_blank" rel="noopener">
                     <span class="nav-icon fa fa-{{ $item['icon'] }}"></span><span>{{ __($item['label']) }}</span>
-                    <span class="fa fa-external-link" aria-hidden="true" style="margin-left:auto;font-size:10px;opacity:.55"></span>
+                    <span class="fa fa-external-link" aria-hidden="true" style="margin-left:auto;font-size:13px;opacity:.55"></span>
                 </a>
             @else
                 <a href="{{ route($item['route']) }}" @class(['active' => isset($item['active']) ? $item['active']() : request()->routeIs($item['pattern'])])>

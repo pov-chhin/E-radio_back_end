@@ -9,10 +9,10 @@ class Category extends Model
 {
     protected $fillable = ['name', 'slug', 'description', 'icon', 'sort_order'];
 
-    /** The name a "New … Media Content" / "Edit … Media Content" title uses: Podcast reads "Podcast EPS" there. */
+    /** The name a "New … Media Content" / "Edit … Media Content" title uses: Podcast reads "Podcast Episode" there. */
     public function titleName(): string
     {
-        return $this->slug === 'podcast' ? __('Podcast EPS') : $this->name;
+        return $this->slug === 'podcast' ? __('Podcast Episode') : $this->name;
     }
 
     public function programs(): HasMany

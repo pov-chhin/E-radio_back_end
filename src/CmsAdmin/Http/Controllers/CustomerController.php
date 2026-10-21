@@ -10,7 +10,8 @@ class CustomerController extends Controller
 {
     public function index(): View
     {
-        $customers = User::withCount('bookmarks')->latest()->paginate(15);
+        // Every customer: the page's DataTable searches, sorts, filters and pages them in the browser.
+        $customers = User::withCount('bookmarks')->latest()->get();
 
         return view('cms-admin::customers.index', compact('customers'));
     }

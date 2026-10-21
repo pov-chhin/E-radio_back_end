@@ -24,6 +24,37 @@ class CmsTagCategoryTest extends TestCase
         return Category::where('slug', $slug)->firstOrFail();
     }
 
+    public function test_the_tag_list_is_a_datatable_with_a_strip_of_filters(): void
+    {
+        $html = $this->get('/admin/tags')->assertOk()->getContent();
+
+        // Every tag is on the page (it is one tree): the table searches, sorts, filters and pages them.
+        $this->assertStringContainsString('<table class="data-table" id="tag-table">', $html);
+        $this->assertStringContainsString("jQuery('#tag-table').DataTable(", $html);
+        $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
+        $this->assertStringContainsString("emptyTable: 'No tags yet.'", $html);
+        $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'tag-filters', searchLabel: 'Search' });", $html);
+
+        // The strip: Category (the ones the tags are filed under) and Level, with Clear. No date boxes.
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="tag-filters"[^>]*>\s*<label class="filter-field"><span>Category<\/span>\s*<span class="filter-control"><i class="fa fa-folder-o" aria-hidden="true"><\/i>\s*<select data-filter="category">\s*<option value="">All categories<\/option>/', $html);
+        foreach (['Ambient Music', 'Economy/Finance', 'Health', 'News'] as $name) {
+            $this->assertStringContainsString('<option value="'.e($name).'">'.e($name).'</option>', $html, $name);
+        }
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Level<\/span>\s*<span class="filter-control"><i class="fa fa-sitemap" aria-hidden="true"><\/i>\s*<select data-filter="level">\s*<option value="">All levels<\/option>\s*<option value="top">Top level<\/option>\s*<option value="sub">Nested tags<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('data-filter="from"', $html);
+        $this->assertStringNotContainsString('data-filter="to"', $html);
+
+        // Each row carries its category and level; the name sorts by the plain name though it shows indented.
+        $this->assertStringContainsString('<tr data-category="Health" data-level="top">', $html);
+        $this->assertStringContainsString('<tr data-category="Health" data-level="sub">', $html);
+        $this->assertStringContainsString('data-order="Mental Health"', $html);
+
+        // Responsive: the category cell names its column for the card layout on phones, and the shared styles are in.
+        $this->assertStringContainsString('data-label="Category"', $html);
+        $this->assertStringContainsString('@media (max-width: 760px)', $html);
+    }
+
     public function test_the_seeded_trees_sit_under_the_category_of_the_same_name(): void
     {
         foreach (['podcast', 'health', 'economyfinance', 'news', 'song', 'ambient-music'] as $slug) {

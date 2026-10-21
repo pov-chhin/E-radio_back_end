@@ -72,6 +72,77 @@ class CmsPodcastAdminTest extends TestCase
         return $episode;
     }
 
+    public function test_the_podcast_category_is_a_dropdown_with_a_search_box_and_the_card_says_category(): void
+    {
+        $this->signIn();
+        $podcast = $this->podcast('Healthy Habits', null, 'health');
+
+        foreach (['/admin/podcasts/create', "/admin/podcasts/{$podcast->id}/edit"] as $url) {
+            $form = $this->get($url)->assertOk()->getContent();
+
+            // The card is called Category (it used to say Details); the select stays in the form and does the work.
+            $this->assertStringContainsString('<h4>Category</h4>', $form, $url);
+            $this->assertStringNotContainsString('<h4>Details</h4>', $form, $url);
+            $this->assertMatchesRegularExpression('/<label>Podcast Category\s*<select id="tag_id" name="tag_id"/', $form, $url);
+
+            // The shared script brings the dropdown (a button, a search box, a list of radio buttons) and the form turns the select into it.
+            $this->assertStringContainsString('window.selectDropdown = (select, { searchPlaceholder, searchLabel, emptyText }) => {', $form, $url);
+            $this->assertStringContainsString("selectDropdown(document.getElementById('tag_id'), {", $form, $url);
+            $this->assertStringContainsString('searchLabel: "Search podcast category",', $form, $url);
+            $this->assertStringContainsString('emptyText: "No matching categories.",', $form, $url);
+            $this->assertStringContainsString("const input = make('input', '', { type: 'radio' });", $form, $url);
+
+            // No "No type" choice: the empty option is only the "nothing picked" text, on the edit form too (it is not listed).
+            $this->assertStringContainsString('<option value="">Select a podcast category…</option>', $form, $url);
+            $this->assertStringNotContainsString('No type', $form, $url);
+            $this->assertStringContainsString(".filter(option => option.value !== '')", $form, $url);
+            $this->assertStringContainsString("select.dispatchEvent(new Event('change', { bubbles: true }));", $form, $url);
+        }
+    }
+
+    public function test_the_podcast_list_is_a_datatable_with_a_strip_of_filters(): void
+    {
+        $this->signIn();
+        $health = $this->podcast('Healthy Habits', null, 'health');
+        $this->podcast('Morning Brief', null, 'politic');
+        $draft = $this->podcast('Untyped Draft');
+        $draft->forceFill(['is_published' => false])->save();
+        $day = $health->fresh()->created_at->copy()->setTimezone(config('app.admin_timezone'))->format('Y-m-d');
+
+        $html = $this->get('/admin/podcasts')->assertOk()->getContent();
+
+        // Every podcast of the tab is on the page (no server paging): the table searches, sorts, filters and pages them.
+        $this->assertStringContainsString('<table class="data-table" id="program-table">', $html);
+        $this->assertStringNotContainsString('pagination', $html);
+        $this->assertStringContainsString("jQuery('#program-table').DataTable(", $html);
+        $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
+        $this->assertStringContainsString("emptyTable: 'No podcasts yet.'", $html);
+        $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'program-filters', dateKey: 'added', searchLabel: 'Search' });", $html);
+
+        // The strip: Podcast Category (the types the rows have, once each), Status, and the day it was Added (From / To), with Clear.
+        $this->assertMatchesRegularExpression('/<div class="table-filters" id="program-filters"[^>]*>\s*<label class="filter-field"><span>Podcast Category<\/span>\s*<span class="filter-control"><i class="fa fa-folder-o" aria-hidden="true"><\/i>\s*<select data-filter="category">\s*<option value="">All categories<\/option>\s*<option value="Health">Health<\/option>\s*<option value="Politic">Politic<\/option>\s*<\/select>/', $html);
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Status<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="status">\s*<option value="">All statuses<\/option>\s*<option value="published">Published<\/option>\s*<option value="draft">Draft<\/option>/', $html);
+        $this->assertMatchesRegularExpression('/<input type="date" data-filter="from">.*<input type="date" data-filter="to">.*data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/s', $html);
+
+        // Each row carries what the filters read: its type, status and the day it was added.
+        $this->assertStringContainsString('<tr data-category="Health" data-status="published" data-added="'.$day.'">', $html);
+        $this->assertStringContainsString('<tr data-category="Politic" data-status="published" data-added="'.$day.'">', $html);
+        $this->assertStringContainsString('<tr data-category="" data-status="draft" data-added="'.$day.'">', $html);
+
+        // Responsive: every value cell names its column for the card layout on phones, and the shared styles are in.
+        foreach (['Podcast Category', 'Episodes', 'Status', 'Added'] as $label) {
+            $this->assertStringContainsString('data-label="'.$label.'"', $html, $label);
+        }
+        $this->assertStringContainsString('#program-table { min-width: 1000px; }', $html);
+        $this->assertStringContainsString('@media (max-width: 760px)', $html);
+
+        // A type tab keeps its own rows, and an empty one has no strip but still says so through the table.
+        $this->get('/admin/podcasts?type=health')->assertOk()->assertSee('Healthy Habits')->assertDontSee('Morning Brief');
+        $empty = $this->get('/admin/podcasts?type=education')->assertOk()->getContent();
+        $this->assertStringNotContainsString('id="program-filters"', $empty);
+        $this->assertStringContainsString("emptyTable: 'No podcasts in Education yet.'", $empty);
+    }
+
     public function test_the_sidebar_and_list_call_them_podcasts(): void
     {
         $this->signIn();
@@ -177,8 +248,8 @@ class CmsPodcastAdminTest extends TestCase
             $this->assertStringContainsString('data-cover-preview style="display:block;width:100%;aspect-ratio:3/4;object-fit:cover;', $sidebar, $url);
             $this->assertStringContainsString(e("Ratio 3:4. Optional: the newest episode's picture is used without one."), $sidebar, $url);
             $this->assertStringNotContainsString('scaled down', $sidebar, $url);
-            // The sidebar's order, like the media editor's: the picture first, then Status, then Details.
-            $cards = [strpos($sidebar, '<h4>Cover image</h4>'), strpos($sidebar, '<h4>Status</h4>'), strpos($sidebar, '<h4>Details</h4>')];
+            // The sidebar's order, like the media editor's: the picture first, then Status, then Category.
+            $cards = [strpos($sidebar, '<h4>Cover image</h4>'), strpos($sidebar, '<h4>Status</h4>'), strpos($sidebar, '<h4>Category</h4>')];
             $this->assertNotContains(false, $cards, $url);
             $sorted = $cards;
             sort($sorted);

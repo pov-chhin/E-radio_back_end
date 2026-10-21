@@ -13,17 +13,17 @@ use Src\Catalog\Models\MediaContent;
 class MusicController extends Controller
 {
     /**
-     * The tabs above the list, in this order: the categories each one lists, the one its "New" button
-     * starts, and that button's name in the singular ("New Podcast"). Audio (key `audio`; the old key `program` still
+     * The tabs above the list, in this order: the categories each one lists, the one its entry in the "New"
+     * menu starts, and that entry's icon. Audio (key `audio`; the old key `program` still
      * redirects to it) groups News, Health and Economy/Finance. Ambient Music is also a set of moods any content can carry, so its tab lists whatever
      * carries a mood (`tagged`) as well as anything filed under the category, and its "New" opens the form
      * with the category fixed on Ambient Music. "All" lists every category here.
      */
     public const TABS = [
-        'song' => ['label' => 'Song', 'new_name' => 'Song', 'categories' => ['song'], 'new' => 'song'],
-        'audio' => ['label' => 'Audio', 'new_name' => 'Audio', 'categories' => ['news', 'health', 'economyfinance'], 'new' => 'news'],
-        'podcast' => ['label' => 'Podcast EPS', 'new_name' => 'Podcast EPS', 'categories' => ['podcast'], 'new' => 'podcast'],
-        'ambient' => ['label' => 'Ambient Music', 'new_name' => 'Ambient Music', 'categories' => ['ambient-music'], 'tagged' => 'ambient-music', 'new' => 'ambient-music'],
+        'song' => ['label' => 'Song', 'icon' => 'fa-music', 'categories' => ['song'], 'new' => 'song'],
+        'audio' => ['label' => 'Audio', 'icon' => 'fa-headphones', 'categories' => ['news', 'health', 'economyfinance'], 'new' => 'news'],
+        'podcast' => ['label' => 'Podcast Episode', 'icon' => 'fa-podcast', 'categories' => ['podcast'], 'new' => 'podcast'],
+        'ambient' => ['label' => 'Ambient Music', 'icon' => 'fa-moon-o', 'categories' => ['ambient-music'], 'tagged' => 'ambient-music', 'new' => 'ambient-music'],
     ];
 
     /** "All": every tab's categories. */
@@ -37,7 +37,7 @@ class MusicController extends Controller
         }
 
         // One tab per group; an unknown or empty `category` means "All".
-        $tabs = collect(self::TABS)->map(fn (array $tab, string $key) => [...$tab, 'key' => $key, 'label' => __($tab['label']), 'new_name' => __($tab['new_name'])]);
+        $tabs = collect(self::TABS)->map(fn (array $tab, string $key) => [...$tab, 'key' => $key, 'label' => __($tab['label'])]);
         $requested = $request->query('category');
         $activeTab = is_string($requested) ? $tabs->get($requested) : null;
 
@@ -52,13 +52,10 @@ class MusicController extends Controller
             ->latest()
             ->get();
 
-        // "New" follows the tab; All starts a Song.
-        $newTab = $activeTab ?? $tabs['song'];
-
         // Category slug => the tab it belongs to: "All" names each row's group (Audio for News / Health /
         // Economy/Finance) instead of its category.
         $groupLabels = $tabs->flatMap(fn (array $tab) => collect($tab['categories'])->mapWithKeys(fn (string $slug) => [$slug => $tab['label']]));
 
-        return view('cms-admin::music.index', compact('mediaContents', 'tabs', 'activeTab', 'newTab', 'groupLabels'));
+        return view('cms-admin::music.index', compact('mediaContents', 'tabs', 'activeTab', 'groupLabels'));
     }
 }

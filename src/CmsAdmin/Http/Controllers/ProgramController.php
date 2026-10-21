@@ -34,8 +34,7 @@ class ProgramController extends Controller
             ->withCount(['mediaContents', 'episodes'])
             ->when($activeType, fn ($query) => $query->whereIn('tag_id', Tag::idsWithDescendants([$activeType->id])))
             ->latest()
-            ->paginate(15)
-            ->withQueryString();
+            ->get(); // every one of the tab: the page's DataTable searches, sorts, filters and pages them in the browser
 
         return view('cms-admin::programs.index', compact('programs', 'types', 'activeType'));
     }

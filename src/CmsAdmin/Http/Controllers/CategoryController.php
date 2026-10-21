@@ -13,7 +13,8 @@ class CategoryController extends Controller
 {
     public function index(): View
     {
-        $categories = Category::withCount(['programs', 'mediaContents'])->orderBy('sort_order')->paginate(15);
+        // Every category, in the order set for them: the page's DataTable searches, sorts, filters and pages them in the browser.
+        $categories = Category::withCount(['programs', 'mediaContents'])->orderBy('sort_order')->get();
 
         return view('cms-admin::categories.index', compact('categories'));
     }

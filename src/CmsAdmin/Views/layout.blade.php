@@ -27,6 +27,9 @@
                     $latestNotifications = $admin?->notifications()->latest()->take(6)->get();
                     $unreadNotificationCount = $admin?->unreadNotifications()->count() ?? 0;
                 @endphp
+                {{-- Everyone online right now: the same number as the dashboard's "All users online" card, which this links to. --}}
+                @php $onlineNow = \App\Support\OnlineUsers::count(); @endphp
+                <a href="{{ route('admin.dashboard') }}" class="online-count" title="{{ __('All users online') }}" aria-label="{{ __('All users online') }}: {{ number_format($onlineNow) }}"><span class="online-dot" aria-hidden="true"></span><b>{{ number_format($onlineNow) }}</b><span class="online-label">{{ __('Online') }}</span></a>
                 <div class="dropdown-anchor">
                     <button class="icon-button notification" aria-label="{{ __('Notifications') }}" aria-haspopup="true" aria-expanded="false" data-dropdown-toggle><span class="fa fa-bell bell-icon"></span>@if($unreadNotificationCount > 0)<i></i>@endif</button>
                     <div class="dropdown-menu dropdown-right notification-panel" data-dropdown>

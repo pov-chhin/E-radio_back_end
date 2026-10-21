@@ -25,7 +25,8 @@ class RadioChannelController extends Controller
 
     public function index(): View
     {
-        $radioChannels = RadioSceaperStation::latest()->paginate(15);
+        // Every channel: the page's DataTable searches, sorts, filters and pages them in the browser.
+        $radioChannels = RadioSceaperStation::latest()->get();
 
         return view('cms-admin::radio-channels.index', compact('radioChannels'));
     }
