@@ -636,7 +636,7 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
     }
 
-    public function test_the_list_can_be_filtered_by_category_status_and_published_day(): void
+    public function test_the_list_can_be_filtered_by_category_and_status(): void
     {
         $this->signIn();
         // Status is worked out from is_published and published_at: public, scheduled (published, but later) or private.
@@ -652,10 +652,12 @@ class CmsMusicAdminTest extends TestCase
         $html = $this->get('/admin/music')->assertOk()->getContent();
         $this->assertMatchesRegularExpression('/<div class="table-filters" id="article-filters"[^>]*>\s*<label class="filter-field"><span>Category<\/span>\s*<span class="filter-control"><i class="fa fa-folder-o" aria-hidden="true"><\/i>\s*<select data-filter="category">\s*<option value="">All categories<\/option>\s*<option value="Audio">Audio<\/option>\s*<option value="Song">Song<\/option>\s*<\/select>/s', $html);
         $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Status<\/span>\s*<span class="filter-control"><i class="fa fa-circle-o" aria-hidden="true"><\/i>\s*<select data-filter="status">\s*<option value="">All statuses<\/option>\s*<option value="public">Public<\/option>\s*<option value="scheduled">Scheduled<\/option>\s*<option value="private">Private<\/option>/', $html);
-        $this->assertMatchesRegularExpression('/<input type="date" data-filter="from">.*<input type="date" data-filter="to">.*data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/s', $html);
-        $this->assertStringContainsString('<tr data-category="Song" data-status="public" data-published="'.$day($past).'">', $html);
-        $this->assertStringContainsString('<tr data-category="Audio" data-status="private" data-published="">', $html);
-        $this->assertStringContainsString('<tr data-category="Audio" data-status="scheduled" data-published="'.$day($future).'">', $html);
+        $this->assertMatchesRegularExpression('/data-filter-clear title="Clear filters" aria-label="Clear filters" hidden>/', $html);
+        $this->assertStringNotContainsString('type="date"', $html);
+        $this->assertStringContainsString('<th>Published</th>', $html);
+        $this->assertStringContainsString('<tr data-category="Song" data-status="public" data-published="'.$day($past).'" data-region="none">', $html);
+        $this->assertStringContainsString('<tr data-category="Audio" data-status="private" data-published="" data-region="none">', $html);
+        $this->assertStringContainsString('<tr data-category="Audio" data-status="scheduled" data-published="'.$day($future).'" data-region="none">', $html);
         $this->assertStringContainsString('jQuery.fn.dataTable.ext.search.push(', $html);
         // One row, in the table's order: the script moves DataTables' search box (the Title column) to the front of the filter
         // strip and its "per page" to the end.
@@ -702,6 +704,39 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringContainsString('content: attr(data-label)', $html);
         $this->assertStringContainsString('#article-table thead { display: none; }', $html);
         $this->assertStringContainsString('@media (max-width: 480px)', $html);
+    }
+
+    public function test_the_content_list_can_be_filtered_by_region_from_tags_and_artists(): void
+    {
+        $this->signIn();
+        $song = $this->category('song');
+        // A genre under Song > International, and one under Song > Local.
+        $genre = function (string $region) use ($song) {
+            $branch = Tag::where('category_id', $song->id)->where('name', $region)->whereNotNull('parent_id')->firstOrFail();
+
+            return Tag::whereIn('parent_id', Tag::where('parent_id', $branch->id)->where('name', 'Genre')->pluck('id'))->firstOrFail();
+        };
+        $far = \Src\Catalog\Models\Artist::create(['name' => 'Far Star', 'slug' => 'far-star', 'region' => 'international']);
+        $near = \Src\Catalog\Models\Artist::create(['name' => 'Near Star', 'slug' => 'near-star', 'region' => 'local']);
+
+        $this->track('Tagged International', 'song')->tags()->attach($genre('International')->id);
+        $this->track('Artist Is Local', 'song', ['artist_ids' => [$near->id]]);
+        $both = $this->track('Tagged Local By An International Artist', 'song', ['artist_ids' => [$far->id]]);
+        $both->tags()->attach($genre('Local')->id);
+        $this->track('Nothing To Say', 'news');
+
+        $html = $this->get('/admin/music')->assertOk()->getContent();
+
+        // The strip offers the Region: International, Local, or not set.
+        $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Region<\/span>\s*<span class="filter-control"><i class="fa fa-globe" aria-hidden="true"><\/i>\s*<select data-filter="region">\s*<option value="">All regions<\/option>\s*<option value="international">International<\/option>\s*<option value="local">Local<\/option>\s*<option value="none">Not set<\/option>\s*<\/select>/', $html);
+
+        // Each row carries its region(s): from the item's tags (however deep under the branch) and from its artists, both counted
+        // (joined by | for the filter to match either), or none.
+        $rows = fn (string $region) => substr_count($html, 'data-region="'.$region.'">');
+        $this->assertSame(1, $rows('international'), 'tagged International');
+        $this->assertSame(1, $rows('local'), 'an artist that is Local');
+        $this->assertSame(1, $rows('international|local'), 'a Local tag and an International artist');
+        $this->assertSame(1, $rows('none'), 'nothing');
     }
 
     public function test_an_empty_tab_says_so_and_is_still_a_datatable(): void

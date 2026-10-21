@@ -39,7 +39,7 @@
         $filterCategories = $mediaContents->map($categoryLabel)->unique()->sort()->values();
     @endphp
     <div class="data-table-wrap">
-        {{-- Narrow the rows below by Category, Status and the day they were Published (From / To, both ends included). The script does it, on top of the search box, as soon as a box is changed. --}}
+        {{-- Narrow the rows below by Category, Status and Region (from the item's tags and artists), on top of the search box, as soon as a box is changed (no date boxes: the shared script also takes from / to ones). --}}
         @unless($mediaContents->isEmpty())
             <div class="table-filters" id="article-filters" role="group" aria-label="{{ __('Filter the list') }}">
                 <label class="filter-field"><span>{{ __('Category') }}</span>
@@ -62,11 +62,15 @@
                         </select>
                     </span>
                 </label>
-                <label class="filter-field"><span>{{ __('Published from') }}</span>
-                    <span class="filter-control"><i class="fa fa-calendar-o" aria-hidden="true"></i><input type="date" data-filter="from"></span>
-                </label>
-                <label class="filter-field"><span>{{ __('Published to') }}</span>
-                    <span class="filter-control"><i class="fa fa-calendar-o" aria-hidden="true"></i><input type="date" data-filter="to"></span>
+                <label class="filter-field"><span>{{ __('Region') }}</span>
+                    <span class="filter-control"><i class="fa fa-globe" aria-hidden="true"></i>
+                        <select data-filter="region">
+                            <option value="">{{ __('All regions') }}</option>
+                            <option value="international">{{ __('International') }}</option>
+                            <option value="local">{{ __('Local') }}</option>
+                            <option value="none">{{ __('Not set') }}</option>
+                        </select>
+                    </span>
                 </label>
                 <button type="button" class="secondary-button compact filter-clear" data-filter-clear title="{{ __('Clear filters') }}" aria-label="{{ __('Clear filters') }}" hidden><i class="fa fa-times" aria-hidden="true"></i></button>
             </div>
@@ -99,7 +103,7 @@
                         }
                         $people = collect([$mediaContent->artist_names, $mediaContent->author?->name])->filter()->implode(' · ');
                     @endphp
-                    <tr data-category="{{ $categoryLabel($mediaContent) }}" data-status="{{ $mediaContent->status }}" data-published="{{ $mediaContent->published_at_local?->format('Y-m-d') }}">
+                    <tr data-category="{{ $categoryLabel($mediaContent) }}" data-status="{{ $mediaContent->status }}" data-published="{{ $mediaContent->published_at_local?->format('Y-m-d') }}" data-region="{{ $regions[$mediaContent->id] }}">
                         {{-- The table sorts and searches the full title (and names), not the shortened text on show. --}}
                         <td data-order="{{ $mediaContent->title }}" data-search="{{ trim($mediaContent->title.' '.$people) }}">
                             <div class="media-title-cell">

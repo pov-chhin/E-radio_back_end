@@ -5,9 +5,11 @@ namespace Src\CmsAdmin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
+use Src\Catalog\Models\Tag;
 
 /** Songs, ambient tracks, the News / Health / Economy content and podcast episodes of Media Content, on a page of their own. */
 class MusicController extends Controller
@@ -41,7 +43,7 @@ class MusicController extends Controller
         $requested = $request->query('category');
         $activeTab = is_string($requested) ? $tabs->get($requested) : null;
 
-        $mediaContents = MediaContent::with(['category', 'artists', 'author'])
+        $mediaContents = MediaContent::with(['category', 'artists', 'author', 'tags'])
             ->where(function ($query) use ($activeTab) {
                 $query->whereIn('category_id', Category::whereIn('slug', $activeTab['categories'] ?? self::ALL_CATEGORIES)->select('id'));
 
@@ -56,6 +58,36 @@ class MusicController extends Controller
         // Economy/Finance) instead of its category.
         $groupLabels = $tabs->flatMap(fn (array $tab) => collect($tab['categories'])->mapWithKeys(fn (string $slug) => [$slug => $tab['label']]));
 
-        return view('cms-admin::music.index', compact('mediaContents', 'tabs', 'activeTab', 'groupLabels'));
+        $regions = $this->regionsOf($mediaContents);
+
+        return view('cms-admin::music.index', compact('mediaContents', 'tabs', 'activeTab', 'groupLabels', 'regions'));
+    }
+
+    /**
+     * What the Region filter reads, by item id: "international", "local" (or both, joined by |) or "none". An item has a
+     * region through its tags (one under an International or Local branch, however deep) and through its artists' region.
+     *
+     * @param  Collection<int, MediaContent>  $items
+     * @return Collection<int, string>
+     */
+    private function regionsOf(Collection $items): Collection
+    {
+        $tags = Tag::query()->get(['id', 'parent_id', 'name'])->keyBy('id');
+        $regionOfTag = function (int $id) use ($tags): ?string {
+            for ($tag = $tags->get($id), $depth = 0; $tag && $depth < 12; $tag = $tags->get($tag->parent_id), $depth++) {
+                $name = mb_strtolower($tag->name);
+                if (in_array($name, ['international', 'local'], true)) {
+                    return $name;
+                }
+            }
+
+            return null;
+        };
+
+        return $items->mapWithKeys(function (MediaContent $item) use ($regionOfTag) {
+            $regions = $item->tags->pluck('id')->map($regionOfTag)->merge($item->artists->pluck('region'))->filter()->unique()->sort()->values();
+
+            return [$item->id => $regions->isEmpty() ? 'none' : $regions->implode('|')];
+        });
     }
 }
