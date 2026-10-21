@@ -60,8 +60,9 @@ class MusicController extends Controller
     }
 
     /**
-     * What the Region filter reads, by item id: "international", "local" (or both, joined by |) or "none". An item has a
-     * region through its tags (one under an International or Local branch, however deep) and through its artists' region.
+     * What the Region column shows and the Region filter reads, by item id: "international", "local" or "none" — one region
+     * per item. The item's own tags decide (one under an International or Local branch, however deep); only when no tag has
+     * a region does its artists' region count. If several still differ, International comes before Local.
      *
      * @param  Collection<int, MediaContent>  $items
      * @return Collection<int, string>
@@ -81,9 +82,10 @@ class MusicController extends Controller
         };
 
         return $items->mapWithKeys(function (MediaContent $item) use ($regionOfTag) {
-            $regions = $item->tags->pluck('id')->map($regionOfTag)->merge($item->artists->pluck('region'))->filter()->unique()->sort()->values();
+            $fromTags = $item->tags->pluck('id')->map($regionOfTag)->filter()->unique()->sort();
+            $region = $fromTags->first() ?? $item->artists->pluck('region')->filter()->unique()->sort()->first();
 
-            return [$item->id => $regions->isEmpty() ? 'none' : $regions->implode('|')];
+            return [$item->id => $region ?? 'none'];
         });
     }
 }

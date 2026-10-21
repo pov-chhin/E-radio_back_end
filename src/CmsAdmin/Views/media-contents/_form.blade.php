@@ -405,8 +405,10 @@
     // Region filter for the tag picker: International or Local is always picked (there is no "all"). The other
     // branch is hidden wherever it appears (under Song, under Economy/Finance, …) and the picked one is listed
     // on its own: its row and the rows above it (Song) are left out, so the list starts at Genre. A region with
-    // no branches of its own stays where it is. It only narrows what is shown: a ticked tag in a hidden branch
-    // stays ticked. The dropdown is offered only while the tree on show has regions, and it starts on
+    // no branches of its own stays where it is. An item's region is the region its ticked tags are under, so picking
+    // the other region in the dropdown unticks what was ticked under the one that goes away (the Genre starts over:
+    // pick one under the new region). Opening the form, or a new category, only picks the starting region and
+    // keeps the ticks. The dropdown is offered only while the tree on show has regions, and it starts on
     // International — or on the region an item already has a ticked tag in.
     (() => {
         const tree = document.querySelector('[data-tag-tree]');
@@ -497,7 +499,14 @@
             select.value = tagged ? nameOf(tagged) : select.options[0].value;
         };
 
-        select.addEventListener('change', apply);
+        // Changing the region by hand changes the item's region: the tags under the other region are unticked (the
+        // hidden ones too), or the item would keep its old region on saving.
+        select.addEventListener('change', () => {
+            regionsOnShow()
+                .filter(node => nameOf(node) !== picked())
+                .forEach(node => node.querySelectorAll('input[type=checkbox], input[type=radio]').forEach(input => { input.checked = false; }));
+            apply();
+        });
         // A new category brings a different tree (whose ticked tags were cleared): start it afresh.
         document.getElementById('category_id')?.addEventListener('change', () => { startRegion(); apply(); });
         startRegion();

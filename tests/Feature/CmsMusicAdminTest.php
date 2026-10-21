@@ -692,7 +692,7 @@ class CmsMusicAdminTest extends TestCase
         $html = $this->get('/admin/music')->assertOk()->getContent();
 
         // Every value cell names its column, for the card layout on phones (the title and the Actions cells need no label).
-        foreach (['Category', 'File size', 'Audio', 'Views', 'Favorites', 'Status', 'Published'] as $label) {
+        foreach (['Category', 'Region', 'Audio', 'Views', 'Favorites', 'Status', 'Published'] as $label) {
             $this->assertStringContainsString('data-label="'.$label.'"', $html, $label);
         }
         $this->assertSame(7, substr_count($html, ' data-label="'));
@@ -731,13 +731,19 @@ class CmsMusicAdminTest extends TestCase
         // The strip offers the Region: International, Local, or not set.
         $this->assertMatchesRegularExpression('/<label class="filter-field"><span>Region<\/span>\s*<span class="filter-control"><i class="fa fa-globe" aria-hidden="true"><\/i>\s*<select data-filter="region">\s*<option value="">All regions<\/option>\s*<option value="international">International<\/option>\s*<option value="local">Local<\/option>\s*<option value="none">Not set<\/option>\s*<\/select>/', $html);
 
-        // Each row carries its region(s): from the item's tags (however deep under the branch) and from its artists, both counted
-        // (joined by | for the filter to match either), or none.
+        // Each row carries one region: from the item's tags (however deep under the branch), else from its artists, else none.
+        // The item's own tag wins over its artist, so a Local tag on a song by an International artist is Local.
         $rows = fn (string $region) => substr_count($html, 'data-region="'.$region.'">');
         $this->assertSame(1, $rows('international'), 'tagged International');
-        $this->assertSame(1, $rows('local'), 'an artist that is Local');
-        $this->assertSame(1, $rows('international|local'), 'a Local tag and an International artist');
+        $this->assertSame(2, $rows('local'), 'an artist that is Local, and a Local tag over an International artist');
+        $this->assertSame(0, substr_count($html, 'data-region="international|local"'), 'never both');
         $this->assertSame(1, $rows('none'), 'nothing');
+
+        // The Region column shows the same value as one badge (International or Local), and a dash when there is none.
+        $this->assertStringContainsString('<th>Region</th>', $html);
+        $this->assertStringNotContainsString('<th>File size</th>', $html);
+        $this->assertSame(1, substr_count($html, '<span class="badge slate">International</span>'));
+        $this->assertSame(2, substr_count($html, '<span class="badge slate">Local</span>'));
     }
 
     public function test_an_empty_tab_says_so_and_is_still_a_datatable(): void
@@ -1358,6 +1364,9 @@ class CmsMusicAdminTest extends TestCase
             $this->assertMatchesRegularExpression('/<div class="tag-dropdown-panel"[^>]*>\s*<div class="tag-dropdown-search">\s*<input type="search"(?![^>]*\sname=)[^>]*data-tag-search>.*?<div class="tag-tree" data-tag-tree>/s', $html);
             $this->assertStringContainsString("box.querySelector('[data-tag-search]')", $html);
             $this->assertStringContainsString("document.querySelector('[data-tag-region]')", $html);
+            // Picking the other region unticks the tags under the one that goes away, so the item can really move to it.
+            $this->assertStringContainsString(".filter(node => nameOf(node) !== picked())", $html);
+            $this->assertStringContainsString("input.checked = false", $html);
         }
     }
 

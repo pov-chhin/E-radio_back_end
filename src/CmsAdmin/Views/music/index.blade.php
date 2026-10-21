@@ -79,7 +79,7 @@
                 <tr>
                     <th>{{ __('Title') }}</th>
                     <th>{{ __('Category') }}</th>
-                    <th>{{ __('File size') }}</th>
+                    <th>{{ __('Region') }}</th>
                     <th>{{ __('Audio') }}</th>
                     <th>{{ __('Views') }}</th>
                     <th>{{ __('Favorites') }}</th>
@@ -120,7 +120,14 @@
                             </div>
                         </td>
                         <td class="muted" data-label="{{ __('Category') }}">{{ $categoryLabel($mediaContent) }}</td>
-                        <td class="muted" data-label="{{ __('File size') }}" data-order="{{ (int) $mediaContent->stream_size }}">{{ $mediaContent->stream_size_label }}</td>
+                        {{-- The same value the Region filter reads: International or Local (one per item), or a dash when it has none. --}}
+                        <td data-label="{{ __('Region') }}" data-order="{{ $regions[$mediaContent->id] }}">
+                            @if($regions[$mediaContent->id] === 'none')
+                                <span class="muted">—</span>
+                            @else
+                                <span class="badge slate">{{ __(ucfirst($regions[$mediaContent->id])) }}</span>
+                            @endif
+                        </td>
                         <td data-label="{{ __('Audio') }}">
                             @if(in_array($mediaContent->processing_status, ['processing', 'failed'], true))
                                 @php $audioFailed = $mediaContent->processing_status === 'failed'; @endphp
