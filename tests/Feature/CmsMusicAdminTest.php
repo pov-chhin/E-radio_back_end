@@ -707,6 +707,25 @@ class CmsMusicAdminTest extends TestCase
         $this->assertStringContainsString('@media (max-width: 480px)', $html);
     }
 
+    public function test_the_title_cell_ends_with_the_file_size_and_length(): void
+    {
+        $this->signIn();
+        $artist = \Src\Catalog\Models\Artist::create(['name' => 'Alpha', 'slug' => 'alpha']);
+        Storage::disk('public')->put('audio/full.opus', str_repeat('a', 2621440)); // 2.5 MB
+
+        $this->track('Full Track', 'song', ['stream' => 'audio/full.opus', 'processing_status' => 'ready', 'duration_seconds' => 705, 'artist_ids' => [$artist->id]]);
+        $this->track('Length Only', 'news', ['duration_seconds' => 3723]);
+        // A link (or a file on cloud storage) has no size to name, and no length: nothing is added.
+        $this->track('Link Only', 'news', ['stream' => 'https://example.com/a.mp3', 'processing_status' => 'ready']);
+
+        $html = $this->get('/admin/music')->assertOk()->getContent();
+
+        // Names, then the size and the length as m:s (h:mm:ss from an hour up), each part only when there is one.
+        $this->assertStringContainsString('<small class="muted">Alpha · 2.5 MB · 11:45</small>', $html);
+        $this->assertStringContainsString('<small class="muted">1:02:03</small>', $html);
+        $this->assertSame(2, substr_count($html, '<small class="muted">'));
+    }
+
     public function test_the_content_list_can_be_filtered_by_region_from_tags_and_artists(): void
     {
         $this->signIn();

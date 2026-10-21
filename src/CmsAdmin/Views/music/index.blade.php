@@ -101,6 +101,8 @@
                             $shortTitle = rtrim(preg_replace('/\x{17D2}$/u', '', $shortTitle)).'...';
                         }
                         $people = collect([$mediaContent->artist_names, $mediaContent->author?->name])->filter()->implode(' · ');
+                        // Under the title: the names, then the file size (only a real size, not "Cloud storage" or a link's provider) and the length as m:s.
+                        $details = collect([$people, $mediaContent->stream_size !== null ? $mediaContent->stream_size_label : null, $mediaContent->duration_label])->filter()->implode(' · ');
                     @endphp
                     <tr data-category="{{ $categoryLabel($mediaContent) }}" data-status="{{ $mediaContent->status }}" data-published="{{ $mediaContent->published_at_local?->format('Y-m-d') }}" data-region="{{ $regions[$mediaContent->id] }}">
                         {{-- The table sorts and searches the full title (and names), not the shortened text on show. --}}
@@ -113,8 +115,8 @@
                                 @endif
                                 <span class="media-title-copy">
                                     <b @if($shortTitle !== $mediaContent->title)title="{{ $mediaContent->title }}"@endif>{{ $shortTitle }}</b>
-                                    @if($people !== '')
-                                        <small class="muted">{{ $people }}</small>
+                                    @if($details !== '')
+                                        <small class="muted">{{ $details }}</small>
                                     @endif
                                 </span>
                             </div>

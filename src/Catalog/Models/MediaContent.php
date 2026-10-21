@@ -159,6 +159,20 @@ class MediaContent extends Model
         });
     }
 
+    /** The length as m:ss (h:mm:ss from an hour up), or null when it is not known. */
+    protected function durationLabel(): Attribute
+    {
+        return Attribute::make(get: function (): ?string {
+            $total = (int) $this->duration_seconds;
+
+            return match (true) {
+                $total <= 0 => null,
+                $total >= 3600 => sprintf('%d:%02d:%02d', intdiv($total, 3600), intdiv($total % 3600, 60), $total % 60),
+                default => sprintf('%d:%02d', intdiv($total, 60), $total % 60),
+            };
+        });
+    }
+
     private function resolveMediaUrl(?string $value, ?string $disk): ?string
     {
         if (blank($value)) {
