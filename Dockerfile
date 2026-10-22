@@ -52,6 +52,13 @@ RUN apt-get update \
     && sed -ri 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf \
     && rm -rf /var/lib/apt/lists/*
 
+# Apache's default mod_deflate list leaves JSON out, so every API response went out uncompressed
+# (/api/home alone is ~48 KB, about 5.5 KB gzipped) — slow on the long, lossy mobile path to this server.
+RUN a2enmod deflate \
+    && printf '<IfModule mod_deflate.c>\n    AddOutputFilterByType DEFLATE application/json application/xml\n</IfModule>\n' \
+        > /etc/apache2/conf-available/compress-json.conf \
+    && a2enconf compress-json
+
 # YouTube episodes (Src\Catalog\Jobs\FetchYoutubeAudio): yt-dlp fetches the audio, FFmpeg (above) shrinks it.
 # yt-dlp needs a JavaScript runtime to get past YouTube's challenge — without one YouTube answers 403. Deno is the one
 # it prefers and Node (tested working) is the fallback; both are copied in as bare binaries from their own images
