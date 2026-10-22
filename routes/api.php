@@ -5,14 +5,15 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookmarkController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CommentController;
+use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\MediaContentController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\StationController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Middleware\RecordUserCountry;
-use Src\Setting\Http\Controllers\YoutubeCookieSyncController;
 use Illuminate\Support\Facades\Route;
+use Src\Setting\Http\Controllers\YoutubeCookieSyncController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -45,6 +46,7 @@ Route::middleware(['auth:sanctum', RecordUserCountry::class])->group(function ()
 });
 
 Route::get('/stations', [StationController::class, 'index']);
+Route::get('/home', HomeController::class);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/tags', [TagController::class, 'index']);
 Route::get('/artists', [ArtistController::class, 'index']);
