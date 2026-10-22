@@ -11,7 +11,7 @@ use Src\Catalog\Jobs\FetchYoutubeAudio;
 use Src\Catalog\Jobs\ProcessMediaContentAudio;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
-use Src\Catalog\Services\OpusAudioProcessor;
+use Src\Catalog\Services\M4aAudioProcessor;
 use Src\Catalog\Services\YoutubeAudioFetcher;
 use Src\Setting\Models\StorageSetting;
 use Src\UserManagement\Models\Permission;
@@ -21,8 +21,8 @@ use Tests\Concerns\CreatesAdminUser;
 use Tests\TestCase;
 
 /**
- * An episode whose audio is a YouTube link: the server fetches the audio (yt-dlp), shrinks it with FFmpeg to a
- * 24 kbps mono Opus file and the app plays that — audio only. yt-dlp itself is faked here (no network).
+ * An episode whose audio is a YouTube link: the server fetches the audio (yt-dlp), converts it with FFmpeg to an
+ * M4A (AAC 96 kbps, 44.1 kHz) file and the app plays that — audio only. yt-dlp itself is faked here (no network).
  */
 class CmsYoutubeAudioTest extends TestCase
 {
@@ -116,7 +116,7 @@ class CmsYoutubeAudioTest extends TestCase
     private function runJob(MediaContent $mediaContent, YoutubeAudioFetcher $fetcher, ?string $url = null): void
     {
         (new FetchYoutubeAudio($mediaContent->id, $url ?? self::LINK))
-            ->handle($fetcher, app(OpusAudioProcessor::class));
+            ->handle($fetcher, app(M4aAudioProcessor::class));
     }
 
     private function probe(string $path, string $entries): string
@@ -191,7 +191,7 @@ class CmsYoutubeAudioTest extends TestCase
         Queue::assertPushed(FetchYoutubeAudio::class, fn ($job) => $job->mediaContentId === $mediaContent->id && $job->url === self::LINK);
     }
 
-    public function test_the_worker_turns_the_video_into_a_small_mono_opus_file_and_keeps_the_link(): void
+    public function test_the_worker_turns_the_video_into_an_aac_m4a_file_and_keeps_the_link(): void
     {
         $mediaContent = $this->episode(['source_url' => self::LINK, 'processing_status' => 'processing']);
 
@@ -201,16 +201,20 @@ class CmsYoutubeAudioTest extends TestCase
         $this->assertSame('ready', $mediaContent->processing_status);
         $this->assertNull($mediaContent->processing_error);
         $this->assertSame(self::LINK, $mediaContent->source_url);
-        $this->assertStringEndsWith('.opus', $mediaContent->stream);
+        $this->assertStringEndsWith('.m4a', $mediaContent->stream);
         Storage::disk('public')->assertExists($mediaContent->stream);
-        $this->assertStringStartsWith('OggS', Storage::disk('public')->get($mediaContent->stream));
+        $this->assertSame('ftyp', substr(Storage::disk('public')->get($mediaContent->stream), 4, 4));
         $this->assertSame(1, $mediaContent->duration_seconds);
 
         $file = Storage::disk('public')->path($mediaContent->stream);
-        $this->assertSame('1', $this->probe($file, 'stream=channels'));
-        // About 24 kbps plus the container's own overhead — far from the 64 kbps stereo an upload gets.
+        $this->assertSame('aac', $this->probe($file, 'stream=codec_name'));
+        $this->assertSame('44100', $this->probe($file, 'stream=sample_rate'));
+        // The fixture is stereo and the channels follow the source.
+        $this->assertSame('2', $this->probe($file, 'stream=channels'));
+        // About 96 kbps plus the container's own overhead (a one-second file, so the overhead is a large share).
         $bitsPerSecond = Storage::disk('public')->size($mediaContent->stream) * 8 / (float) $this->probe($file, 'format=duration');
-        $this->assertLessThan(48_000, $bitsPerSecond);
+        $this->assertGreaterThan(70_000, $bitsPerSecond);
+        $this->assertLessThan(160_000, $bitsPerSecond);
     }
 
     /** A fetcher that hands over `$contents` as the downloaded video and remembers where it put it. */
@@ -232,7 +236,7 @@ class CmsYoutubeAudioTest extends TestCase
         };
     }
 
-    public function test_the_downloaded_video_is_deleted_once_it_is_converted_to_opus(): void
+    public function test_the_downloaded_video_is_deleted_once_it_is_converted_to_m4a(): void
     {
         $mediaContent = $this->episode(['source_url' => self::LINK, 'processing_status' => 'processing']);
         $fetcher = $this->recordingFetcher((string) file_get_contents($this->audioFixture()));
@@ -558,7 +562,7 @@ PHP));
 
         $this->runJob($mediaContent, $this->fetcherReturning($this->audioFixture()));
 
-        $this->assertStringEndsWith('.opus', $mediaContent->fresh()->stream);
+        $this->assertStringEndsWith('.m4a', $mediaContent->fresh()->stream);
     }
 
     public function test_a_failed_fetch_is_recorded_with_its_reason_and_the_old_stream_is_kept(): void

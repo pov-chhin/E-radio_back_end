@@ -12,7 +12,7 @@ use Symfony\Component\Process\Process;
 
 /**
  * Pulls the audio track of a YouTube video down to a temporary local file with yt-dlp, ready for FFmpeg
- * ({@see OpusAudioProcessor}) to shrink. The app plays the result as an ordinary audio file, so a YouTube
+ * ({@see M4aAudioProcessor}) to convert. The app plays the result as an ordinary audio file, so a YouTube
  * episode is "audio only" and never touches YouTube from the phone.
  */
 class YoutubeAudioFetcher

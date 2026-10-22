@@ -7,19 +7,22 @@ use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
-class OpusAudioProcessor
+/**
+ * M4A (AAC-LC), not Opus: unlike an Ogg Opus file, M4A plays natively on every platform (iOS's AVPlayer has no
+ * built-in Opus/OGG support).
+ */
+class M4aAudioProcessor
 {
     /**
-     * Converts $sourcePath (a local file) to Opus and stores it under $directory on $disk (null: the local public
-     * disk). $bitrate and $channels override the configured bitrate and keep-the-source's channels — a small
-     * mono file for speech, say.
+     * Converts $sourcePath (a local file) to M4A — AAC at the configured bitrate (96 kbps) and sample rate
+     * (44.1 kHz), channels as in the source — and stores it under $directory on $disk (null: the local public disk).
      */
-    public function process(string $sourcePath, string $directory, ?string $disk = null, ?string $bitrate = null, ?int $channels = null): string
+    public function process(string $sourcePath, string $directory, ?string $disk = null): string
     {
         $id = (string) Str::uuid();
-        $temporaryOutput = sys_get_temp_dir().DIRECTORY_SEPARATOR."media_opus_{$id}.opus";
-        $storedPath = trim($directory, '/').'/'.$id.'.opus';
-        $timeout = max(1, (int) config('services.ffmpeg.opus_timeout', 300));
+        $temporaryOutput = sys_get_temp_dir().DIRECTORY_SEPARATOR."media_m4a_{$id}.m4a";
+        $storedPath = trim($directory, '/').'/'.$id.'.m4a';
+        $timeout = max(1, (int) config('services.ffmpeg.audio_timeout', 300));
 
         try {
             $process = new Process([
@@ -30,11 +33,11 @@ class OpusAudioProcessor
                 '-i', $sourcePath,
                 '-map', '0:a:0',
                 '-vn',
-                '-c:a', 'libopus',
-                '-b:a', $bitrate ?? config('services.ffmpeg.opus_bitrate', '64k'),
-                ...($channels ? ['-ac', (string) $channels] : []),
-                '-vbr', 'on',
-                '-application', 'audio',
+                '-c:a', 'aac',
+                '-b:a', config('services.ffmpeg.audio_bitrate', '96k'),
+                '-ar', (string) config('services.ffmpeg.audio_sample_rate', 44100),
+                // The index goes first in the file, so the app can start playing and seek before it has all of it.
+                '-movflags', '+faststart',
                 $temporaryOutput,
             ]);
             $process->setTimeout($timeout);
@@ -43,12 +46,12 @@ class OpusAudioProcessor
             $stream = fopen($temporaryOutput, 'rb');
 
             if ($stream === false) {
-                throw new RuntimeException('Unable to read the converted Opus file.');
+                throw new RuntimeException('Unable to read the converted M4A file.');
             }
 
             try {
                 if (! MediaStorage::disk($disk)->put($storedPath, $stream)) {
-                    throw new RuntimeException('Unable to store the converted Opus file.');
+                    throw new RuntimeException('Unable to store the converted M4A file.');
                 }
             } finally {
                 if (is_resource($stream)) {
@@ -58,7 +61,7 @@ class OpusAudioProcessor
 
             return $storedPath;
         } catch (\Throwable $exception) {
-            throw new RuntimeException('The media file could not be converted to Opus.', 0, $exception);
+            throw new RuntimeException('The media file could not be converted to M4A.', 0, $exception);
         } finally {
             @unlink($temporaryOutput);
         }

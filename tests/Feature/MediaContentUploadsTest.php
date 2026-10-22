@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Src\Catalog\Jobs\ProcessMediaContentAudio;
 use Src\Catalog\Models\Category;
 use Src\Catalog\Models\MediaContent;
-use Src\Catalog\Services\OpusAudioProcessor;
+use Src\Catalog\Services\M4aAudioProcessor;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Src\Setting\Models\StorageSetting;
 use Symfony\Component\Process\Process;
@@ -63,7 +63,7 @@ class MediaContentUploadsTest extends TestCase
     {
         $mediaContent->refresh();
         (new ProcessMediaContentAudio($mediaContent->id, $mediaContent->source_path))
-            ->handle(app(OpusAudioProcessor::class));
+            ->handle(app(M4aAudioProcessor::class));
         $mediaContent->refresh();
     }
 
@@ -116,7 +116,7 @@ class MediaContentUploadsTest extends TestCase
         $this->assertSame([1000, 1000], [imagesx($image), imagesy($image)]);
     }
 
-    public function test_uploading_audio_returns_immediately_and_the_queue_converts_it_to_opus(): void
+    public function test_uploading_audio_returns_immediately_and_the_queue_converts_it_to_m4a(): void
     {
         $this->post('/admin/media-contents', [
             'category_id' => $this->category()->id,
@@ -134,9 +134,9 @@ class MediaContentUploadsTest extends TestCase
 
         $this->assertSame('ready', $mediaContent->processing_status);
         $this->assertNull($mediaContent->source_path);
-        $this->assertStringEndsWith('.opus', $mediaContent->stream);
+        $this->assertStringEndsWith('.m4a', $mediaContent->stream);
         Storage::disk('public')->assertExists($mediaContent->stream);
-        $this->assertStringStartsWith('OggS', Storage::disk('public')->get($mediaContent->stream));
+        $this->assertSame('ftyp', substr(Storage::disk('public')->get($mediaContent->stream), 4, 4));
         $this->assertSame(Storage::disk('public')->size($mediaContent->stream), $mediaContent->stream_size);
         $this->assertMatchesRegularExpression('/\d+(?:\.\d)? (?:B|KB|MB)/', $mediaContent->stream_size_label);
         $this->assertStringContainsString('/storage/', $mediaContent->stream_url);
@@ -160,7 +160,7 @@ class MediaContentUploadsTest extends TestCase
         $this->assertStringStartsWith('custom/audio/', $mediaContent->stream);
     }
 
-    public function test_the_worker_extracts_video_audio_and_converts_it_to_opus(): void
+    public function test_the_worker_extracts_video_audio_and_converts_it_to_m4a(): void
     {
         $temporaryBase = tempnam(sys_get_temp_dir(), 'video_fixture_');
         $videoPath = $temporaryBase.'.mp4';
@@ -188,8 +188,8 @@ class MediaContentUploadsTest extends TestCase
             $this->processPendingAudio($mediaContent);
 
             $this->assertSame('ready', $mediaContent->processing_status);
-            $this->assertStringEndsWith('.opus', $mediaContent->stream);
-            $this->assertStringStartsWith('OggS', Storage::disk('public')->get($mediaContent->stream));
+            $this->assertStringEndsWith('.m4a', $mediaContent->stream);
+            $this->assertSame('ftyp', substr(Storage::disk('public')->get($mediaContent->stream), 4, 4));
         } finally {
             @unlink($videoPath);
         }
@@ -346,7 +346,7 @@ class MediaContentUploadsTest extends TestCase
         $this->assertDatabaseMissing('media_contents', ['slug' => 'qa-track']);
     }
 
-    public function test_replacing_the_stream_keeps_the_old_file_until_the_new_opus_is_ready(): void
+    public function test_replacing_the_stream_keeps_the_old_file_until_the_new_m4a_is_ready(): void
     {
         $category = $this->category();
         $this->post('/admin/media-contents', [

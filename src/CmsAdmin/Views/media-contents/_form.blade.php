@@ -90,7 +90,7 @@
                     @error('duration_seconds') <em>{{ $message }}</em> @enderror
                 </label>
                 <label class="full">{{ __('Stream / content') }}
-                    <small class="muted" style="font-weight:400">{{ __('Maximum 100 MB. Uploads are saved immediately and converted to Opus by the queue worker.') }}</small>
+                    <small class="muted" style="font-weight:400">{{ __('Maximum 100 MB. Uploads are saved immediately and converted to M4A by the queue worker.') }}</small>
                     @if(isset($mediaContent) && in_array($mediaContent->processing_status, ['processing', 'failed'], true))
                         @php
                             $audioFailed = $mediaContent->processing_status === 'failed';

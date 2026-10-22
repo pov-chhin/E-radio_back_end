@@ -6,15 +6,15 @@ use App\Support\MediaStorage;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Src\Catalog\Models\MediaContent;
-use Src\Catalog\Services\OpusAudioProcessor;
+use Src\Catalog\Services\M4aAudioProcessor;
 use Src\Catalog\Services\YoutubeAudioFetcher;
 use Src\Setting\Models\StorageSetting;
 use Throwable;
 
 /**
- * An episode whose audio is a YouTube link: fetches the audio (yt-dlp), shrinks it with FFmpeg to a small
- * low-bitrate Opus file and swaps it in as the episode's stream. The app then plays that file like any other —
- * audio only. Until it is ready the episode stays "processing" (so it is not public), and any earlier stream
+ * An episode whose audio is a YouTube link: fetches the audio (yt-dlp), converts it with FFmpeg to the same
+ * M4A (AAC 96 kbps, 44.1 kHz) as an upload and swaps it in as the episode's stream. The app then plays that file
+ * like any other — audio only. Until it is ready the episode stays "processing" (so it is not public), and any earlier stream
  * stays where it is until the new file replaces it.
  */
 class FetchYoutubeAudio implements ShouldQueue
@@ -23,7 +23,7 @@ class FetchYoutubeAudio implements ShouldQueue
 
     public int $tries = 1;
 
-    /** Download (services.yt_dlp.timeout) plus conversion (services.ffmpeg.opus_timeout), with room to spare. */
+    /** Download (services.yt_dlp.timeout) plus conversion (services.ffmpeg.audio_timeout), with room to spare. */
     public int $timeout = 720;
 
     public function __construct(
@@ -31,7 +31,7 @@ class FetchYoutubeAudio implements ShouldQueue
         public readonly string $url,
     ) {}
 
-    public function handle(YoutubeAudioFetcher $fetcher, OpusAudioProcessor $processor): void
+    public function handle(YoutubeAudioFetcher $fetcher, M4aAudioProcessor $processor): void
     {
         $mediaContent = MediaContent::find($this->mediaContentId);
 
@@ -49,13 +49,7 @@ class FetchYoutubeAudio implements ShouldQueue
 
             $downloaded = $fetcher->download($this->url);
 
-            $convertedPath = $processor->process(
-                $downloaded,
-                config('services.media_storage.audio_directory'),
-                $targetDisk,
-                (string) config('services.ffmpeg.youtube_bitrate', '24k'),
-                (int) config('services.ffmpeg.youtube_channels', 1) ?: null,
-            );
+            $convertedPath = $processor->process($downloaded, config('services.media_storage.audio_directory'), $targetDisk);
             $mediaContent->refresh();
 
             // Another link or an upload took over while this one was downloading.

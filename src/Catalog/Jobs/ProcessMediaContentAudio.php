@@ -7,7 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
 use Src\Catalog\Models\MediaContent;
-use Src\Catalog\Services\OpusAudioProcessor;
+use Src\Catalog\Services\M4aAudioProcessor;
 use Src\Setting\Models\StorageSetting;
 use Throwable;
 
@@ -24,7 +24,7 @@ class ProcessMediaContentAudio implements ShouldQueue
         public readonly string $sourcePath,
     ) {}
 
-    public function handle(OpusAudioProcessor $processor): void
+    public function handle(M4aAudioProcessor $processor): void
     {
         $mediaContent = MediaContent::find($this->mediaContentId);
 

@@ -7,11 +7,10 @@ return [
         'probe_binary' => env('FFMPEG_PROBE_BINARY', 'ffprobe'),
         'hls_bitrate' => env('FFMPEG_HLS_BITRATE', '128k'),
         'hls_timeout' => env('FFMPEG_HLS_TIMEOUT', 300),
-        'opus_bitrate' => env('FFMPEG_OPUS_BITRATE', '64k'),
-        'opus_timeout' => env('FFMPEG_OPUS_TIMEOUT', 300),
-        // Episodes whose audio comes from a YouTube link: small mono Opus (clear for speech, light on mobile data).
-        'youtube_bitrate' => env('FFMPEG_YOUTUBE_BITRATE', '24k'),
-        'youtube_channels' => (int) env('FFMPEG_YOUTUBE_CHANNELS', 1),
+        // Every stored episode/song audio file — uploads and YouTube links alike — is M4A (AAC) at this bitrate and rate.
+        'audio_bitrate' => env('FFMPEG_AUDIO_BITRATE', '96k'),
+        'audio_sample_rate' => (int) env('FFMPEG_AUDIO_SAMPLE_RATE', 44100),
+        'audio_timeout' => env('FFMPEG_AUDIO_TIMEOUT', 300),
     ],
 
     // Fetches the audio track of a YouTube link (see Src\Catalog\Services\YoutubeAudioFetcher).
