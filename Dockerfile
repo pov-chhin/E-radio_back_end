@@ -30,7 +30,7 @@ RUN composer install \
     --prefer-dist \
     --optimize-autoloader
 
-FROM php:8.3-apache-bookworm
+FROM php:8.5.12-apache-bookworm
 
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
@@ -46,7 +46,8 @@ RUN apt-get update \
         python3 \
         python3-pip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install -j"$(nproc)" bcmath exif gd intl opcache pcntl pdo_mysql zip \
+    && docker-php-ext-install -j"$(nproc)" bcmath exif gd intl pcntl pdo_mysql zip \
+    && php -m | grep -qi 'zend opcache' \
     && a2enmod rewrite headers expires \
     && sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
     && sed -ri 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf \
