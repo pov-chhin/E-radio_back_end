@@ -53,7 +53,9 @@ class CmsAdminRadioChannelTest extends TestCase
         $this->assertStringContainsString('<table class="data-table" id="channel-table">', $html);
         $this->assertStringNotContainsString('pagination', $html);
         $this->assertStringContainsString("jQuery('#channel-table').DataTable(", $html);
-        $this->assertStringContainsString('targets: -1, orderable: false, searchable: false', $html);
+        $this->assertStringContainsString('targets: 4, orderable: false, searchable: false', $html);   // the Actions column (a hidden Position column follows it)
+        $this->assertStringContainsString('order: [[POSITION, \'asc\']]', $html);
+        $this->assertSame(3, substr_count($html, 'class="drag-handle" data-id="'));   // a grip on each row, for an admin who may edit
         $this->assertStringContainsString("emptyTable: 'No channels yet. Sync from Radio Browser or add one manually.'", $html);
         $this->assertStringContainsString("attachTableFilters(table, { filtersId: 'channel-filters', dateKey: 'added', searchLabel: 'Search' });", $html);
 
@@ -64,6 +66,8 @@ class CmsAdminRadioChannelTest extends TestCase
         $this->assertStringNotContainsString('type="date"', $html);
         $this->assertStringNotContainsString('data-filter="from"', $html);
         $this->assertStringContainsString('<th>Added</th>', $html);
+        $this->assertMatchesRegularExpression('/<thead>\s*<tr>\s*<th>Name<\/th>\s*<th>Stream URL<\/th>/', $html);
+        $this->assertStringNotContainsString('Sort order', $html);   // the order is set by dragging rows, not shown as a column
 
         // Each row carries what the filters read: its status, where it came from and the day it was added.
         $this->assertStringContainsString('<tr data-status="published" data-source="radio-browser" data-added="'.$day.'">', $html);
@@ -471,6 +475,67 @@ class CmsAdminRadioChannelTest extends TestCase
         $this->assertNull($removed->cover_disk);
         Storage::disk($disk)->assertMissing($removedCover);
         Storage::disk($disk)->assertMissing($deletedCover);
+    }
+
+    public function test_it_saves_a_sort_order_and_a_blank_one_means_zero(): void
+    {
+        $this->post('/admin/radio-channels', ['name' => 'Ordered Radio', 'sort_order' => '3'])
+            ->assertRedirect(route('admin.radio-channels.index'));
+        $channel = RadioSceaperStation::where('name', 'Ordered Radio')->firstOrFail();
+        $this->assertSame(3, $channel->sort_order);
+
+        // Saving without the field leaves it; a blank box clears it to 0 rather than failing on NULL.
+        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Ordered Radio'])->assertRedirect();
+        $this->assertSame(3, $channel->fresh()->sort_order);
+
+        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Ordered Radio', 'sort_order' => ''])->assertRedirect();
+        $this->assertSame(0, $channel->fresh()->sort_order);
+
+        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Ordered Radio', 'sort_order' => '-1'])->assertSessionHasErrors('sort_order');
+
+        $this->get("/admin/radio-channels/{$channel->id}/edit")->assertOk()->assertDontSee('name="sort_order"', false);   // the order is set by dragging rows on the list
+    }
+
+    public function test_numbered_channels_come_first_then_the_unset_ones_by_id_in_the_api_and_the_admin_list(): void
+    {
+        $make = fn (string $name, int $sortOrder) => RadioSceaperStation::create([
+            'name' => $name, 'stream_url' => 'https://stream.example.com/'.strtolower($name), 'is_published' => true, 'sort_order' => $sortOrder,
+        ]);
+        $make('Added 1st, unset', 0);
+        $make('Added 2nd, order 5', 5);
+        $make('Added 3rd, order 1', 1);
+        $make('Added 4th, unset', 0);
+        $make('Added 5th, order 5', 5);
+        $expected = ['Added 3rd, order 1', 'Added 2nd, order 5', 'Added 5th, order 5', 'Added 1st, unset', 'Added 4th, unset'];
+
+        $this->assertSame($expected, $this->getJson('/api/stations')->assertOk()->json('data.*.name'));
+        $this->assertSame($expected, $this->getJson('/api/home')->assertOk()->json('data.stations.*.name'));
+        $this->get('/admin/radio-channels')->assertOk()->assertSeeInOrder($expected);
+    }
+
+    public function test_dragging_a_row_saves_its_new_place_in_the_list(): void
+    {
+        $make = fn (string $name, int $sortOrder = 0) => RadioSceaperStation::create(['name' => $name, 'sort_order' => $sortOrder]);
+        [$a, $b, $c, $d] = [$make('A'), $make('B'), $make('C'), $make('D')];
+        $e = $make('E', 1);
+        $order = fn () => RadioSceaperStation::inListenerOrder()->pluck('name')->all();
+        $this->assertSame(['E', 'A', 'B', 'C', 'D'], $order());
+
+        // D dropped above A: it lands there, and the list (the unset ones too) is numbered 1, 2, 3… from the top.
+        $this->patchJson('/admin/radio-channels/reorder', ['id' => $d->id, 'target' => $a->id, 'placement' => 'before'])->assertNoContent();
+        $this->assertSame(['E', 'D', 'A', 'B', 'C'], $order());
+        $this->assertSame([1, 2, 3, 4, 5], RadioSceaperStation::inListenerOrder()->pluck('sort_order')->all());
+
+        // E dropped below B (the last row on the page is placed after its neighbour).
+        $this->patchJson('/admin/radio-channels/reorder', ['id' => $e->id, 'target' => $b->id, 'placement' => 'after'])->assertNoContent();
+        $this->assertSame(['D', 'A', 'B', 'E', 'C'], $order());
+        $this->assertSame([1, 2, 3, 4, 5], RadioSceaperStation::inListenerOrder()->pluck('sort_order')->all());
+
+        // A row can't be dropped on itself, and both rows must exist.
+        $this->patchJson('/admin/radio-channels/reorder', ['id' => $c->id, 'target' => $c->id, 'placement' => 'before'])->assertJsonValidationErrors('target');
+        $this->patchJson('/admin/radio-channels/reorder', ['id' => $c->id, 'target' => 9999, 'placement' => 'before'])->assertJsonValidationErrors('target');
+        $this->patchJson('/admin/radio-channels/reorder', ['id' => $c->id, 'target' => $a->id, 'placement' => 'beside'])->assertJsonValidationErrors('placement');
+        $this->assertSame(['D', 'A', 'B', 'E', 'C'], $order());
     }
 
     public function test_it_saves_and_shows_a_channel_description(): void

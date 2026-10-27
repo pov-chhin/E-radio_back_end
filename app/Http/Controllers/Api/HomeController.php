@@ -59,8 +59,7 @@ class HomeController extends Controller
     {
         $stations = RadioSceaperStation::query()
             ->where('is_published', true)
-            ->orderByRaw("CASE WHEN tags LIKE '%ams%' THEN 0 ELSE 1 END")
-            ->orderBy('name')
+            ->inListenerOrder()
             ->limit(self::STATION_LIMIT)
             ->get();
 

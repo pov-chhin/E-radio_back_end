@@ -5,6 +5,8 @@ namespace Src\CmsAdmin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -26,7 +28,7 @@ class RadioChannelController extends Controller
     public function index(): View
     {
         // Every channel: the page's DataTable searches, sorts, filters and pages them in the browser.
-        $radioChannels = RadioSceaperStation::latest()->get();
+        $radioChannels = RadioSceaperStation::inListenerOrder()->get();
 
         return view('cms-admin::radio-channels.index', compact('radioChannels'));
     }
@@ -58,6 +60,43 @@ class RadioChannelController extends Controller
         $radioChannel->update($this->validateChannel($request, $radioChannel));
 
         return redirect()->route('admin.radio-channels.index')->with('status', __('Channel updated.'));
+    }
+
+    /**
+     * A row dragged to a new place in the list: put `id` just before or after `target` in the order listeners see, then number the
+     * whole list 1, 2, 3… so the place is kept (channels that were left at 0 are numbered too, in the order they were showing).
+     */
+    public function reorder(Request $request): Response
+    {
+        $data = $request->validate([
+            'id' => ['required', 'integer', 'exists:radio_sceaper_stations,id'],
+            'target' => ['required', 'integer', 'different:id', 'exists:radio_sceaper_stations,id'],
+            'placement' => ['required', Rule::in(['before', 'after'])],
+        ]);
+
+        $ids = RadioSceaperStation::inListenerOrder()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $ids = array_values(array_diff($ids, [(int) $data['id']]));
+        $at = array_search((int) $data['target'], $ids, true) + ($data['placement'] === 'after' ? 1 : 0);
+        array_splice($ids, $at, 0, [(int) $data['id']]);
+
+        // Only the rows whose number changes are written, a few hundred to a statement.
+        $current = RadioSceaperStation::pluck('sort_order', 'id');
+        $changes = [];
+        foreach ($ids as $index => $id) {
+            if ((int) $current[$id] !== $index + 1) {
+                $changes[$id] = $index + 1;
+            }
+        }
+
+        DB::transaction(function () use ($changes): void {
+            foreach (array_chunk($changes, 500, true) as $chunk) {
+                $cases = collect($chunk)->map(fn (int $sortOrder, int $id) => "WHEN {$id} THEN {$sortOrder}")->implode(' ');
+
+                DB::table('radio_sceaper_stations')->whereIn('id', array_keys($chunk))->update(['sort_order' => DB::raw("CASE id {$cases} END")]);
+            }
+        });
+
+        return response()->noContent();
     }
 
     /**
@@ -136,7 +175,13 @@ class RadioChannelController extends Controller
             'remove_cover' => ['nullable', 'boolean'],
             'bitrate' => ['nullable', 'integer', 'min:0'],
             'tags' => ['nullable', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
         ]);
+
+        // A blank box means "no fixed position" (0), not NULL — the column can't hold one.
+        if (array_key_exists('sort_order', $data)) {
+            $data['sort_order'] = (int) $data['sort_order'];
+        }
 
         $data = [
             ...$data,

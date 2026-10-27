@@ -36,6 +36,7 @@ Route::prefix('admin')->name('admin.')->controller(RadioChannelController::class
     Route::get('/radio-channels/create', 'create')->name('radio-channels.create')->middleware('permission:create-radio-channels');
     Route::post('/radio-channels', 'store')->name('radio-channels.store')->middleware('permission:create-radio-channels');
     Route::post('/radio-channels/sync', 'sync')->name('radio-channels.sync')->middleware('permission:create-radio-channels');
+    Route::patch('/radio-channels/reorder', 'reorder')->name('radio-channels.reorder')->middleware('permission:edit-radio-channels');
     Route::get('/radio-channels/{radioChannel}/edit', 'edit')->name('radio-channels.edit')->middleware('permission:edit-radio-channels');
     Route::get('/radio-channels/{radioChannel}', 'show')->name('radio-channels.show')->middleware('permission:view-radio-channels');
     Route::put('/radio-channels/{radioChannel}', 'update')->name('radio-channels.update')->middleware('permission:edit-radio-channels');

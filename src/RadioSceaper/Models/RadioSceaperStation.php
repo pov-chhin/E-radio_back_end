@@ -3,16 +3,23 @@
 namespace Src\RadioSceaper\Models;
 
 use App\Support\MediaStorage;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
 class RadioSceaperStation extends Model
 {
-    protected $fillable = ['name', 'description', 'stream_url', 'cover', 'cover_disk', 'bitrate', 'votes', 'tags', 'radio_browser_uuid', 'is_published'];
+    protected $fillable = ['name', 'description', 'stream_url', 'cover', 'cover_disk', 'bitrate', 'votes', 'tags', 'radio_browser_uuid', 'is_published', 'sort_order'];
 
     protected function casts(): array
     {
-        return ['bitrate' => 'integer', 'votes' => 'integer', 'is_published' => 'boolean'];
+        return ['bitrate' => 'integer', 'votes' => 'integer', 'is_published' => 'boolean', 'sort_order' => 'integer'];
+    }
+
+    /** The order listeners see, and the admin list shows: channels with a sort order first (1, 2, 3…), then the ones left at 0 below them; each group by id (oldest first). */
+    public function scopeInListenerOrder(Builder $query): void
+    {
+        $query->orderByRaw('sort_order = 0')->orderBy('sort_order')->orderBy('id');
     }
 
     /** 'draft' (no stream URL yet), 'hidden' (has a URL, not published), or 'published'. */

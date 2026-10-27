@@ -45,6 +45,7 @@
                 </div>
                 <div><dt>{{ __('Stream URL') }}</dt><dd>{{ $radioChannel->stream_url ?? '—' }}</dd></div>
                 <div><dt>{{ __('Bitrate') }}</dt><dd>{{ $radioChannel->bitrate ? number_format($radioChannel->bitrate).' kbps' : '—' }}</dd></div>
+                <div><dt>{{ __('Sort order') }}</dt><dd>{{ $radioChannel->sort_order ?: '—' }}</dd></div>
                 <div><dt>{{ __('Tags') }}</dt><dd>{{ $radioChannel->tags ?? '—' }}</dd></div>
                 <div><dt>{{ __('Votes') }}</dt><dd>{{ number_format($radioChannel->votes) }}</dd></div>
                 <div><dt>{{ __('Source') }}</dt><dd>{{ $radioChannel->radio_browser_uuid ? __('Synced from Radio Browser') : __('Added manually') }}</dd></div>
