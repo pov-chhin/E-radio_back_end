@@ -477,23 +477,20 @@ class CmsAdminRadioChannelTest extends TestCase
         Storage::disk($disk)->assertMissing($deletedCover);
     }
 
-    public function test_it_saves_a_sort_order_and_a_blank_one_means_zero(): void
+    public function test_the_form_does_not_set_the_order_that_is_only_set_by_dragging(): void
     {
+        // A new channel starts unnumbered (0), below the numbered ones, even if a number is sent.
         $this->post('/admin/radio-channels', ['name' => 'Ordered Radio', 'sort_order' => '3'])
             ->assertRedirect(route('admin.radio-channels.index'));
         $channel = RadioSceaperStation::where('name', 'Ordered Radio')->firstOrFail();
-        $this->assertSame(3, $channel->sort_order);
+        $this->assertSame(0, $channel->sort_order);
 
-        // Saving without the field leaves it; a blank box clears it to 0 rather than failing on NULL.
-        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Ordered Radio'])->assertRedirect();
+        // Saving the form leaves a channel where it was placed, even if a stale page sends a number.
+        $channel->update(['sort_order' => 3]);
+        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Ordered Radio', 'sort_order' => '9'])->assertRedirect();
         $this->assertSame(3, $channel->fresh()->sort_order);
 
-        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Ordered Radio', 'sort_order' => ''])->assertRedirect();
-        $this->assertSame(0, $channel->fresh()->sort_order);
-
-        $this->put("/admin/radio-channels/{$channel->id}", ['name' => 'Ordered Radio', 'sort_order' => '-1'])->assertSessionHasErrors('sort_order');
-
-        $this->get("/admin/radio-channels/{$channel->id}/edit")->assertOk()->assertDontSee('name="sort_order"', false);   // the order is set by dragging rows on the list
+        $this->get("/admin/radio-channels/{$channel->id}/edit")->assertOk()->assertDontSee('name="sort_order"', false);
     }
 
     public function test_numbered_channels_come_first_then_the_unset_ones_by_id_in_the_api_and_the_admin_list(): void

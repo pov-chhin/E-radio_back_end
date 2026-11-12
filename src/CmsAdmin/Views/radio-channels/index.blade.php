@@ -137,7 +137,8 @@
         /* This page's own sizes (the type scale is 15 / 13 / 11px; the page's big title is left as it is). */
         .page-heading > div > p:last-child { font-size: 15px; }
         .page-heading .eyebrow { font-size: 11px; }
-        #channel-table .table-name-cell b { font-size: 15px; }        #channel-table td time small { font-size: 11px; }
+        #channel-table .table-name-cell b { font-size: 15px; }
+        #channel-table td time small { font-size: 11px; }
         /* A long stream address is cut short (the whole of it is the tooltip), so it doesn't stretch the table. */
         #channel-table td.stream-url { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
         @media (max-width: 760px) { #channel-table td.stream-url { max-width: none; word-break: break-all; } }

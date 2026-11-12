@@ -74,10 +74,13 @@ class RadioChannelController extends Controller
             'placement' => ['required', Rule::in(['before', 'after'])],
         ]);
 
+        $moved = (int) $data['id'];
+        $target = (int) $data['target'];
+
         $ids = RadioSceaperStation::inListenerOrder()->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $ids = array_values(array_diff($ids, [(int) $data['id']]));
-        $at = array_search((int) $data['target'], $ids, true) + ($data['placement'] === 'after' ? 1 : 0);
-        array_splice($ids, $at, 0, [(int) $data['id']]);
+        $ids = array_values(array_diff($ids, [$moved]));
+        $at = array_search($target, $ids, true) + ($data['placement'] === 'after' ? 1 : 0);
+        array_splice($ids, $at, 0, [$moved]);
 
         // Only the rows whose number changes are written, a few hundred to a statement.
         $current = RadioSceaperStation::pluck('sort_order', 'id');
@@ -175,13 +178,7 @@ class RadioChannelController extends Controller
             'remove_cover' => ['nullable', 'boolean'],
             'bitrate' => ['nullable', 'integer', 'min:0'],
             'tags' => ['nullable', 'string', 'max:255'],
-            'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
         ]);
-
-        // A blank box means "no fixed position" (0), not NULL — the column can't hold one.
-        if (array_key_exists('sort_order', $data)) {
-            $data['sort_order'] = (int) $data['sort_order'];
-        }
 
         $data = [
             ...$data,
